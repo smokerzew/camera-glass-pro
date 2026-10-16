@@ -1,11 +1,10 @@
 import SwiftUI
 
-/// The ⠿ controls sheet, laid out like the iOS 27 Camera app: grabber, a 3-column grid of
-/// FLASH / LIVE / ASPECT / TIMER / EXPOSURE / STYLES / FILTER / DEPTH / NIGHT MODE, and FORMAT centered below.
-/// Every control does something real in this app (see each hint).
+/// The ⠿ controls sheet, laid out like the iOS 27 Camera app: grabber and a 3-column grid of every
+/// `CameraControl` (including GRID and LEVEL). In Edit mode each control shows +/− and tapping it
+/// pins or unpins it in the top bar instead of running it.
 struct CameraControlPanel: View {
     @Bindable var vm: CameraWorkspaceViewModel
-    @AppStorage(SettingsKey.exportFormat) private var exportFormat = ExportFormat.jpeg
     @Environment(\.cameraReduceMotion) private var reduceMotion
     @State private var dragOffset: CGFloat = 0
 
@@ -17,8 +16,17 @@ struct CameraControlPanel: View {
                 .fill(.white.opacity(0.35))
                 .frame(width: 36, height: 5)
                 .padding(.top, 8)
-                .padding(.bottom, 14)
+                .padding(.bottom, 10)
                 .accessibilityHidden(true)
+
+            if vm.isEditingTopBar {
+                Text("Tap + to add a control to the top bar, − to remove it.")
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding(.bottom, 10)
+                    .transition(.opacity)
+            }
 
             ViewThatFits(in: .vertical) {
                 content
@@ -41,72 +49,36 @@ struct CameraControlPanel: View {
                 }
         )
         .padding(.horizontal, 12)
+        .animation(reduceMotion ? nil : .spring(duration: 0.3), value: vm.isEditingTopBar)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("More controls")
+        .accessibilityLabel(vm.isEditingTopBar ? "Edit top bar" : "More controls")
         .accessibilityAction(.escape) { vm.isControlPanelOpen = false }
     }
 
     private var content: some View {
         VStack(spacing: 18) {
             LazyVGrid(columns: columns, spacing: 18) {
-                PanelControlButton(systemImage: vm.flash == .off ? "bolt.slash" : vm.flash.systemImage, title: "FLASH",
-                                   isActive: vm.flash != .off, stateDescription: vm.flash.label,
-                                   hint: "Visual flash effect only") { vm.flash = vm.flash.next }
-
-                PanelControlButton(systemImage: vm.livePreference ? "livephoto" : "livephoto.slash", title: "LIVE",
-                                   isActive: vm.livePreference,
-                                   hint: "Shows Live as on; imported photos stay still images") { vm.livePreference.toggle() }
-
-                PanelControlButton(systemImage: "aspectratio", title: "ASPECT",
-                                   value: vm.aspect == .original ? nil : vm.aspect.rawValue,
-                                   isActive: vm.aspect != .original, stateDescription: vm.aspect.label,
-                                   hint: "Cycles full screen, 4:3, 16:9 and 1:1 framing") { vm.aspect = vm.aspect.next }
-
-                PanelControlButton(systemImage: "timer", title: "TIMER",
-                                   value: vm.timer == .off ? nil : vm.timer.label,
-                                   isActive: vm.timer != .off, stateDescription: vm.timer.label,
-                                   hint: "Delays opening the photo picker") { vm.timer = vm.timer.next }
-
-                PanelControlButton(systemImage: "plusminus", title: "EXPOSURE",
-                                   isActive: vm.isExposureDialVisible || vm.adjustments.exposure != 0,
-                                   stateDescription: AdjustmentParameter.exposure.format(vm.adjustments.exposure),
-                                   hint: "Shows the exposure slider") {
-                    withAnimation(reduceMotion ? nil : .spring(duration: 0.3)) { vm.isExposureDialVisible.toggle() }
+                ForEach(CameraControl.allCases) { control in
+                    let unavailable = !vm.isEditingTopBar && control.requiresMedia && !vm.hasMedia
+                    PanelControlButton(
+                        systemImage: vm.symbol(for: control),
+                        title: control.title,
+                        value: vm.valueText(for: control),
+                        isActive: vm.isActive(control),
+                        stateDescription: vm.stateDescription(for: control),
+                        hint: vm.hint(for: control),
+                        pinnedInTopBar: vm.isEditingTopBar ? vm.isInTopBar(control) : nil
+                    ) {
+                        withAnimation(reduceMotion ? nil : .spring(duration: 0.3)) {
+                            if vm.isEditingTopBar { vm.toggleTopBar(control) } else { vm.perform(control) }
+                        }
+                    }
+                    .disabled(unavailable)
+                    .opacity(unavailable ? 0.45 : 1)
                 }
-                .disabled(!vm.hasMedia)
-
-                PanelControlButton(systemImage: "square.3.layers.3d", title: "STYLES",
-                                   isActive: vm.hasEdits, stateDescription: vm.hasEdits ? "Edited" : "No edits",
-                                   hint: "Opens light and color adjustments") { vm.showAdjustments = true }
-                    .disabled(!vm.hasMedia)
-
-                PanelControlButton(systemImage: "camera.filters", title: "FILTER",
-                                   isActive: vm.adjustments.filter != .none,
-                                   stateDescription: vm.adjustments.filter.label,
-                                   hint: "Cycles Vivid, Mono, Noir, Chrome, Fade and Instant") { vm.cycleFilter() }
-                    .disabled(!vm.hasMedia)
-
-                PanelControlButton(systemImage: "f.cursive", title: "DEPTH",
-                                   isActive: vm.depthEffect,
-                                   hint: "Preview-only depth look with a soft vignette") { vm.setDepth(!vm.depthEffect) }
-                    .disabled(!vm.hasMedia)
-
-                PanelControlButton(systemImage: vm.adjustments.nightLook ? "moon.fill" : "moon", title: "NIGHT MODE",
-                                   isActive: vm.adjustments.nightLook,
-                                   hint: "Lifts shadows and reduces noise") { vm.setNightLook(!vm.adjustments.nightLook) }
-                    .disabled(!vm.hasMedia)
             }
 
-            PanelControlButton(systemImage: "photo", title: "FORMAT",
-                               value: exportFormat == .heic ? "HEIF" : exportFormat.label,
-                               stateDescription: exportFormat.label,
-                               hint: "Cycles the export format: JPEG, HEIF, PNG") {
-                let all = ExportFormat.allCases
-                exportFormat = all[((all.firstIndex(of: exportFormat) ?? 0) + 1) % all.count]
-            }
-            .frame(maxWidth: 120)
-
-            if vm.isExposureDialVisible, vm.hasMedia {
+            if vm.isExposureDialVisible, vm.hasMedia, !vm.isEditingTopBar {
                 HStack(spacing: 10) {
                     Image(systemName: "plusminus").foregroundStyle(.white.opacity(0.8)).accessibilityHidden(true)
                     Slider(
@@ -126,5 +98,26 @@ struct CameraControlPanel: View {
                 .transition(.opacity)
             }
         }
+    }
+}
+
+/// "Edit" / "Done" capsule shown top-left while the panel is open (as in the Camera app).
+struct TopBarEditButton: View {
+    @Bindable var vm: CameraWorkspaceViewModel
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(duration: 0.3)) { vm.isEditingTopBar.toggle() }
+        } label: {
+            Text(vm.isEditingTopBar ? "Done" : "Edit")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(vm.isEditingTopBar ? Color.yellow : .white)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 32)
+                .cameraGlass(.interactive, in: Capsule())
+        }
+        .buttonStyle(PressableButtonStyle())
+        .accessibilityLabel(vm.isEditingTopBar ? "Done editing top bar" : "Edit top bar")
+        .accessibilityHint("Choose which controls appear in the top bar")
     }
 }

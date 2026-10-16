@@ -7,18 +7,16 @@ struct PhotoExportView: View {
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage(SettingsKey.exportContent) private var content = ExportContent.adjusted
-    @AppStorage(SettingsKey.exportFormat) private var format = ExportFormat.jpeg
-    @AppStorage(SettingsKey.gridStyle) private var gridStyle = GridStyle.thirds
     @AppStorage(SettingsKey.showCenter) private var showCenter = false
     @State private var cropToFraming = false
     @State private var burnOverlays = false
 
     private var options: ExportOptions {
-        ExportOptions(content: content, format: format, cropToFraming: cropToFraming, burnOverlays: burnOverlays)
+        ExportOptions(content: content, format: vm.exportFormat, cropToFraming: cropToFraming, burnOverlays: burnOverlays)
     }
 
     private var overlays: OverlayBurnIn {
-        OverlayBurnIn(gridDivisions: gridStyle.divisions, center: showCenter)
+        OverlayBurnIn(gridDivisions: vm.gridStyle.divisions, center: showCenter)
     }
 
     var body: some View {
@@ -35,7 +33,7 @@ struct PhotoExportView: View {
 
                 if content == .adjusted && !isVideo {
                     Section("Edited Copy") {
-                        Picker("Format", selection: $format) {
+                        Picker("Format", selection: Binding(get: { vm.exportFormat }, set: { vm.setExportFormat($0) })) {
                             ForEach(ExportFormat.allCases) { Text($0.label).tag($0) }
                         }
                         Toggle("Crop to Preview Framing", isOn: $cropToFraming)

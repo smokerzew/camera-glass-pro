@@ -11,53 +11,12 @@ struct CameraStatusRow: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 26) {
-                statusIcon(vm.flash == .off ? "bolt.slash" : vm.flash.systemImage,
-                           active: vm.flash != .off, label: "Flash effect", value: vm.flash.label) {
-                    vm.flash = vm.flash.next
-                }
-
-                statusIcon(vm.livePreference ? "livephoto" : "livephoto.slash",
-                           active: vm.livePreference, label: "Live preference",
-                           value: vm.livePreference ? "On" : "Off") {
-                    vm.livePreference.toggle()
-                }
-
-                if vm.hasMedia {
-                    Button { openExposureDial() } label: {
-                        VStack(spacing: -1) {
-                            Text(String(format: "%.1f", vm.adjustments.exposure))
-                                .font(.system(size: 15, weight: .semibold).monospacedDigit())
-                            Text("EV").font(.system(size: 8, weight: .semibold))
-                        }
-                        .foregroundStyle(vm.adjustments.exposure != 0 ? Color.yellow : .white)
-                        .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .accessibilityLabel("Exposure")
-                    .accessibilityValue(AdjustmentParameter.exposure.format(vm.adjustments.exposure))
-                    .accessibilityHint("Opens the exposure slider")
-
-                    statusIcon("square.3.layers.3d", active: vm.hasEdits, label: "Styles",
-                               value: vm.hasEdits ? "Edited" : "No edits") {
-                        vm.showAdjustments = true
-                    }
-                }
-
-                if vm.timer != .off {
-                    statusIcon("timer", active: true, label: "Timer", value: vm.timer.label) {
-                        vm.timer = vm.timer.next
-                    }
-                }
-
-                if vm.depthEffect {
-                    Button { vm.setDepth(false) } label: {
-                        Text("4.5")
-                            .font(.system(size: 15, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(.yellow)
-                            .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .accessibilityLabel("Depth effect, f 4.5")
-                    .accessibilityHint("Turns the preview depth look off")
+            // Pinned controls (choose them with Edit in the ⠿ panel), plus timer/depth while they're on.
+            HStack(spacing: 22) {
+                ForEach(vm.visibleTopBarControls) { control in
+                    topBarItem(control)
+                        .disabled(control.requiresMedia && !vm.hasMedia)
+                        .opacity(control.requiresMedia && !vm.hasMedia ? 0.4 : 1)
                 }
             }
             .buttonStyle(PressableButtonStyle())
@@ -83,25 +42,37 @@ struct CameraStatusRow: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: vm.depthTag)
     }
 
-    private func openExposureDial() {
-        withAnimation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.18)) {
-            vm.isExposureDialVisible = true
-            vm.isControlPanelOpen = true
+    @ViewBuilder
+    private func topBarItem(_ control: CameraControl) -> some View {
+        let active = vm.isActive(control) && !(control == .exposure && vm.adjustments.exposure == 0)
+        Button {
+            withAnimation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.18)) {
+                vm.perform(control, fromTopBar: true)
+            }
+        } label: {
+            Group {
+                if control == .exposure {
+                    // iOS-style "0.0 / EV" readout.
+                    VStack(spacing: -1) {
+                        Text(String(format: "%.1f", vm.adjustments.exposure))
+                            .font(.system(size: 15, weight: .semibold).monospacedDigit())
+                        Text("EV").font(.system(size: 8, weight: .semibold))
+                    }
+                } else if let value = vm.valueText(for: control) {
+                    Text(value).font(.system(size: 14, weight: .semibold).monospacedDigit())
+                } else {
+                    Image(systemName: vm.symbol(for: control))
+                        .font(.system(size: 18, weight: .regular))
+                        .symbolRenderingMode(.hierarchical)
+                }
+            }
+            .foregroundStyle(active ? Color.yellow : .white)
+            .frame(minWidth: 36, minHeight: 36)
+            .contentShape(Rectangle())
         }
-    }
-
-    private func statusIcon(_ symbol: String, active: Bool, label: String, value: String,
-                            action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 18, weight: .regular))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(active ? Color.yellow : .white)
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel(label)
-        .accessibilityValue(value)
+        .accessibilityLabel(control.title.capitalized)
+        .accessibilityValue(vm.stateDescription(for: control))
+        .accessibilityHint(vm.hint(for: control))
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 }

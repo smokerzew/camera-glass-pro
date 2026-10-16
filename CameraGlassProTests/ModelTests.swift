@@ -202,3 +202,69 @@ final class ViewModelTests: XCTestCase {
         XCTAssertTrue(vm.showPhotosPicker)
     }
 }
+
+@MainActor
+final class TopBarTests: XCTestCase {
+    private func makeDefaults() -> UserDefaults {
+        let name = "TopBarTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name) ?? .standard
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
+    func testDecodeKeepsPanelOrderAndDropsUnknown() {
+        XCTAssertEqual(CameraControl.decode(nil), CameraControl.defaultTopBar)
+        XCTAssertEqual(CameraControl.decode("grid,flash,bogus,flash"), [.flash, .grid])
+        XCTAssertEqual(CameraControl.decode(""), [])
+        XCTAssertEqual(CameraControl.encode([.live, .level]), "live,level")
+    }
+
+    func testToggleTopBarPersistsAcrossLaunches() {
+        let defaults = makeDefaults()
+        let vm = CameraWorkspaceViewModel(defaults: defaults)
+        XCTAssertEqual(vm.topBarControls, CameraControl.defaultTopBar)
+        vm.toggleTopBar(.grid)
+        vm.toggleTopBar(.flash)
+        XCTAssertTrue(vm.isInTopBar(.grid))
+        XCTAssertFalse(vm.isInTopBar(.flash))
+
+        let relaunched = CameraWorkspaceViewModel(defaults: defaults)
+        XCTAssertEqual(relaunched.topBarControls, vm.topBarControls)
+    }
+
+    func testTimerAndDepthAppearWhileActive() {
+        let vm = CameraWorkspaceViewModel(defaults: makeDefaults())
+        XCTAssertFalse(vm.visibleTopBarControls.contains(.timer))
+        vm.perform(.timer)
+        XCTAssertTrue(vm.visibleTopBarControls.contains(.timer))
+    }
+
+    func testGridLevelAndFormatPersist() {
+        let defaults = makeDefaults()
+        let vm = CameraWorkspaceViewModel(defaults: defaults)
+        XCTAssertEqual(vm.gridStyle, .thirds)
+        vm.perform(.grid)
+        vm.perform(.level)
+        vm.perform(.format)
+        let relaunched = CameraWorkspaceViewModel(defaults: defaults)
+        XCTAssertEqual(relaunched.gridStyle, .fine)
+        XCTAssertTrue(relaunched.showLevel)
+        XCTAssertEqual(relaunched.exportFormat, .heic)
+    }
+
+    func testExposureFromTopBarOpensPanelSlider() {
+        let vm = CameraWorkspaceViewModel(defaults: makeDefaults())
+        vm.perform(.exposure, fromTopBar: true)
+        XCTAssertTrue(vm.isControlPanelOpen)
+        XCTAssertTrue(vm.isExposureDialVisible)
+    }
+
+    func testEveryControlHasPresentation() {
+        let vm = CameraWorkspaceViewModel(defaults: makeDefaults())
+        for control in CameraControl.allCases {
+            XCTAssertFalse(vm.symbol(for: control).isEmpty)
+            XCTAssertFalse(vm.hint(for: control).isEmpty)
+            XCTAssertFalse(control.title.isEmpty)
+        }
+    }
+}

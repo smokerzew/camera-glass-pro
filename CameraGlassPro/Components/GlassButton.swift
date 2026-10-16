@@ -49,6 +49,8 @@ struct PanelControlButton: View {
     var isActive = false
     var stateDescription: String? = nil
     var hint: String = ""
+    /// Edit mode badge: true = pinned to the top bar (shows −), false = not pinned (shows +), nil = not editing.
+    var pinnedInTopBar: Bool? = nil
     let action: () -> Void
 
     @Environment(\.cameraLargeLabels) private var largeLabels
@@ -71,6 +73,16 @@ struct PanelControlButton: View {
                 .foregroundStyle(isActive ? Color.yellow : .white)
                 .frame(width: 62, height: 62)
                 .overlay { if isActive { Circle().strokeBorder(.yellow.opacity(0.7), lineWidth: 1.5) } }
+                .overlay(alignment: .topTrailing) {
+                    if let pinned = pinnedInTopBar {
+                        Image(systemName: pinned ? "minus.circle.fill" : "plus.circle.fill")
+                            .font(.system(size: 20))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, pinned ? Color.red : Color.green)
+                            .offset(x: 4, y: -4)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
 
                 Text(title)
                     .font(largeLabels ? .footnote.weight(.semibold) : .caption2.weight(.semibold))
@@ -85,7 +97,7 @@ struct PanelControlButton: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title.capitalized)
         .accessibilityValue(stateDescription ?? value ?? (isActive ? "On" : "Off"))
-        .accessibilityHint(hint)
+        .accessibilityHint(pinnedInTopBar.map { $0 ? "Removes it from the top bar" : "Adds it to the top bar" } ?? hint)
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }

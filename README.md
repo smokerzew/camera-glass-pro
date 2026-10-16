@@ -43,6 +43,8 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | ⠿ panel | FLASH, LIVE, ASPECT, TIMER, EXPOSURE (slider), STYLES (adjustments), FILTER (Vivid/Mono/Noir/Chrome/Fade/Instant), DEPTH, NIGHT MODE, FORMAT (export format) | Real except Flash/Live (visual) and Depth (preview-only vignette) |
 | Video | Import videos from Photos or Files. Full-screen looping playback; the red center control plays/pauses (stop square while playing) with a running timecode. Exposure, Styles, Filter and Night Look apply live per frame and to the edited MOV export. | Real |
 | Save Screen with UI | Export sheet › Save Screen with UI: captures the viewfinder with the camera controls exactly as shown and adds it to Photos (videos use the current frame). | Real |
+| Top bar | Pick which controls appear: open ⠿, tap **Edit** (top-left), then + / − on any control. Saved across launches. Timer and depth also appear while they're on. | Real |
+| Grid & Level | GRID (off / thirds / fine) and LEVEL buttons in the ⠿ panel; saved across launches. | Real |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 

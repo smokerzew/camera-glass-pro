@@ -57,6 +57,15 @@ final class CameraWorkspaceViewModel {
     private(set) var depthTag: String?
     var timer: TimerSetting = .off
     private(set) var countdown: Int?
+
+    // MARK: Persistent controls (saved in UserDefaults)
+    private(set) var gridStyle: GridStyle = .thirds
+    private(set) var showLevel = false
+    private(set) var exportFormat: ExportFormat = .jpeg
+    /// Controls pinned to the top bar, in panel order. Changed with the panel's Edit mode.
+    private(set) var topBarControls: [CameraControl] = CameraControl.defaultTopBar
+    /// Panel Edit mode: tapping a control pins/unpins it instead of running it.
+    var isEditingTopBar = false
     private(set) var flashPulse = 0
 
     // MARK: Presentation
@@ -102,7 +111,51 @@ final class CameraWorkspaceViewModel {
         self.processor = processor
         self.exporter = exporter
         self.defaults = defaults
+        gridStyle = GridStyle(rawValue: defaults.string(forKey: SettingsKey.gridStyle) ?? "") ?? .thirds
+        showLevel = defaults.bool(forKey: SettingsKey.showLevel)
+        exportFormat = ExportFormat(rawValue: defaults.string(forKey: SettingsKey.exportFormat) ?? "") ?? .jpeg
+        topBarControls = CameraControl.decode(defaults.string(forKey: SettingsKey.topBarControls))
         resetFraming()
+    }
+
+    // MARK: Persistent controls
+
+    func setGridStyle(_ style: GridStyle) {
+        gridStyle = style
+        defaults.set(style.rawValue, forKey: SettingsKey.gridStyle)
+    }
+
+    func setShowLevel(_ show: Bool) {
+        showLevel = show
+        defaults.set(show, forKey: SettingsKey.showLevel)
+    }
+
+    func setExportFormat(_ format: ExportFormat) {
+        exportFormat = format
+        defaults.set(format.rawValue, forKey: SettingsKey.exportFormat)
+        invalidateExport()
+    }
+
+    func cycleExportFormat() {
+        let all = ExportFormat.allCases
+        setExportFormat(all[((all.firstIndex(of: exportFormat) ?? 0) + 1) % all.count])
+    }
+
+    func isInTopBar(_ control: CameraControl) -> Bool { topBarControls.contains(control) }
+
+    /// Pins or unpins a control; the bar always keeps panel order.
+    func toggleTopBar(_ control: CameraControl) {
+        var set = Set(topBarControls)
+        if set.contains(control) { set.remove(control) } else { set.insert(control) }
+        topBarControls = CameraControl.allCases.filter(set.contains)
+        defaults.set(CameraControl.encode(topBarControls), forKey: SettingsKey.topBarControls)
+    }
+
+    /// Top bar contents: the pinned controls, plus timer and depth whenever they're on (as iOS does).
+    var visibleTopBarControls: [CameraControl] {
+        CameraControl.allCases.filter { control in
+            isInTopBar(control) || ((control == .timer || control == .depth) && isActive(control))
+        }
     }
 
     // MARK: Derived
@@ -342,7 +395,7 @@ final class CameraWorkspaceViewModel {
 
     /// True when any camera-style control differs from its default (rings the panel button yellow).
     var hasActiveControls: Bool {
-        hasEdits || flash != .off || livePreference || timer != .off || depthEffect || aspect != .original
+        hasEdits || flash != .off || livePreference || timer != .off || depthEffect || aspect != .original || showLevel
     }
 
     func setAdjustment(_ parameter: AdjustmentParameter, to value: Double) {

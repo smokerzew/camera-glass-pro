@@ -40,6 +40,9 @@ struct CameraWorkspaceView: View {
             .sensoryFeedback(.impact(weight: .light), trigger: vm.flashPulse)
             .sensoryFeedback(.error, trigger: vm.alert?.id) { _, new in new != nil }
             .onChange(of: vm.flashPulse) { playFlash() }
+            .onChange(of: vm.isControlPanelOpen) { _, open in
+                if !open { vm.isEditingTopBar = false }
+            }
             .environment(\.cameraReduceMotion, reduceMotion)
             .environment(\.cameraHighContrast, appHighContrast || systemContrast == .increased)
             .environment(\.cameraLargeLabels, largeLabels)
@@ -70,6 +73,20 @@ struct CameraWorkspaceView: View {
                     .padding(.bottom, 6)
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                     .zIndex(1)
+
+                // "Edit" sits top-left beside the Dynamic Island, as in the Camera app.
+                VStack {
+                    HStack {
+                        TopBarEditButton(vm: vm)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(.leading, 24)
+                .padding(.top, 14)
+                .ignoresSafeArea(edges: .top)
+                .transition(.opacity)
+                .zIndex(1)
             }
 
             Color.white

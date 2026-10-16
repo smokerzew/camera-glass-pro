@@ -6,9 +6,7 @@ import SwiftUI
 struct PhotoPreviewView: View {
     @Bindable var vm: CameraWorkspaceViewModel
 
-    @AppStorage(SettingsKey.gridStyle) private var gridStyle = GridStyle.thirds
     @AppStorage(SettingsKey.gridOpacity) private var gridOpacity = 0.45
-    @AppStorage(SettingsKey.showLevel) private var showLevel = false
     @AppStorage(SettingsKey.showCenter) private var showCenter = false
     @AppStorage(SettingsKey.showModeGuides) private var showModeGuides = true
     @Environment(\.cameraReduceMotion) private var reduceMotion
@@ -97,12 +95,12 @@ struct PhotoPreviewView: View {
         ZStack {
             if vm.mode == .portrait || vm.depthEffect { PortraitVignette() }
             if showModeGuides, let ratio = vm.mode.framingGuideRatio { ModeFramingGuide(ratio: ratio) }
-            CameraGridOverlay(style: gridStyle, opacity: gridOpacity)
-            if showLevel { CameraLevelGuide() }
+            CameraGridOverlay(style: vm.gridStyle, opacity: gridOpacity)
+            if vm.showLevel { CameraLevelGuide() }
             if showCenter { CenterGuide() }
         }
         .allowsHitTesting(false)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: gridStyle)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.gridStyle)
     }
 
     private var magnification: some Gesture {
