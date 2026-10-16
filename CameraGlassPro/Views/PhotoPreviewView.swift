@@ -120,8 +120,11 @@ struct PhotoPreviewView: View {
         .accessibilityAction(named: "Pan up") { vm.setPan(CGPoint(x: vm.pan.x, y: vm.pan.y + 0.25)) }
         .accessibilityAction(named: "Pan down") { vm.setPan(CGPoint(x: vm.pan.x, y: vm.pan.y - 0.25)) }
         .onTapGesture {
-            if vm.isControlPanelOpen {
-                withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) { vm.isControlPanelOpen = false }
+            if vm.isControlPanelOpen || vm.showFilterPicker {
+                withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) {
+                    vm.isControlPanelOpen = false
+                    vm.showFilterPicker = false
+                }
             }
         }
     }

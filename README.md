@@ -59,6 +59,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Restore | Reopens the last photo/video with its edits, mode, zoom, aspect, pan and trim on relaunch (one copy kept in the app's private storage). | Real |
 | Live Text | TEXT control: on-device text recognition (Vision) with tappable boxes (tap = copy line), Show Text sheet with Copy All and on-device Translate. Pauses videos to scan the current frame. | Real |
 | Mode carousel | Slide the mode strip like iOS 27: the capsule opens to full width, the thumbnail and Files button hide, labels glide under a fixed glass pill, the centered mode lights up with a haptic tick, and it snaps on release. Tap a mode to jump; tap the selected one for controls. | — |
+| Filters | FILTER opens a glass pop-up with live preview tiles in four tabs: Classic (Vivid, Mono, Noir, Chrome, Fade, Instant), Y2K (Y2K Glow, Flash Pop, Cyber, Pastel), Quality (HD, Clarity, HDR, Crisp) and DigiCam FX (DigiCam, CCD, Lo-Fi, Date Stamp). Applied to the preview, video frames and exports. Date Stamp prints today's date as a style; no metadata is touched. | Real |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 

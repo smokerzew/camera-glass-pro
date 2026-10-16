@@ -66,7 +66,7 @@ final class ImageProcessingService: @unchecked Sendable {
             image = filter.outputImage ?? image
         }
 
-        image = applyLook(a.filter, to: image)
+        image = applyLook(a.filter, to: image, extent: input.extent)
 
         if a.grain > 0 {
             image = addGrain(amount: a.grain, to: image, extent: input.extent)
@@ -93,24 +93,6 @@ final class ImageProcessingService: @unchecked Sendable {
         add.inputImage = grain
         add.backgroundImage = image
         return add.outputImage ?? image
-    }
-
-    private func applyLook(_ look: PhotoFilter, to image: CIImage) -> CIImage {
-        let filter: CIFilter
-        switch look {
-        case .none: return image
-        case .vivid:
-            let vibrance = CIFilter.vibrance()
-            vibrance.amount = 0.6
-            filter = vibrance
-        case .mono: filter = CIFilter.photoEffectMono()
-        case .noir: filter = CIFilter.photoEffectNoir()
-        case .chrome: filter = CIFilter.photoEffectChrome()
-        case .fade: filter = CIFilter.photoEffectFade()
-        case .instant: filter = CIFilter.photoEffectInstant()
-        }
-        filter.setValue(image, forKey: kCIInputImageKey)
-        return filter.outputImage ?? image
     }
 
     /// Focus peaking: transparent image with the strongest edges painted red.

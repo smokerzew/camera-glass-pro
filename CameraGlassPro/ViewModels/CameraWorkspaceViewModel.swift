@@ -66,6 +66,11 @@ final class CameraWorkspaceViewModel {
     /// Peaking/zebra overlay for photos (videos get it inside the live compositor).
     private(set) var overlayImage: CGImage?
 
+    // MARK: Filter picker
+    var showFilterPicker = false
+    /// Small previews of every filter on the current photo/video (rendered when the picker opens).
+    private(set) var filterThumbnails: [PhotoFilter: CGImage] = [:]
+
     // MARK: Live Text
     private(set) var liveTextEnabled = false
     private(set) var recognizedText: [RecognizedText] = []
@@ -156,6 +161,7 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var lastUndoPoint = Date.distantPast
     @ObservationIgnored private var entryEdits: [UUID: PhotoAdjustmentState] = [:]
     @ObservationIgnored private var textTask: Task<Void, Never>?
+    @ObservationIgnored private var thumbnailTask: Task<Void, Never>?
     @ObservationIgnored private var restoringState: SessionState?
     private let sessionStore: SessionStore?
 
@@ -717,6 +723,46 @@ final class CameraWorkspaceViewModel {
         recordUndoPoint(force: true)
         adjustments.reset(parameter)
         adjustmentsChanged()
+    }
+
+    func setFilter(_ filter: PhotoFilter) {
+        guard filter != adjustments.filter else { return }
+        recordUndoPoint(force: true)
+        adjustments.filter = filter
+        adjustmentsChanged()
+    }
+
+    /// Opens the glass filter pop-up and renders a live preview tile for each filter.
+    func openFilterPicker() {
+        isControlPanelOpen = false
+        showFilterPicker = true
+        renderFilterThumbnails()
+    }
+
+    private func renderFilterThumbnails() {
+        thumbnailTask?.cancel()
+        guard let source = photo?.preview ?? video?.poster else { filterThumbnails = [:]; return }
+        let recipe = adjustments
+        let processor = self.processor
+        thumbnailTask = Task { [weak self] in
+            let tiles = await Task.detached(priority: .userInitiated) { () -> [PhotoFilter: CGImage] in
+                let full = CIImage(cgImage: source)
+                let scale = 160 / max(full.extent.width, full.extent.height, 1)
+                let small = full.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                var result: [PhotoFilter: CGImage] = [:]
+                for filter in PhotoFilter.allCases {
+                    var state = recipe
+                    state.filter = filter
+                    let output = processor.apply(state, to: small)
+                    if let image = processor.context.createCGImage(output, from: small.extent) {
+                        result[filter] = image
+                    }
+                }
+                return result
+            }.value
+            guard !Task.isCancelled else { return }
+            self?.filterThumbnails = tiles
+        }
     }
 
     func cycleFilter() {

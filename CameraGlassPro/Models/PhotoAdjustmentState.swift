@@ -130,11 +130,28 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// Core Image photo looks cycled by the panel's FILTER control.
+/// Photo looks picked in the FILTER pop-up (grouped by `FilterCategory`).
 enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case none, vivid, mono, noir, chrome, fade, instant
+    case y2kGlow, flashPop, cyber, pastel
+    case hd, clarity, hdr, crisp
+    case digicam, ccd, lofi, dateStamp
 
-    var label: String { self == .none ? "Off" : rawValue.capitalized }
+    var label: String {
+        switch self {
+        case .none: "Off"
+        case .y2kGlow: "Y2K Glow"
+        case .flashPop: "Flash Pop"
+        case .pastel: "Pastel"
+        case .hd: "HD"
+        case .hdr: "HDR"
+        case .digicam: "DigiCam"
+        case .ccd: "CCD"
+        case .lofi: "Lo-Fi"
+        case .dateStamp: "Date Stamp"
+        default: rawValue.capitalized
+        }
+    }
 
     var next: PhotoFilter {
         let all = Self.allCases
