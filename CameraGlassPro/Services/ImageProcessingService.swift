@@ -31,11 +31,12 @@ final class ImageProcessingService: @unchecked Sendable {
         }
 
         if a.warmth != 0 {
-            // A target neutral above the source neutral renders warmer; below renders cooler.
+            // A target neutral below the source neutral renders warmer; above renders cooler
+            // (sign verified by ImageProcessingTests.testWarmthDirection on CI).
             let filter = CIFilter.temperatureAndTint()
             filter.inputImage = image
             filter.neutral = CIVector(x: 6500, y: 0)
-            filter.targetNeutral = CIVector(x: 6500 + a.warmth * 2500, y: 0)
+            filter.targetNeutral = CIVector(x: 6500 - a.warmth * 2500, y: 0)
             image = filter.outputImage ?? image
         }
 

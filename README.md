@@ -187,7 +187,7 @@ A file ending in `.ipa` is not automatically installable. The signature and prov
 - **"Signing requires a development team"**: choose your Team in Signing & Capabilities, or pass `DEVELOPMENT_TEAM=` to xcodebuild.
 - **The project won't open or reports a damaged file**: run `brew install xcodegen && xcodegen` in this folder to regenerate it from `project.yml`.
 - **`glassEffect` not found**: you are on an SDK older than iOS 26. Install Xcode 26, or accept the fallback (see Requirements).
-- **The Warmth slider goes the wrong way**: `ImageProcessingTests.testWarmthDirection` checks this. If it fails, flip the sign in `ImageProcessingService.apply`.
+- **The Warmth slider goes the wrong way**: `ImageProcessingTests.testWarmthDirection` checks this on every CI run.
 
 ## Privacy
 
