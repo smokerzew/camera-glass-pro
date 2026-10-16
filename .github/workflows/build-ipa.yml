@@ -36,7 +36,15 @@ jobs:
             -project CameraGlassPro.xcodeproj \
             -scheme CameraGlassPro \
             -destination "id=$SIM_ID" \
-            -resultBundlePath TestResults.xcresult
+            -resultBundlePath TestResults.xcresult 2>&1 | tee test.log
+
+      - name: Surface test and compile errors as annotations
+        if: failure()
+        run: |
+          # Annotations are readable without signing in, unlike raw logs.
+          grep -E "error:|: failed|XCTAssert|Fatal error|Testing failed" test.log | sort -u | head -40 | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
 
       - name: Build unsigned device app
         run: |

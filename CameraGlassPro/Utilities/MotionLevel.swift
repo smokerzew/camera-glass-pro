@@ -16,7 +16,7 @@ final class MotionLevel {
     private let manager = CMMotionManager()
 
     /// Within this many radians the guide snaps to level and turns yellow (~1°).
-    static let levelTolerance = 1.0 * .pi / 180
+    nonisolated static let levelTolerance = 1.0 * .pi / 180
 
     func start() {
         guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
