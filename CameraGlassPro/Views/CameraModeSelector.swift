@@ -40,14 +40,10 @@ struct CameraModeSelector: View {
                     .cameraGlass(.regular, in: Capsule())
                     .opacity(isInteracting ? 0 : 1)
 
-                if #available(iOS 26.0, *) {
-                    // iOS 26+: clear Liquid Glass pill above the text refracts the labels sliding under it.
-                    labels(stripOrigin: stripOrigin, active: active, width: width)
-                    pill(for: active).allowsHitTesting(false)
-                } else {
-                    pill(for: active).allowsHitTesting(false)
-                    labels(stripOrigin: stripOrigin, active: active, width: width)
-                }
+                // The pill sits behind the labels: Liquid Glass blurs whatever is under it,
+                // so placing it over the text made the selected mode unreadable on device.
+                pill(for: active).allowsHitTesting(false)
+                labels(stripOrigin: stripOrigin, active: active, width: width)
             }
             .frame(width: width, height: proxy.size.height)
             .mask {
@@ -109,7 +105,7 @@ struct CameraModeSelector: View {
         Capsule()
             .fill(Color.black.opacity(0.35))
             .frame(width: (labelWidths[mode] ?? 60) + 34, height: pillHeight)
-            .cameraGlass(.subtle, in: Capsule())
+            .cameraGlass(.selected, in: Capsule())
             .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.1), value: mode)
     }
 

@@ -39,7 +39,7 @@ enum AspectRatioOption: String, CaseIterable, Identifiable {
 
 enum ZoomLimits {
     static let minimum: CGFloat = 0.5
-    static let maximum: CGFloat = 5
+    static let maximum: CGFloat = 25
     static let presets: [CGFloat] = [0.5, 1, 2, 5]
 
     static func clamp(_ zoom: CGFloat) -> CGFloat {
@@ -103,6 +103,32 @@ enum FramingGeometry {
         return CGRect(x: (image.width - width) / 2 * (1 - pan.x),
                       y: (image.height - height) / 2 * (1 - pan.y),
                       width: width, height: height)
+    }
+
+    /// Zoom at which the mini-map appears (past the 5× telephoto stop, as in the Camera app).
+    static let miniMapThreshold: CGFloat = 6
+
+    /// Mini-map framing at high zoom: `region` is the wider view it shows (pixels, aspect `miniRatio`,
+    /// as seen at `referenceZoom`), kept inside the image and around the current view; `highlight`
+    /// is the current view inside it, normalized 0...1 (the yellow rectangle).
+    static func miniMap(image: CGSize, frameRatio: CGFloat, zoom: CGFloat, pan: CGPoint,
+                        referenceZoom: CGFloat = 5, miniRatio: CGFloat = 0.75) -> (region: CGRect, highlight: CGRect) {
+        let current = visibleRect(image: image, ratio: frameRatio, zoom: zoom, fill: true, pan: pan)
+        let reference = visibleRect(image: image, ratio: miniRatio, zoom: referenceZoom, fill: true)
+        guard reference.width > 0, reference.height > 0 else { return (.zero, .zero) }
+        let size = CGSize(width: max(reference.width, current.width), height: max(reference.height, current.height))
+        let origin = CGPoint(
+            x: min(max(current.midX - size.width / 2, 0), max(0, image.width - size.width)),
+            y: min(max(current.midY - size.height / 2, 0), max(0, image.height - size.height))
+        )
+        let region = CGRect(origin: origin, size: size)
+        let highlight = CGRect(
+            x: (current.minX - region.minX) / region.width,
+            y: (current.minY - region.minY) / region.height,
+            width: current.width / region.width,
+            height: current.height / region.height
+        )
+        return (region, highlight)
     }
 
     /// `visibleRect` expressed in 0...1 units of the image.

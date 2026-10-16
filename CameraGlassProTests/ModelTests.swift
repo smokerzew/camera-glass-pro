@@ -61,7 +61,8 @@ final class AdjustmentStateTests: XCTestCase {
 final class FramingTests: XCTestCase {
     func testZoomClamp() {
         XCTAssertEqual(ZoomLimits.clamp(0.1), 0.5)
-        XCTAssertEqual(ZoomLimits.clamp(12), 5)
+        XCTAssertEqual(ZoomLimits.clamp(12), 12)
+        XCTAssertEqual(ZoomLimits.clamp(40), 25)
         XCTAssertEqual(ZoomLimits.clamp(2), 2)
         XCTAssertEqual(ZoomLimits.clamp(.infinity), 1)
     }

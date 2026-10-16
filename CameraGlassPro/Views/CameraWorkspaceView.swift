@@ -83,8 +83,20 @@ struct CameraWorkspaceView: View {
                             .allowsHitTesting(false)
                             .transition(.opacity)
                     }
+
+                    // Picture-in-picture overview past 6x, top-right like the Camera app.
+                    HStack {
+                        Spacer()
+                        ZoomMiniMap(vm: vm)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .topTrailing)))
+                    }
+                    .padding(.top, 72)
+                    .padding(.trailing, 14)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25),
+                               value: vm.zoom >= FramingGeometry.miniMapThreshold)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped() // keeps the zoom dial's dark disc inside the viewfinder
 
                 CameraBottomBar(vm: vm)
             }

@@ -66,8 +66,8 @@ final class IconRotationTests: XCTestCase {
 final class ZoomDialTests: XCTestCase {
     func testPositionRoundTrips() {
         XCTAssertEqual(ZoomDial.position(for: 0.5), 0, accuracy: 1e-9)
-        XCTAssertEqual(ZoomDial.position(for: 5), 1, accuracy: 1e-9)
-        for zoom: CGFloat in [0.5, 1, 2, 3.3, 5] {
+        XCTAssertEqual(ZoomDial.position(for: 25), 1, accuracy: 1e-9)
+        for zoom: CGFloat in [0.5, 1, 2, 3.3, 5, 9.9, 25] {
             XCTAssertEqual(ZoomDial.zoom(at: ZoomDial.position(for: zoom)), zoom, accuracy: 0.0001)
         }
     }
@@ -78,5 +78,25 @@ final class ZoomDialTests: XCTestCase {
         let zoomedOut = ZoomDial.zoom(from: 1, dragDistance: 100, radius: 300)
         XCTAssertLessThan(zoomedOut, 1)
         XCTAssertEqual(ZoomDial.zoom(from: 5, dragDistance: -10_000, radius: 300), ZoomLimits.maximum)
+    }
+}
+
+final class MiniMapTests: XCTestCase {
+    func testHighlightShrinksAsZoomGrows() {
+        let image = CGSize(width: 3000, height: 4000)
+        let at10 = FramingGeometry.miniMap(image: image, frameRatio: 0.75, zoom: 10, pan: .zero)
+        let at20 = FramingGeometry.miniMap(image: image, frameRatio: 0.75, zoom: 20, pan: .zero)
+        XCTAssertEqual(at10.highlight.width, 0.5, accuracy: 0.01, "10x inside the 5x overview is half as wide")
+        XCTAssertLessThan(at20.highlight.width, at10.highlight.width)
+        XCTAssertEqual(at10.highlight.midX, 0.5, accuracy: 0.01, "centered when not panned")
+    }
+
+    func testRegionStaysInsideImageWhenPannedToEdge() {
+        let image = CGSize(width: 3000, height: 4000)
+        let map = FramingGeometry.miniMap(image: image, frameRatio: 0.75, zoom: 12, pan: CGPoint(x: 1, y: 1))
+        XCTAssertGreaterThanOrEqual(map.region.minX, 0)
+        XCTAssertGreaterThanOrEqual(map.region.minY, 0)
+        XCTAssertGreaterThanOrEqual(map.highlight.minX, -0.001)
+        XCTAssertLessThanOrEqual(map.highlight.maxX, 1.001)
     }
 }
