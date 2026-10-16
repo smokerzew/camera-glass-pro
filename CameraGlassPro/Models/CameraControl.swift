@@ -2,7 +2,7 @@ import Foundation
 
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
-    case flash, live, aspect, timer, exposure, styles, filter, depth, nightMode, grid, level, format
+    case flash, live, aspect, timer, exposure, styles, filter, depth, nightMode, grid, level, scopes, peaking, format
 
     var id: String { rawValue }
 
@@ -16,7 +16,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
     /// Controls that act on the imported photo or video and are disabled until there is one.
     var requiresMedia: Bool {
         switch self {
-        case .exposure, .styles, .filter, .depth, .nightMode: true
+        case .exposure, .styles, .filter, .depth, .nightMode, .scopes, .peaking: true
         default: false
         }
     }
@@ -50,6 +50,8 @@ extension CameraWorkspaceViewModel {
         case .nightMode: adjustments.nightLook ? "moon.fill" : "moon"
         case .grid: "squareshape.split.3x3"
         case .level: "level"
+        case .scopes: "chart.bar.xaxis"
+        case .peaking: "scope"
         case .format: "photo"
         }
     }
@@ -67,6 +69,8 @@ extension CameraWorkspaceViewModel {
         case .nightMode: adjustments.nightLook
         case .grid: gridStyle != .off
         case .level: showLevel
+        case .scopes: scopeMode != .off
+        case .peaking: focusPeaking
         case .format: false
         }
     }
@@ -77,6 +81,7 @@ extension CameraWorkspaceViewModel {
         case .aspect: aspect == .original ? nil : aspect.rawValue
         case .timer: timer == .off ? nil : timer.label
         case .depth: depthEffect ? "4.5" : nil
+        case .scopes: scopeMode.shortLabel
         case .format: exportFormat == .heic ? "HEIF" : exportFormat.label
         default: nil
         }
@@ -95,6 +100,8 @@ extension CameraWorkspaceViewModel {
         case .nightMode: adjustments.nightLook ? "On" : "Off"
         case .grid: gridStyle.label
         case .level: showLevel ? "On" : "Off"
+        case .scopes: scopeMode.label
+        case .peaking: focusPeaking ? "On" : "Off"
         case .format: exportFormat.label
         }
     }
@@ -111,7 +118,9 @@ extension CameraWorkspaceViewModel {
         case .depth: "Preview-only depth look with a soft vignette"
         case .nightMode: "Lifts shadows and reduces noise"
         case .grid: "Cycles off, rule of thirds and fine grid"
-        case .level: "Shows a composition level guide"
+        case .level: "Shows a level that follows your phone's tilt"
+        case .scopes: "Cycles Luminance, RGB and RGB Parade exposure scopes"
+        case .peaking: "Highlights the sharpest edges in red"
         case .format: "Cycles the export format: JPEG, HEIF, PNG"
         }
     }
@@ -136,6 +145,8 @@ extension CameraWorkspaceViewModel {
         case .nightMode: setNightLook(!adjustments.nightLook)
         case .grid: setGridStyle(gridStyle.next)
         case .level: setShowLevel(!showLevel)
+        case .scopes: setScopeMode(scopeMode.next)
+        case .peaking: setFocusPeaking(!focusPeaking)
         case .format: cycleExportFormat()
         }
     }

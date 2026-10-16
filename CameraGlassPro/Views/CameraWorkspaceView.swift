@@ -54,12 +54,20 @@ struct CameraWorkspaceView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                ZStack {
+                ZStack(alignment: .topLeading) {
                     PhotoPreviewView(vm: vm)
                     VStack(spacing: 0) {
                         CameraStatusRow(vm: vm)
                         Spacer(minLength: 0)
                         CameraShutterControls(vm: vm)
+                    }
+
+                    if vm.scopeMode != .off, let data = vm.scopeData {
+                        ScopeView(mode: vm.scopeMode, data: data)
+                            .padding(.top, 58)
+                            .padding(.leading, 12)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -33,14 +33,20 @@ struct PickedVideoFile: Transferable {
     }
 }
 
-/// The live adjustment recipe read by the video compositor on its own thread.
+/// The live adjustment recipe (and display-only focus peaking) read by the video compositor on its own thread.
 final class AdjustmentBox: @unchecked Sendable {
     private let lock = NSLock()
     private var stored = PhotoAdjustmentState()
+    private var storedPeaking = false
 
     var value: PhotoAdjustmentState {
         get { lock.withLock { stored } }
         set { lock.withLock { stored = newValue } }
+    }
+
+    var peaking: Bool {
+        get { lock.withLock { storedPeaking } }
+        set { lock.withLock { storedPeaking = newValue } }
     }
 }
 
@@ -100,7 +106,10 @@ enum VideoService {
         processor: ImageProcessingService
     ) async throws -> AVVideoComposition {
         try await AVMutableVideoComposition.videoComposition(with: asset) { request in
-            let output = processor.apply(recipe.value, to: request.sourceImage)
+            var output = processor.apply(recipe.value, to: request.sourceImage)
+            if recipe.peaking {
+                output = processor.peakingOverlay(for: output).composited(over: output)
+            }
             request.finish(with: output, context: processor.context)
         }
     }

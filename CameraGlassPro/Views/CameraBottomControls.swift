@@ -176,7 +176,9 @@ struct CameraBottomBar: View {
             .accessibilityHint("Share or save the original or an edited copy")
 
             Spacer(minLength: 0)
-            CameraModeSelector(selection: $vm.mode)
+            CameraModeSelector(selection: $vm.mode) {
+                withAnimation(.spring(duration: 0.4, bounce: 0.18)) { vm.isControlPanelOpen = true }
+            }
                 .frame(maxWidth: 250)
             Spacer(minLength: 0)
 
@@ -273,6 +275,7 @@ struct ImportControl: View {
     }
 
     private var accessibilityLabel: String {
+        if vm.isRecordingUI { return "Stop recording and save" }
         if vm.centerControlPlaysVideo { return vm.isPlaying ? "Pause video" : "Play video" }
         if vm.countdown != nil { return "Cancel timer" }
         return vm.hasMedia ? "Replace" : "Import photo or video"

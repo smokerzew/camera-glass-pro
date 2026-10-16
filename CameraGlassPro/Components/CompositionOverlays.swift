@@ -38,34 +38,49 @@ struct CameraGridOverlay: View {
     }
 }
 
-/// Static composition level: a horizon reference with a centered alignment mark.
-/// It does not read device sensors; it is a guide for lining up the imported photo.
+/// iOS-style level. The outer segments stay fixed to the screen; the middle segment shows the true horizon
+/// from the phone's tilt. Within ~1° everything turns yellow and joins into one line (with a light tap).
 struct CameraLevelGuide: View {
+    /// Phone tilt in radians (from `MotionLevel`); 0 = level.
+    var angle: Double = 0
+    var isUpright = true
+
+    @Environment(\.cameraReduceMotion) private var reduceMotion
+
+    private var isLevel: Bool { isUpright && MotionLevel.isLevel(angle) }
+
     var body: some View {
         GeometryReader { proxy in
-            let width = proxy.size.width
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            let arm = proxy.size.width * 0.16
+            let gap: CGFloat = isLevel ? 0 : 34
+            let color: Color = isLevel ? .yellow : .white
+
             ZStack {
                 Path { path in
-                    let gap: CGFloat = 26
-                    let arm = width * 0.18
-                    path.move(to: CGPoint(x: center.x - gap - arm, y: center.y))
-                    path.addLine(to: CGPoint(x: center.x - gap, y: center.y))
-                    path.move(to: CGPoint(x: center.x + gap, y: center.y))
-                    path.addLine(to: CGPoint(x: center.x + gap + arm, y: center.y))
+                    path.move(to: CGPoint(x: center.x - gap - 40 - arm, y: center.y))
+                    path.addLine(to: CGPoint(x: center.x - gap - 40, y: center.y))
+                    path.move(to: CGPoint(x: center.x + gap + 40, y: center.y))
+                    path.addLine(to: CGPoint(x: center.x + gap + 40 + arm, y: center.y))
                 }
-                .stroke(.white.opacity(0.85), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+                .stroke(color.opacity(0.9), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
 
-                Path { path in
-                    path.move(to: CGPoint(x: center.x - 14, y: center.y))
-                    path.addLine(to: CGPoint(x: center.x + 14, y: center.y))
-                }
-                .stroke(.yellow, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                // The horizon: counter-rotates against the phone's tilt.
+                Capsule()
+                    .fill(color)
+                    .frame(width: 80, height: 1.6)
+                    .rotationEffect(.radians(isUpright ? -clampedAngle : 0))
+                    .position(center)
             }
             .shadow(color: .black.opacity(0.4), radius: 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isLevel)
         }
+        .sensoryFeedback(.impact(weight: .light), trigger: isLevel) { _, nowLevel in nowLevel }
         .accessibilityHidden(true)
     }
+
+    /// Beyond ~30° the guide stops following, like the Camera app's level.
+    private var clampedAngle: Double { min(max(angle, -.pi / 6), .pi / 6) }
 }
 
 /// Center crosshair, as in the reference screenshots.

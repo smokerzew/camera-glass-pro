@@ -11,6 +11,7 @@ struct PhotoPreviewView: View {
     @AppStorage(SettingsKey.showModeGuides) private var showModeGuides = true
     @Environment(\.cameraReduceMotion) private var reduceMotion
     @State private var pinchStartZoom: CGFloat?
+    @State private var motion = MotionLevel()
 
     var body: some View {
         GeometryReader { proxy in
@@ -30,6 +31,11 @@ struct PhotoPreviewView: View {
             .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.15), value: vm.previewRatio)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: vm.photo?.id ?? vm.video?.id)
             .onAppear { updateViewfinderRatio(proxy.size) }
+            .task(id: vm.showLevel) {
+                // Motion updates run only while the level is visible.
+                if vm.showLevel { motion.start() } else { motion.stop() }
+            }
+            .onDisappear { motion.stop() }
             .onChange(of: proxy.size) { _, size in updateViewfinderRatio(size) }
         }
     }
@@ -50,9 +56,16 @@ struct PhotoPreviewView: View {
                 }
             }
         } else if let image = vm.displayedImage {
-            Image(decorative: image, scale: 1)
-                .resizable()
-                .interpolation(.high)
+            ZStack {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .interpolation(.high)
+                if vm.focusPeaking, let peaking = vm.peakingImage {
+                    Image(decorative: peaking, scale: 1)
+                        .resizable()
+                        .transition(.opacity)
+                }
+            }
         }
     }
 
@@ -96,7 +109,7 @@ struct PhotoPreviewView: View {
             if vm.mode == .portrait || vm.depthEffect { PortraitVignette() }
             if showModeGuides, let ratio = vm.mode.framingGuideRatio { ModeFramingGuide(ratio: ratio) }
             CameraGridOverlay(style: vm.gridStyle, opacity: gridOpacity)
-            if vm.showLevel { CameraLevelGuide() }
+            if vm.showLevel { CameraLevelGuide(angle: motion.angle, isUpright: motion.isUpright) }
             if showCenter { CenterGuide() }
         }
         .allowsHitTesting(false)

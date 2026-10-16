@@ -81,6 +81,35 @@ final class ImageProcessingService: @unchecked Sendable {
         return filter.outputImage ?? image
     }
 
+    /// Focus peaking: transparent image with the strongest edges painted red.
+    /// Display-only; never part of an export.
+    func peakingOverlay(for input: CIImage) -> CIImage {
+        let edges = CIFilter.edges()
+        edges.inputImage = input
+        edges.intensity = 6
+        guard let edgeImage = edges.outputImage else { return CIImage.empty() }
+
+        // Edge strength (sum of channels) becomes alpha; RGB is a fixed red. Weak edges fall below 0.
+        let matrix = CIFilter.colorMatrix()
+        matrix.inputImage = edgeImage
+        matrix.rVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        matrix.gVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        matrix.bVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        matrix.aVector = CIVector(x: 1.2, y: 1.2, z: 1.2, w: 0)
+        matrix.biasVector = CIVector(x: 1, y: 0.12, z: 0.1, w: -0.9)
+
+        let clamp = CIFilter.colorClamp()
+        clamp.inputImage = matrix.outputImage
+        clamp.minComponents = CIVector(x: 0, y: 0, z: 0, w: 0)
+        clamp.maxComponents = CIVector(x: 1, y: 1, z: 1, w: 1)
+        return (clamp.outputImage ?? CIImage.empty()).cropped(to: input.extent)
+    }
+
+    func renderPeakingOverlay(_ source: CGImage) -> CGImage? {
+        let input = CIImage(cgImage: source)
+        return context.createCGImage(peakingOverlay(for: input), from: input.extent)
+    }
+
     func renderPreview(_ source: CGImage, adjustments: PhotoAdjustmentState) -> CGImage? {
         let input = CIImage(cgImage: source)
         return context.createCGImage(apply(adjustments, to: input), from: input.extent)

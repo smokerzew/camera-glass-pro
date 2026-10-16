@@ -87,8 +87,19 @@ struct PhotoExportView: View {
                             .font(.body.weight(.semibold))
                     }
                     .disabled(!vm.hasMedia)
+
+                    if isVideo {
+                        Button {
+                            vm.saveVideoWithUI()
+                        } label: {
+                            Label("Save Video with UI", systemImage: "record.circle")
+                                .font(.body.weight(.semibold))
+                        }
+                    }
                 } footer: {
-                    Text("Saves a screenshot of the viewfinder with the camera controls, as you see it now, to Photos.")
+                    Text(isVideo
+                         ? "Screen saves a still with the camera controls. Video records the screen while your video plays once (up to 60 s; tap the shutter to stop early) and saves it to Photos."
+                         : "Saves a screenshot of the viewfinder with the camera controls, as you see it now, to Photos.")
                 }
             }
             .navigationTitle("Export")

@@ -1,5 +1,6 @@
 import AVFoundation
 import Observation
+import QuartzCore
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
@@ -37,6 +38,15 @@ final class CameraWorkspaceViewModel {
     private(set) var playbackTime: Double = 0
     /// Still frame laid over the player while the screen is captured (snapshots can't see AVPlayerLayer).
     private(set) var snapshotFrame: CGImage?
+    /// True while "Save Video with UI" is recording the screen.
+    private(set) var isRecordingUI = false
+
+    // MARK: Pro tools (display only)
+    private(set) var scopeMode: ScopeMode = .off
+    private(set) var scopeData: ScopeData?
+    private(set) var focusPeaking = false
+    /// Red edge overlay for photos (videos get peaking inside the live compositor).
+    private(set) var peakingImage: CGImage?
 
     // MARK: Import
     private(set) var isImporting = false
@@ -100,6 +110,10 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var importGeneration = UUID()
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var timeObserver: Any?
+    @ObservationIgnored private var videoOutput: AVPlayerItemVideoOutput?
+    @ObservationIgnored private var scopeTask: Task<Void, Never>?
+    @ObservationIgnored private var analysisTask: Task<Void, Never>?
+    @ObservationIgnored private var stopRecordingRequested = false
 
     init(
         importer: PhotoImporting = PhotoImportService(),
@@ -190,6 +204,7 @@ final class CameraWorkspaceViewModel {
 
     /// Plays/pauses a loaded video in the video modes; otherwise honors the timer and opens the picker.
     func primaryAction() {
+        if isRecordingUI { stopRecordingRequested = true; return }
         if centerControlPlaysVideo { togglePlayback(); return }
         guard countdown == nil else { cancelCountdown(); return }
         if flash == .on { flashPulse += 1 }
@@ -319,6 +334,12 @@ final class CameraWorkspaceViewModel {
         } catch {
             alert = AppAlert(title: "Video Effects Unavailable", message: "The video will play without adjustments.")
         }
+        // Taps composed frames (after adjustments) for the exposure scopes.
+        let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        ])
+        item.add(output)
+        videoOutput = output
         let player = AVPlayer(playerItem: item)
         player.actionAtItemEnd = .none
         endObserver = NotificationCenter.default.addObserver(
@@ -335,9 +356,13 @@ final class CameraWorkspaceViewModel {
         playbackTime = 0
         player.play()
         isPlaying = true
+        updateVideoScopeSampling()
     }
 
     private func tearDownPlayer() {
+        scopeTask?.cancel()
+        scopeTask = nil
+        videoOutput = nil
         if let timeObserver { player?.removeTimeObserver(timeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         timeObserver = nil
@@ -396,6 +421,7 @@ final class CameraWorkspaceViewModel {
     /// True when any camera-style control differs from its default (rings the panel button yellow).
     var hasActiveControls: Bool {
         hasEdits || flash != .off || livePreference || timer != .off || depthEffect || aspect != .original || showLevel
+            || scopeMode != .off || focusPeaking
     }
 
     func setAdjustment(_ parameter: AdjustmentParameter, to value: Double) {
@@ -428,6 +454,72 @@ final class CameraWorkspaceViewModel {
         showOriginal = value
         recipe.value = value ? PhotoAdjustmentState() : adjustments
         refreshPausedVideoFrame()
+        refreshPhotoAnalysis()
+    }
+
+    // MARK: Scopes and focus peaking
+
+    func setScopeMode(_ mode: ScopeMode) {
+        scopeMode = mode
+        if mode == .off { scopeData = nil }
+        refreshPhotoAnalysis()
+        updateVideoScopeSampling()
+    }
+
+    func setFocusPeaking(_ enabled: Bool) {
+        focusPeaking = enabled
+        recipe.peaking = enabled
+        if !enabled { peakingImage = nil }
+        refreshPausedVideoFrame()
+        refreshPhotoAnalysis()
+    }
+
+    /// Recomputes scope data / peaking overlay for the photo currently on screen (off the main thread).
+    private func refreshPhotoAnalysis() {
+        analysisTask?.cancel()
+        guard photo != nil, let image = displayedImage, scopeMode != .off || focusPeaking else { return }
+        let wantsScopes = scopeMode != .off
+        let wantsPeaking = focusPeaking
+        let processor = self.processor
+        analysisTask = Task { [weak self] in
+            let result = await Task.detached(priority: .utility) { () -> (ScopeData?, CGImage?) in
+                (wantsScopes ? ScopeData.compute(from: image) : nil,
+                 wantsPeaking ? processor.renderPeakingOverlay(image) : nil)
+            }.value
+            guard !Task.isCancelled, let self, self.displayedImage === image else { return }
+            if wantsScopes { self.scopeData = result.0 }
+            if wantsPeaking { self.peakingImage = result.1 }
+        }
+    }
+
+    /// While scopes are on and a video is loaded, samples composed frames about 4 times a second.
+    private func updateVideoScopeSampling() {
+        scopeTask?.cancel()
+        scopeTask = nil
+        guard scopeMode != .off, video != nil else { return }
+        scopeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.sampleVideoScopes()
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
+    private func sampleVideoScopes() async {
+        guard let output = videoOutput else { return }
+        let time = output.itemTime(forHostTime: CACurrentMediaTime())
+        guard output.hasNewPixelBuffer(forItemTime: time) || scopeData == nil,
+              let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) else { return }
+        let processor = self.processor
+        let data = await Task.detached(priority: .utility) { () -> ScopeData? in
+            let frame = CIImage(cvPixelBuffer: buffer)
+            let scale = 160 / max(frame.extent.width, 1)
+            let small = frame.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            guard let image = processor.context.createCGImage(small, from: small.extent) else { return nil }
+            return ScopeData.compute(from: image)
+        }.value
+        guard !Task.isCancelled, scopeMode != .off, let data else { return }
+        scopeData = data
     }
 
     private func adjustmentsChanged() {
@@ -448,6 +540,7 @@ final class CameraWorkspaceViewModel {
         let recipe = adjustments
         guard !recipe.isIdentity else {
             renderedPreview = source
+            refreshPhotoAnalysis()
             return
         }
         let processor = self.processor
@@ -460,6 +553,7 @@ final class CameraWorkspaceViewModel {
             guard !Task.isCancelled, let self, self.photo?.preview === source else { return }
             if let rendered {
                 self.renderedPreview = rendered
+                self.refreshPhotoAnalysis()
             } else {
                 self.alert = AppAlert(title: "Adjustment Failed", message: "The preview couldn't be rendered with these settings.")
             }
@@ -554,6 +648,55 @@ final class CameraWorkspaceViewModel {
                 self.snapshotFrame = nil
                 let message = (error as? LocalizedError)?.errorDescription ?? "The screen couldn't be saved."
                 self.alert = AppAlert(title: "Couldn't Save Screen", message: message)
+            }
+        }
+    }
+
+    /// Records the screen (video + camera controls) while the video plays through once (up to 60 s),
+    /// then saves the recording to Photos. Tap the center control to stop early.
+    func saveVideoWithUI() {
+        guard let video, let player, !isRecordingUI else { return }
+        showExport = false
+        showAdjustments = false
+        isControlPanelOpen = false
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(700)) // let sheets finish dismissing
+            guard let self else { return }
+            do {
+                try await ScreenCapture.startRecording()
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? "Screen recording couldn't start."
+                self.alert = AppAlert(title: "Couldn't Record Screen", message: message)
+                return
+            }
+            self.stopRecordingRequested = false
+            self.isRecordingUI = true
+            _ = await player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+            player.play()
+            self.isPlaying = true
+
+            let limit = min(max(video.duration, 1), 60)
+            let started = Date()
+            var lastTime = 0.0
+            while !self.stopRecordingRequested {
+                try? await Task.sleep(for: .milliseconds(100))
+                let now = player.currentTime().seconds
+                let wrapped = now + 0.5 < lastTime // the looping player jumped back to the start
+                if wrapped || now >= limit - 0.1 || Date().timeIntervalSince(started) > limit + 2 { break }
+                lastTime = now
+            }
+
+            player.pause()
+            self.isPlaying = false
+            self.isRecordingUI = false
+            do {
+                let url = try await ScreenCapture.stopRecording()
+                try await ScreenCapture.saveVideoToPhotos(url)
+                try? FileManager.default.removeItem(at: url)
+                self.showToast("Video saved to Photos")
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? "The recording couldn't be saved."
+                self.alert = AppAlert(title: "Couldn't Save Video", message: message)
             }
         }
     }
