@@ -55,6 +55,9 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Undo / presets | Undo/redo in Adjust (a slider drag is one step); save, apply and delete named styles. | Real |
 | SLO-MO / TIME-LAPSE | Imported videos play at 1/4 or 8x in these modes; the edited MOV exports at that speed. | Real |
 | Trim | TRIM control: start/end handles; playback loops inside, edited export and Save Video with UI use it. | Real |
+| Multi-select | Pick up to 20 photos/videos (Photos or Files); swipe sideways (when not zoomed) to move between them; each keeps its own edits; "2 / 5" counter. | Real |
+| Restore | Reopens the last photo/video with its edits, mode, zoom, aspect, pan and trim on relaunch (one copy kept in the app's private storage). | Real |
+| Live Text | TEXT control: on-device text recognition (Vision) with tappable boxes (tap = copy line), Show Text sheet with Copy All and on-device Translate. Pauses videos to scan the current frame. | Real |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 

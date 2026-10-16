@@ -5,8 +5,9 @@ import SwiftUI
 /// status icons float over its top, zoom/shutter controls over its bottom, and a black bar holds
 /// the thumbnail, the mode capsule and a round action button.
 struct CameraWorkspaceView: View {
-    @State private var vm = CameraWorkspaceViewModel()
-    @State private var pickerItem: PhotosPickerItem?
+    @State private var vm = CameraWorkspaceViewModel(sessionStore: .standard)
+    @State private var pickerItems: [PhotosPickerItem] = []
+    @Environment(\.scenePhase) private var scenePhase
     @State private var flashOpacity = 0.0
     @State private var motion = MotionLevel()
 
@@ -21,19 +22,26 @@ struct CameraWorkspaceView: View {
     var body: some View {
         workspace
             .environment(\.colorScheme, .dark) // the viewfinder is always dark; sheets follow the system
-            .photosPicker(isPresented: $vm.showPhotosPicker, selection: $pickerItem,
+            .photosPicker(isPresented: $vm.showPhotosPicker, selection: $pickerItems,
+                          maxSelectionCount: 20, selectionBehavior: .ordered,
                           matching: .any(of: [.images, .videos]), preferredItemEncoding: .current)
-            .onChange(of: pickerItem) { _, item in
-                guard let item else { return }
-                vm.importFromLibrary(item)
-                pickerItem = nil
+            .onChange(of: pickerItems) { _, items in
+                guard !items.isEmpty else { return }
+                vm.importFromLibrary(items)
+                pickerItems = []
             }
-            .fileImporter(isPresented: $vm.showFileImporter, allowedContentTypes: [.image, .movie]) { result in
-                vm.importFromFile(result)
+            .fileImporter(isPresented: $vm.showFileImporter, allowedContentTypes: [.image, .movie],
+                          allowsMultipleSelection: true) { result in
+                vm.importFromFiles(result)
+            }
+            .task { vm.restoreLastSession() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { vm.saveSessionState() }
             }
             .sheet(isPresented: $vm.showAdjustments) { PhotoAdjustmentView(vm: vm) }
             .sheet(isPresented: $vm.showExport) { PhotoExportView(vm: vm) }
             .sheet(isPresented: $vm.showTrim) { VideoTrimView(vm: vm) }
+            .sheet(isPresented: $vm.showTextSheet) { LiveTextSheet(vm: vm) }
             .appAlert(vm)
             .sensoryFeedback(.success, trigger: vm.importSuccessCount)
             .sensoryFeedback(.selection, trigger: vm.mode)

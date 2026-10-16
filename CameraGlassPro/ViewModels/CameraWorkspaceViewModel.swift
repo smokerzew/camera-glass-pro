@@ -3,12 +3,24 @@ import Observation
 import QuartzCore
 import PhotosUI
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct AppAlert: Identifiable {
     let id = UUID()
     let title: String
     let message: String
+}
+
+/// One item picked in a multi-selection; loaded when it's shown.
+struct LibraryEntry: Identifiable {
+    enum Source {
+        case library(PhotosPickerItem)
+        case file(URL)
+    }
+
+    let id = UUID()
+    let source: Source
 }
 
 /// What the workspace is showing.
@@ -54,10 +66,20 @@ final class CameraWorkspaceViewModel {
     /// Peaking/zebra overlay for photos (videos get it inside the live compositor).
     private(set) var overlayImage: CGImage?
 
+    // MARK: Live Text
+    private(set) var liveTextEnabled = false
+    private(set) var recognizedText: [RecognizedText] = []
+    private(set) var isRecognizingText = false
+    var showTextSheet = false
+
     // MARK: Undo / presets
     private(set) var canUndo = false
     private(set) var canRedo = false
     private(set) var presets: [StylePreset] = []
+
+    // MARK: Library (multi-select) and session restore
+    private(set) var library: [LibraryEntry] = []
+    private(set) var libraryIndex = 0
 
     // MARK: Import
     private(set) var isImporting = false
@@ -132,13 +154,19 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var undoStack: [PhotoAdjustmentState] = []
     @ObservationIgnored private var redoStack: [PhotoAdjustmentState] = []
     @ObservationIgnored private var lastUndoPoint = Date.distantPast
+    @ObservationIgnored private var entryEdits: [UUID: PhotoAdjustmentState] = [:]
+    @ObservationIgnored private var textTask: Task<Void, Never>?
+    @ObservationIgnored private var restoringState: SessionState?
+    private let sessionStore: SessionStore?
 
     init(
         importer: PhotoImporting = PhotoImportService(),
         processor: ImageProcessingService = .shared,
         exporter: PhotoExportService = PhotoExportService(),
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        sessionStore: SessionStore? = nil
     ) {
+        self.sessionStore = sessionStore
         self.importer = importer
         self.processor = processor
         self.exporter = exporter
@@ -248,7 +276,55 @@ final class CameraWorkspaceViewModel {
 
     // MARK: Import
 
-    func importFromLibrary(_ item: PhotosPickerItem) {
+    /// Picks up to 20 items; each keeps its own edits while you swipe between them.
+    func importFromLibrary(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        startLibrary(items.map { LibraryEntry(source: .library($0)) })
+    }
+
+    func importFromFiles(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard !urls.isEmpty else { return }
+            startLibrary(urls.map { LibraryEntry(source: .file($0)) })
+        case .failure(let error):
+            let mapped = PhotoImportError.map(error)
+            if mapped != .cancelled {
+                alert = AppAlert(title: "File Import Failed", message: mapped.errorDescription ?? "")
+            }
+        }
+    }
+
+    private func startLibrary(_ entries: [LibraryEntry]) {
+        restoringState = nil // a new import replaces any restore in progress
+        library = entries
+        entryEdits = [:]
+        libraryIndex = 0
+        load(entries[0])
+    }
+
+    var currentEntryID: UUID? { library.indices.contains(libraryIndex) ? library[libraryIndex].id : nil }
+    var hasNext: Bool { libraryIndex + 1 < library.count }
+    var hasPrevious: Bool { libraryIndex > 0 && !library.isEmpty }
+
+    func showNext() { showEntry(at: libraryIndex + 1) }
+    func showPrevious() { showEntry(at: libraryIndex - 1) }
+
+    func showEntry(at index: Int) {
+        guard library.indices.contains(index), index != libraryIndex else { return }
+        if let current = currentEntryID { entryEdits[current] = adjustments }
+        libraryIndex = index
+        load(library[index])
+    }
+
+    private func load(_ entry: LibraryEntry) {
+        switch entry.source {
+        case .library(let item): importFromLibrary(item)
+        case .file(let url): importFile(url)
+        }
+    }
+
+    private func importFromLibrary(_ item: PhotosPickerItem) {
         if item.supportedContentTypes.contains(where: { VideoService.isVideo($0) }) {
             beginImport(message: "Loading video…") { _ in
                 guard let file = try await item.loadTransferable(type: PickedVideoFile.self) else {
@@ -261,22 +337,71 @@ final class CameraWorkspaceViewModel {
         }
     }
 
-    func importFromFile(_ result: Result<URL, Error>) {
-        switch result {
-        case .success(let url):
-            if VideoService.isVideo(UTType(filenameExtension: url.pathExtension)) {
-                beginImport(message: "Loading video…") { _ in
-                    let local = try await Task.detached { try VideoService.copyFromFiles(url) }.value
-                    return .video(try await VideoService.load(localURL: local))
-                }
-            } else {
-                beginImport(message: "Loading file…") { .photo(try await $0.loadImage(from: url)) }
+    private func importFile(_ url: URL) {
+        if VideoService.isVideo(UTType(filenameExtension: url.pathExtension)) {
+            beginImport(message: "Loading video…") { _ in
+                let local = try await Task.detached { try VideoService.copyFromFiles(url) }.value
+                return .video(try await VideoService.load(localURL: local))
             }
-        case .failure(let error):
-            let mapped = PhotoImportError.map(error)
-            if mapped != .cancelled {
-                alert = AppAlert(title: "File Import Failed", message: mapped.errorDescription ?? "")
-            }
+        } else {
+            beginImport(message: "Loading file…") { .photo(try await $0.loadImage(from: url)) }
+        }
+    }
+
+    // MARK: Session restore
+
+    /// Reopens the last photo or video with its edits, framing, mode and trim (called once at launch).
+    func restoreLastSession() {
+        guard !hasMedia, !isImporting, let store = sessionStore, let state = store.loadState() else { return }
+        startLibrary([LibraryEntry(source: .file(store.mediaURL(for: state)))])
+        restoringState = state // set after startLibrary, which clears it
+    }
+
+    /// Saves the current edits and framing (called when the app goes to the background).
+    func saveSessionState() {
+        guard let store = sessionStore, hasMedia, restoringState == nil else { return }
+        try? store.saveState(currentSessionState(fileName: sessionFileName))
+    }
+
+    @ObservationIgnored private var sessionFileName = ""
+
+    private func currentSessionState(fileName: String) -> SessionState {
+        SessionState(
+            kind: video != nil ? .video : .photo,
+            fileName: fileName,
+            adjustments: adjustments,
+            mode: mode.rawValue,
+            zoom: Double(zoom),
+            aspect: aspect.rawValue,
+            panX: Double(pan.x),
+            panY: Double(pan.y),
+            trimStart: trimStart,
+            trimEnd: trimEnd
+        )
+    }
+
+    /// Copies the new media into the session store in the background, then writes its state.
+    private func persistSessionMedia(_ media: ImportedMedia) {
+        guard let store = sessionStore else { return }
+        let photoData: Data?
+        let videoURL: URL?
+        let fileName: String
+        switch media {
+        case .photo(let photo):
+            photoData = photo.data
+            videoURL = nil
+            let ext = photo.typeIdentifier.flatMap { UTType($0)?.preferredFilenameExtension } ?? "jpg"
+            fileName = "media." + ext
+        case .video(let video):
+            photoData = nil
+            videoURL = video.url
+            fileName = "media." + (video.url.pathExtension.isEmpty ? "mov" : video.url.pathExtension)
+        }
+        sessionFileName = fileName
+        let state = currentSessionState(fileName: fileName)
+        Task.detached(priority: .utility) {
+            try? store.saveMedia(photoData: photoData, videoURL: videoURL, fileName: fileName)
+            try? store.saveState(state)
         }
     }
 
@@ -308,6 +433,7 @@ final class CameraWorkspaceViewModel {
             } catch {
                 guard let self, self.importGeneration == generation else { return }
                 self.isImporting = false
+                self.restoringState = nil
                 let mapped = PhotoImportError.map(error)
                 if mapped != .cancelled {
                     self.alert = AppAlert(title: "Couldn't Import", message: mapped.errorDescription ?? "")
@@ -323,7 +449,12 @@ final class CameraWorkspaceViewModel {
         showOriginal = false
         invalidateExport()
         resetFraming()
-        if !defaults.bool(forKey: SettingsKey.keepAdjustmentsOnReplace) {
+        let restoring = restoringState
+        if let restoring {
+            adjustments = restoring.adjustments.clamped()
+        } else if let id = currentEntryID, let saved = entryEdits[id] {
+            adjustments = saved
+        } else if !defaults.bool(forKey: SettingsKey.keepAdjustmentsOnReplace) {
             adjustments = PhotoAdjustmentState()
         }
         clearUndoHistory()
@@ -341,8 +472,25 @@ final class CameraWorkspaceViewModel {
             mode = .video
             await setUpPlayer(for: newVideo)
         }
+
+        if let restoring {
+            mode = CameraMode(rawValue: restoring.mode) ?? mode
+            setZoom(CGFloat(restoring.zoom))
+            aspect = AspectRatioOption(rawValue: restoring.aspect) ?? .original
+            setPan(CGPoint(x: restoring.panX, y: restoring.panY))
+            if video != nil, restoring.trimEnd > restoring.trimStart {
+                setTrim(start: restoring.trimStart, end: restoring.trimEnd)
+            }
+            sessionFileName = restoring.fileName
+            restoringState = nil
+            modeChanged()
+        } else {
+            persistSessionMedia(media)
+        }
         isImporting = false
         importSuccessCount += 1
+        recognizedText = []
+        if liveTextEnabled { recognizeText() }
     }
 
     // MARK: Video playback
@@ -399,6 +547,54 @@ final class CameraWorkspaceViewModel {
         guard let player else { return }
         if isPlaying { player.pause() } else { player.playImmediately(atRate: playbackRate) }
         isPlaying.toggle()
+        if liveTextEnabled {
+            // Boxes only make sense on a still frame: clear while playing, re-scan when paused.
+            if isPlaying { recognizedText = [] } else { recognizeText() }
+        }
+    }
+
+    // MARK: Live Text
+
+    func setLiveText(_ enabled: Bool) {
+        liveTextEnabled = enabled
+        if enabled { recognizeText() } else { textTask?.cancel(); recognizedText = [] }
+    }
+
+    /// Finds text in the photo, or in the current video frame (pausing the video).
+    func recognizeText() {
+        textTask?.cancel()
+        guard liveTextEnabled, hasMedia else { recognizedText = []; return }
+        isRecognizingText = true
+        let photoImage = photo?.preview
+        let video = self.video
+        let player = self.player
+        if video != nil, isPlaying {
+            player?.pause()
+            isPlaying = false
+        }
+        textTask = Task { [weak self] in
+            var image = photoImage
+            if image == nil, let video, let player {
+                image = try? await VideoService.frame(
+                    of: video.asset, at: player.currentTime(), composition: player.currentItem?.videoComposition)
+            }
+            guard let image else {
+                self?.isRecognizingText = false
+                return
+            }
+            let found = await Task.detached(priority: .userInitiated) {
+                (try? LiveTextService.recognize(in: image)) ?? []
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            self.recognizedText = found
+            self.isRecognizingText = false
+            if found.isEmpty { self.showToast("No text found") }
+        }
+    }
+
+    func copyText(_ line: RecognizedText) {
+        UIPasteboard.general.string = line.text
+        showToast("Copied")
     }
 
     /// 1× normally; ¼× in SLO-MO and 8× in TIME-LAPSE.
@@ -508,7 +704,7 @@ final class CameraWorkspaceViewModel {
     /// True when any camera-style control differs from its default (rings the panel button yellow).
     var hasActiveControls: Bool {
         hasEdits || flash != .off || livePreference || timer != .off || depthEffect || aspect != .original || showLevel
-            || scopeMode != .off || focusPeaking || zebras
+            || scopeMode != .off || focusPeaking || zebras || liveTextEnabled
     }
 
     func setAdjustment(_ parameter: AdjustmentParameter, to value: Double) {

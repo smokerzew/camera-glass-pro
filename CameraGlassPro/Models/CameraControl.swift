@@ -2,13 +2,14 @@ import Foundation
 
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
-    case flash, live, aspect, timer, exposure, styles, filter, depth, nightMode, grid, level, scopes, peaking, zebras, trim, format
+    case flash, live, aspect, timer, exposure, styles, filter, depth, nightMode, grid, level, scopes, peaking, zebras, liveText, trim, format
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .nightMode: "NIGHT MODE"
+        case .liveText: "TEXT"
         default: rawValue.uppercased()
         }
     }
@@ -16,7 +17,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
     /// Controls that act on the imported photo or video and are disabled until there is one.
     var requiresMedia: Bool {
         switch self {
-        case .exposure, .styles, .filter, .depth, .nightMode, .scopes, .peaking, .zebras, .trim: true
+        case .exposure, .styles, .filter, .depth, .nightMode, .scopes, .peaking, .zebras, .liveText, .trim: true
         default: false
         }
     }
@@ -60,6 +61,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: "scope"
         case .zebras: "line.diagonal"
         case .trim: "timeline.selection"
+        case .liveText: "text.viewfinder"
         case .format: "photo"
         }
     }
@@ -81,6 +83,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: focusPeaking
         case .zebras: zebras
         case .trim: isTrimmed
+        case .liveText: liveTextEnabled
         case .format: false
         }
     }
@@ -114,6 +117,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: focusPeaking ? "On" : "Off"
         case .zebras: zebras ? "On" : "Off"
         case .trim: isTrimmed ? String(format: "%.1f s to %.1f s", trimStart, trimEnd) : "Full length"
+        case .liveText: liveTextEnabled ? "\(recognizedText.count) lines found" : "Off"
         case .format: exportFormat.label
         }
     }
@@ -135,6 +139,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: "Highlights the sharpest edges in red"
         case .zebras: "Stripes the brightest areas that are close to clipping"
         case .trim: "Choose where the video starts and ends"
+        case .liveText: "Finds text you can copy or translate (pauses videos)"
         case .format: "Cycles the export format: JPEG, HEIF, PNG"
         }
     }
@@ -163,6 +168,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: setFocusPeaking(!focusPeaking)
         case .zebras: setZebras(!zebras)
         case .trim: showTrim = true
+        case .liveText: setLiveText(!liveTextEnabled)
         case .format: cycleExportFormat()
         }
     }

@@ -66,11 +66,27 @@ struct PhotoPreviewView: View {
         }
     }
 
+    /// Yellow boxes over recognized text; tap one to copy that line.
+    private var liveTextBoxes: some View {
+        GeometryReader { geometry in
+            ForEach(vm.recognizedText) { line in
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color.yellow.opacity(0.18))
+                    .overlay { RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(.yellow, lineWidth: 1.5) }
+                    .frame(width: line.box.width * geometry.size.width + 6,
+                           height: line.box.height * geometry.size.height + 4)
+                    .position(x: line.box.midX * geometry.size.width, y: line.box.midY * geometry.size.height)
+                    .onTapGesture { vm.copyText(line) }
+            }
+        }
+    }
+
     private func viewfinder(mediaSize: CGSize, frame: CGSize) -> some View {
         let scale = FramingGeometry.baseScale(image: mediaSize, frame: frame, fill: true)
         let maxOffset = FramingGeometry.maxOffset(image: mediaSize, frame: frame, zoom: vm.zoom, fill: true)
         return ZStack {
             mediaContent
+                .overlay { if vm.liveTextEnabled && !vm.isPlaying { liveTextBoxes } }
                 .frame(width: mediaSize.width * scale, height: mediaSize.height * scale)
                 .scaleEffect(vm.zoom)
                 .offset(x: vm.pan.x * maxOffset.width, y: vm.pan.y * maxOffset.height)
@@ -133,7 +149,14 @@ struct PhotoPreviewView: View {
                 let dy = maxOffset.height > 0 ? value.translation.height / maxOffset.height : 0
                 vm.setPan(CGPoint(x: start.x + dx, y: start.y + dy))
             }
-            .onEnded { _ in panStart = nil }
+            .onEnded { value in
+                panStart = nil
+                // Not zoomed in: a sideways swipe moves through a multi-selection.
+                guard maxOffset.width <= 0, vm.library.count > 1,
+                      abs(value.translation.width) > 60,
+                      abs(value.translation.width) > abs(value.translation.height) else { return }
+                if value.translation.width < 0 { vm.showNext() } else { vm.showPrevious() }
+            }
     }
 
     private var magnification: some Gesture {
