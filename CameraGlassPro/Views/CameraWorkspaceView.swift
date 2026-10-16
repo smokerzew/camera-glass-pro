@@ -21,13 +21,13 @@ struct CameraWorkspaceView: View {
         workspace
             .environment(\.colorScheme, .dark) // the viewfinder is always dark; sheets follow the system
             .photosPicker(isPresented: $vm.showPhotosPicker, selection: $pickerItem,
-                          matching: .images, preferredItemEncoding: .current)
+                          matching: .any(of: [.images, .videos]), preferredItemEncoding: .current)
             .onChange(of: pickerItem) { _, item in
                 guard let item else { return }
                 vm.importFromLibrary(item)
                 pickerItem = nil
             }
-            .fileImporter(isPresented: $vm.showFileImporter, allowedContentTypes: [.image]) { result in
+            .fileImporter(isPresented: $vm.showFileImporter, allowedContentTypes: [.image, .movie]) { result in
                 vm.importFromFile(result)
             }
             .sheet(isPresented: $vm.showAdjustments) { PhotoAdjustmentView(vm: vm) }
@@ -83,6 +83,22 @@ struct CameraWorkspaceView: View {
                     .zIndex(2)
             }
 
+            if let toast = vm.toast {
+                VStack {
+                    Text(toast)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 38)
+                        .cameraGlass(.regular, in: Capsule())
+                        .padding(.top, 12)
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+                .zIndex(4)
+            }
+
             if vm.isImporting {
                 LoadingOverlay(message: vm.importMessage) { vm.cancelImport() }
                     .transition(.opacity)
@@ -91,6 +107,7 @@ struct CameraWorkspaceView: View {
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.isImporting)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.countdown)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: vm.toast)
     }
 
     private func playFlash() {

@@ -85,14 +85,19 @@ struct PhotoExportService: Sendable {
         }.value
     }
 
-    func exportSynchronously(_ request: ExportRequest) throws -> URL {
+    /// Empties the export folder (only the latest export is kept on disk) and recreates it.
+    func prepareDirectory() throws {
         let fileManager = FileManager.default
-        try? fileManager.removeItem(at: directory) // keep only the latest export on disk
+        try? fileManager.removeItem(at: directory)
         do {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
             throw PhotoExportError.writeFailed
         }
+    }
+
+    func exportSynchronously(_ request: ExportRequest) throws -> URL {
+        try prepareDirectory()
 
         let data: Data
         let fileExtension: String

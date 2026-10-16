@@ -30,12 +30,10 @@ struct PhotoExportView: View {
                     }
                     .pickerStyle(.segmented)
                 } footer: {
-                    Text(content == .original
-                         ? "Shares the file exactly as imported (\(vm.photo?.formatLabel ?? "image")), including any metadata it already had. Nothing is added or changed."
-                         : "Renders a full-resolution copy with your adjustments. The original is untouched, and no capture metadata is added.")
+                    Text(footerText)
                 }
 
-                if content == .adjusted {
+                if content == .adjusted && !isVideo {
                     Section("Edited Copy") {
                         Picker("Format", selection: $format) {
                             ForEach(ExportFormat.allCases) { Text($0.label).tag($0) }
@@ -62,7 +60,7 @@ struct PhotoExportView: View {
                     if vm.isExporting {
                         HStack(spacing: 12) {
                             ProgressView()
-                            Text(content == .adjusted ? "Rendering full resolution…" : "Preparing file…")
+                            Text(content == .adjusted ? (isVideo ? "Rendering video…" : "Rendering full resolution…") : "Preparing file…")
                         }
                     } else if let file = vm.exportedFile {
                         Label("Ready: \(file.lastPathComponent)", systemImage: "checkmark.circle.fill")
@@ -79,8 +77,20 @@ struct PhotoExportView: View {
                             Label("Prepare Export", systemImage: "arrow.down.doc")
                                 .font(.body.weight(.semibold))
                         }
-                        .disabled(vm.photo == nil)
+                        .disabled(!vm.hasMedia)
                     }
+                }
+
+                Section {
+                    Button {
+                        vm.saveScreenWithUI()
+                    } label: {
+                        Label("Save Screen with UI", systemImage: "camera.viewfinder")
+                            .font(.body.weight(.semibold))
+                    }
+                    .disabled(!vm.hasMedia)
+                } footer: {
+                    Text("Saves a screenshot of the viewfinder with the camera controls, as you see it now, to Photos.")
                 }
             }
             .navigationTitle("Export")
@@ -96,6 +106,18 @@ struct PhotoExportView: View {
         .presentationDragIndicator(.visible)
         .modifier(GlassSheetBackground())
         .appAlert(vm)
+    }
+
+    private var isVideo: Bool { vm.video != nil }
+
+    private var footerText: String {
+        let format = vm.photo?.formatLabel ?? vm.video?.formatLabel ?? "file"
+        if content == .original {
+            return "Shares the file exactly as imported (\(format)), including any metadata it already had. Nothing is added or changed."
+        }
+        return isVideo
+            ? "Renders a full-quality MOV with your adjustments and filter. The original is untouched."
+            : "Renders a full-resolution copy with your adjustments. The original is untouched, and no capture metadata is added."
     }
 
     private func sharePreview(for file: URL) -> SharePreview<Image, Never> {

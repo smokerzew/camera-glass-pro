@@ -57,7 +57,7 @@ struct PhotoAdjustmentView: View {
         .presentationDragIndicator(.visible)
         .modifier(GlassSheetBackground())
         .appAlert(vm)
-        .onDisappear { vm.showOriginal = false }
+        .onDisappear { vm.setShowOriginal(false) }
     }
 
     private var statusRow: some View {
@@ -72,12 +72,12 @@ struct PhotoAdjustmentView: View {
                 .frame(minHeight: 36)
                 .cameraGlass(vm.showOriginal ? .selected : .interactive, in: Capsule())
                 .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, perform: {}, onPressingChanged: { pressing in
-                    vm.showOriginal = pressing
+                    vm.setShowOriginal(pressing)
                 })
                 .opacity(vm.hasEdits ? 1 : 0.4)
                 .allowsHitTesting(vm.hasEdits)
                 .accessibilityRepresentation {
-                    Toggle("Show original", isOn: $vm.showOriginal)
+                    Toggle("Show original", isOn: Binding(get: { vm.showOriginal }, set: { vm.setShowOriginal($0) }))
                 }
         }
     }

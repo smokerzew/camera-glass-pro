@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 /// The viewfinder: the photo fills the available area (iOS Camera style), with composition guides on top.
@@ -16,12 +17,12 @@ struct PhotoPreviewView: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                if let image = vm.displayedImage, let photo = vm.photo {
+                if let mediaSize = vm.mediaSize {
                     let frame = FramingGeometry.frameSize(ratio: vm.previewRatio, in: proxy.size)
-                    viewfinder(image: image, imageSize: photo.previewSize, frame: frame)
+                    viewfinder(mediaSize: mediaSize, frame: frame)
                         .frame(width: frame.width, height: frame.height)
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.97)))
-                        .id(photo.id)
+                        .id(vm.photo?.id ?? vm.video?.id)
                 } else {
                     EmptyStateView(vm: vm)
                         .transition(.opacity)
@@ -29,7 +30,7 @@ struct PhotoPreviewView: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.15), value: vm.previewRatio)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: vm.photo?.id)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: vm.photo?.id ?? vm.video?.id)
             .onAppear { updateViewfinderRatio(proxy.size) }
             .onChange(of: proxy.size) { _, size in updateViewfinderRatio(size) }
         }
@@ -40,16 +41,31 @@ struct PhotoPreviewView: View {
         vm.viewfinderRatio = size.width / size.height
     }
 
-    private func viewfinder(image: CGImage, imageSize: CGSize, frame: CGSize) -> some View {
-        let scale = FramingGeometry.baseScale(image: imageSize, frame: frame, fill: true)
-        return ZStack {
+    /// The photo, or the playing video, sized with the same framing math so zoom and guides behave alike.
+    @ViewBuilder
+    private var mediaContent: some View {
+        if let player = vm.player {
+            ZStack {
+                PlayerLayerView(player: player)
+                if let frame = vm.snapshotFrame {
+                    Image(decorative: frame, scale: 1).resizable()
+                }
+            }
+        } else if let image = vm.displayedImage {
             Image(decorative: image, scale: 1)
                 .resizable()
                 .interpolation(.high)
-                .frame(width: imageSize.width * scale, height: imageSize.height * scale)
+        }
+    }
+
+    private func viewfinder(mediaSize: CGSize, frame: CGSize) -> some View {
+        let scale = FramingGeometry.baseScale(image: mediaSize, frame: frame, fill: true)
+        return ZStack {
+            mediaContent
+                .frame(width: mediaSize.width * scale, height: mediaSize.height * scale)
                 .scaleEffect(vm.zoom)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(vm.showOriginal ? "Imported photo, original" : "Imported photo preview")
+                .accessibilityLabel(vm.video != nil ? "Imported video" : (vm.showOriginal ? "Imported photo, original" : "Imported photo preview"))
                 .accessibilityValue("\(ZoomLimits.label(for: vm.zoom)) times zoom, \(vm.aspect.label) framing")
                 .accessibilityHint("Swipe up or down to change preview zoom")
                 .accessibilityAdjustableAction { direction in
@@ -103,6 +119,8 @@ struct PhotoPreviewView: View {
 /// Small yellow capsule label, as the Camera app uses for PORTRAIT / NATURAL LIGHT.
 struct CameraTag: View {
     let text: String
+    /// White tag for "off" states (e.g. PORTRAIT OFF), yellow otherwise.
+    var isOff = false
 
     var body: some View {
         Text(text)
@@ -111,7 +129,7 @@ struct CameraTag: View {
             .foregroundStyle(.black)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(Color.yellow, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .background(isOff ? Color.white : Color.yellow, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 }
 
@@ -128,10 +146,10 @@ struct EmptyStateView: View {
                 .accessibilityHidden(true)
 
             VStack(spacing: 6) {
-                Text("Import a photo to begin")
+                Text("Import a photo or video")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
-                Text("Tap the shutter to choose a photo. Nothing is captured or uploaded.")
+                Text("Tap the shutter to choose a photo or video. Nothing is captured or uploaded.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
@@ -139,5 +157,27 @@ struct EmptyStateView: View {
             .padding(.horizontal, 32)
         }
         .frame(maxWidth: 420)
+    }
+}
+
+/// AVPlayerLayer host. The layer is sized by SwiftUI to the media's own aspect, so `.resize` never distorts.
+struct PlayerLayerView: UIViewRepresentable {
+    let player: AVPlayer
+
+    final class LayerView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer } // layerClass guarantees the type
+    }
+
+    func makeUIView(context: Context) -> LayerView {
+        let view = LayerView()
+        view.playerLayer.videoGravity = .resize
+        view.playerLayer.player = player
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: LayerView, context: Context) {
+        if view.playerLayer.player !== player { view.playerLayer.player = player }
     }
 }

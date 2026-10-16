@@ -41,6 +41,9 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Modes | PHOTO is the working mode. PORTRAIT adds a vignette, and VIDEO / CINEMATIC / PANO show framing bands. Each one says "Preview only". | Simulated looks |
 | Export | Original as an exact byte-for-byte copy, or an edited copy (JPEG/HEIC/PNG) at full resolution. Optional crop to framing and optional burned-in guides. Uses the native share sheet (Save Image, Files, AirDrop). | Real |
 | ⠿ panel | FLASH, LIVE, ASPECT, TIMER, EXPOSURE (slider), STYLES (adjustments), FILTER (Vivid/Mono/Noir/Chrome/Fade/Instant), DEPTH, NIGHT MODE, FORMAT (export format) | Real except Flash/Live (visual) and Depth (preview-only vignette) |
+| Video | Import videos from Photos or Files. Full-screen looping playback; the red center control plays/pauses (stop square while playing) with a running timecode. Exposure, Styles, Filter and Night Look apply live per frame and to the edited MOV export. | Real |
+| Save Screen with UI | Export sheet › Save Screen with UI: captures the viewfinder with the camera controls exactly as shown and adds it to Photos (videos use the current frame). | Real |
+| Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 
 **Center control:** the big circle imports a photo when none is loaded, or replaces the current one. Touch and hold it for Photos or Files. Its accessibility label says "Import photo" or "Replace photo". It never claims to take a picture.

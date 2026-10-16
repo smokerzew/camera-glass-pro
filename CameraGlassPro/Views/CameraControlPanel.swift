@@ -73,28 +73,28 @@ struct CameraControlPanel: View {
                                    hint: "Shows the exposure slider") {
                     withAnimation(reduceMotion ? nil : .spring(duration: 0.3)) { vm.isExposureDialVisible.toggle() }
                 }
-                .disabled(vm.photo == nil)
+                .disabled(!vm.hasMedia)
 
                 PanelControlButton(systemImage: "square.3.layers.3d", title: "STYLES",
                                    isActive: vm.hasEdits, stateDescription: vm.hasEdits ? "Edited" : "No edits",
                                    hint: "Opens light and color adjustments") { vm.showAdjustments = true }
-                    .disabled(vm.photo == nil)
+                    .disabled(!vm.hasMedia)
 
                 PanelControlButton(systemImage: "camera.filters", title: "FILTER",
                                    isActive: vm.adjustments.filter != .none,
                                    stateDescription: vm.adjustments.filter.label,
                                    hint: "Cycles Vivid, Mono, Noir, Chrome, Fade and Instant") { vm.cycleFilter() }
-                    .disabled(vm.photo == nil)
+                    .disabled(!vm.hasMedia)
 
                 PanelControlButton(systemImage: "f.cursive", title: "DEPTH",
                                    isActive: vm.depthEffect,
-                                   hint: "Preview-only depth look with a soft vignette") { vm.depthEffect.toggle() }
-                    .disabled(vm.photo == nil)
+                                   hint: "Preview-only depth look with a soft vignette") { vm.setDepth(!vm.depthEffect) }
+                    .disabled(!vm.hasMedia)
 
                 PanelControlButton(systemImage: vm.adjustments.nightLook ? "moon.fill" : "moon", title: "NIGHT MODE",
                                    isActive: vm.adjustments.nightLook,
                                    hint: "Lifts shadows and reduces noise") { vm.setNightLook(!vm.adjustments.nightLook) }
-                    .disabled(vm.photo == nil)
+                    .disabled(!vm.hasMedia)
             }
 
             PanelControlButton(systemImage: "photo", title: "FORMAT",
@@ -106,7 +106,7 @@ struct CameraControlPanel: View {
             }
             .frame(maxWidth: 120)
 
-            if vm.isExposureDialVisible, vm.photo != nil {
+            if vm.isExposureDialVisible, vm.hasMedia {
                 HStack(spacing: 10) {
                     Image(systemName: "plusminus").foregroundStyle(.white.opacity(0.8)).accessibilityHidden(true)
                     Slider(

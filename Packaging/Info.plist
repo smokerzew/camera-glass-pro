@@ -26,6 +26,6 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Camera Glass Pro saves exported copies of your photos to your library only when you choose Save Image.</string>
+	<string>Camera Glass Pro adds photos to your library only when you choose to save an export or a screen capture.</string>
 </dict>
 </plist>

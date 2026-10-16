@@ -23,7 +23,7 @@ struct CameraStatusRow: View {
                     vm.livePreference.toggle()
                 }
 
-                if vm.photo != nil {
+                if vm.hasMedia {
                     Button { openExposureDial() } label: {
                         VStack(spacing: -1) {
                             Text(String(format: "%.1f", vm.adjustments.exposure))
@@ -50,7 +50,7 @@ struct CameraStatusRow: View {
                 }
 
                 if vm.depthEffect {
-                    Button { vm.depthEffect = false } label: {
+                    Button { vm.setDepth(false) } label: {
                         Text("4.5")
                             .font(.system(size: 15, weight: .semibold).monospacedDigit())
                             .foregroundStyle(.yellow)
@@ -63,12 +63,24 @@ struct CameraStatusRow: View {
             .buttonStyle(PressableButtonStyle())
             .shadow(color: .black.opacity(0.45), radius: 2)
 
-            if vm.depthEffect {
-                CameraTag(text: "PORTRAIT").transition(.opacity)
+            if vm.video != nil {
+                Text(vm.timecode)
+                    .font(.system(size: 15, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(vm.isPlaying ? Color.red : Color.black.opacity(0.35),
+                                in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .accessibilityLabel("Playback time \(vm.timecode)")
+            }
+
+            // Shown briefly after toggling depth, then faded out (as in the Camera app).
+            if let tag = vm.depthTag {
+                CameraTag(text: tag, isOff: !vm.depthEffect).transition(.opacity)
             }
         }
         .padding(.top, 10)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.depthEffect)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: vm.depthTag)
     }
 
     private func openExposureDial() {
@@ -101,11 +113,11 @@ struct CameraShutterControls: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            if vm.depthEffect {
+            if vm.depthTag != nil, vm.depthEffect {
                 CameraTag(text: "NATURAL LIGHT").transition(.opacity)
             }
 
-            if vm.photo != nil {
+            if vm.hasMedia {
                 if vm.isZoomSliderVisible {
                     Slider(
                         value: Binding(get: { Double(vm.zoom) }, set: { vm.setZoom(CGFloat($0)) }),
@@ -135,13 +147,13 @@ struct CameraShutterControls: View {
                 RingedCircleButton(isActive: vm.depthEffect, label: "Depth",
                                    value: vm.depthEffect ? "On" : "Off",
                                    hint: "Preview-only depth look with a soft vignette") {
-                    vm.depthEffect.toggle()
+                    vm.setDepth(!vm.depthEffect)
                 } content: {
                     Image(systemName: "f.cursive")
                         .font(.system(size: 18, weight: .medium))
                 }
-                .disabled(vm.photo == nil)
-                .opacity(vm.photo == nil ? 0.4 : 1)
+                .disabled(!vm.hasMedia)
+                .opacity(vm.hasMedia ? 1 : 0.4)
 
                 Spacer()
                 ImportControl(vm: vm)
@@ -162,7 +174,7 @@ struct CameraShutterControls: View {
             .padding(.horizontal, 32)
         }
         .padding(.bottom, 14)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.depthEffect)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: vm.depthTag)
     }
 }
 
@@ -187,9 +199,9 @@ struct CameraBottomBar: View {
                 .cameraGlass(.regular, in: Circle())
             }
             .buttonStyle(PressableButtonStyle())
-            .disabled(vm.photo == nil)
+            .disabled(!vm.hasMedia)
             .accessibilityLabel("Export photo")
-            .accessibilityValue(vm.photo == nil ? "No photo" : (vm.hasEdits ? "Edited" : "No edits"))
+            .accessibilityValue(!vm.hasMedia ? "Nothing imported" : (vm.hasEdits ? "Edited" : "No edits"))
             .accessibilityHint("Share or save the original or an edited copy")
 
             Spacer(minLength: 0)
@@ -258,9 +270,16 @@ struct ImportControl: View {
             ZStack {
                 Circle().strokeBorder(Color.black.opacity(0.35), lineWidth: 5).frame(width: 82, height: 82)
                 Circle().strokeBorder(.white.opacity(0.9), lineWidth: 3).frame(width: 82, height: 82)
-                Circle()
-                    .fill(vm.mode.usesRecordStyle ? Color.red : .white)
-                    .frame(width: 68, height: 68)
+                if vm.centerControlPlaysVideo && vm.isPlaying {
+                    // Recording-style stop square while the video plays.
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.red)
+                        .frame(width: 32, height: 32)
+                } else {
+                    Circle()
+                        .fill(vm.mode.usesRecordStyle ? Color.red : .white)
+                        .frame(width: 68, height: 68)
+                }
                 if vm.countdown != nil {
                     Image(systemName: "xmark")
                         .font(.system(size: 22, weight: .semibold))
@@ -275,7 +294,16 @@ struct ImportControl: View {
             Button("Choose from Photos", systemImage: "photo.on.rectangle") { vm.showPhotosPicker = true }
             Button("Browse Files", systemImage: "folder") { vm.showFileImporter = true }
         }
-        .accessibilityLabel(vm.countdown != nil ? "Cancel timer" : (vm.photo == nil ? "Import photo" : "Replace photo"))
-        .accessibilityHint(vm.mode.isPreviewOnly ? vm.mode.explanation : "Opens the photo picker. Touch and hold for Files.")
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(vm.centerControlPlaysVideo
+            ? "Touch and hold to import something else."
+            : "Opens the photo and video picker. Touch and hold for Files.")
+        .animation(.spring(duration: 0.3), value: vm.isPlaying)
+    }
+
+    private var accessibilityLabel: String {
+        if vm.centerControlPlaysVideo { return vm.isPlaying ? "Pause video" : "Play video" }
+        if vm.countdown != nil { return "Cancel timer" }
+        return vm.hasMedia ? "Replace" : "Import photo or video"
     }
 }
