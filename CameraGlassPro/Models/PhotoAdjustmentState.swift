@@ -18,6 +18,11 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var nightLook = false
     /// Photo look applied after the adjustments (the panel's FILTER control).
     var filter: PhotoFilter = .none
+    /// Photographic Style and its 2D pad position (Tone vertical, Color horizontal) and Palette strength.
+    var style: PhotographicStyle = .standard
+    var styleTone: Double = 0
+    var styleColor: Double = 0
+    var stylePalette: Double = 1
 
     var isIdentity: Bool { self == PhotoAdjustmentState() }
 
@@ -37,6 +42,10 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
         filter = try c.decodeIfPresent(PhotoFilter.self, forKey: .filter) ?? .none
+        style = try c.decodeIfPresent(PhotographicStyle.self, forKey: .style) ?? .standard
+        styleTone = min(max(try c.decodeIfPresent(Double.self, forKey: .styleTone) ?? 0, -1), 1)
+        styleColor = min(max(try c.decodeIfPresent(Double.self, forKey: .styleColor) ?? 0, -1), 1)
+        stylePalette = min(max(try c.decodeIfPresent(Double.self, forKey: .stylePalette) ?? 1, 0), 1)
     }
 
     subscript(parameter: AdjustmentParameter) -> Double {

@@ -102,6 +102,13 @@ struct CameraWorkspaceView: View {
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility1) // camera chrome has fixed geometry
 
+            if vm.showStylesPad {
+                StylesPadView(vm: vm)
+                    .padding(.bottom, 6)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(1)
+            }
+
             if vm.showFilterPicker {
                 FilterPickerView(vm: vm)
                     .padding(.bottom, 6)

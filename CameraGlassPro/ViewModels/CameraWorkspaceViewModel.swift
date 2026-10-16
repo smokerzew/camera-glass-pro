@@ -66,6 +66,16 @@ final class CameraWorkspaceViewModel {
     /// Peaking/zebra overlay for photos (videos get it inside the live compositor).
     private(set) var overlayImage: CGImage?
 
+    // MARK: Tap to focus / expose
+    /// Where the yellow focus box sits, in viewfinder points (nil = hidden).
+    private(set) var focusPoint: CGPoint?
+    private(set) var focusPulse = 0
+    private(set) var isAELocked = false
+    private(set) var isFocusDimmed = false
+
+    // MARK: Photographic Styles pad
+    var showStylesPad = false
+
     // MARK: Filter picker
     var showFilterPicker = false
     /// Small previews of every filter on the current photo/video (rendered when the picker opens).
@@ -162,6 +172,8 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var entryEdits: [UUID: PhotoAdjustmentState] = [:]
     @ObservationIgnored private var textTask: Task<Void, Never>?
     @ObservationIgnored private var thumbnailTask: Task<Void, Never>?
+    @ObservationIgnored private var focusTask: Task<Void, Never>?
+    @ObservationIgnored private var exposureDragStart: Double?
     @ObservationIgnored private var restoringState: SessionState?
     private let sessionStore: SessionStore?
 
@@ -455,6 +467,7 @@ final class CameraWorkspaceViewModel {
         showOriginal = false
         invalidateExport()
         resetFraming()
+        clearFocus()
         let restoring = restoringState
         if let restoring {
             adjustments = restoring.adjustments.clamped()
@@ -725,6 +738,126 @@ final class CameraWorkspaceViewModel {
         adjustmentsChanged()
     }
 
+    // MARK: Tap to focus / expose
+
+    /// Tap: moves the focus box and meters exposure for the tapped area. Long press (`lock`) adds
+    /// AE/AF LOCK, which keeps the box and exposure until you tap somewhere else.
+    func focus(atView point: CGPoint, mediaPoint: CGPoint?, lock: Bool) {
+        if isAELocked && !lock { isAELocked = false }
+        focusPoint = point
+        focusPulse += 1
+        isFocusDimmed = false
+        if lock { isAELocked = true }
+        if let mediaPoint { meterExposure(at: mediaPoint) }
+        scheduleFocusDim()
+    }
+
+    func clearFocus() {
+        focusTask?.cancel()
+        focusPoint = nil
+        isAELocked = false
+        isFocusDimmed = false
+    }
+
+    /// Drag up/down while the box is showing to slide the ☀︎ exposure (one undo step per drag).
+    func beginExposureDrag() {
+        focusTask?.cancel()
+        isFocusDimmed = false
+        exposureDragStart = adjustments.exposure
+        recordUndoPoint(force: true)
+    }
+
+    func updateExposureDrag(by verticalTranslation: CGFloat) {
+        guard let start = exposureDragStart else { return }
+        adjustments[.exposure] = start - Double(verticalTranslation) / 120
+        adjustmentsChanged()
+    }
+
+    func endExposureDrag() {
+        exposureDragStart = nil
+        scheduleFocusDim()
+    }
+
+    var isDraggingExposure: Bool { exposureDragStart != nil }
+
+    /// Box goes dim after 2 s and away after 6 s (stays while AE/AF locked).
+    private func scheduleFocusDim() {
+        focusTask?.cancel()
+        focusTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self else { return }
+            self.isFocusDimmed = true
+            guard !self.isAELocked else { return }
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            self.focusPoint = nil
+        }
+    }
+
+    /// EV that brings an area of the given sRGB luminance (0...1) to mid-gray, damped like auto-exposure.
+    nonisolated static func meteredExposure(regionLuma: Double) -> Double {
+        let linear = max(0.002, pow(min(max(regionLuma, 0), 1), 2.2))
+        return min(max(log2(0.18 / linear) * 0.8, -2), 2)
+    }
+
+    private func meterExposure(at mediaPoint: CGPoint) {
+        let photoImage = photo?.preview
+        let video = self.video
+        let time = player?.currentTime() ?? .zero
+        let processor = self.processor
+        Task { [weak self] in
+            var source = photoImage
+            if source == nil, let video {
+                source = try? await VideoService.frame(of: video.asset, at: time, composition: nil)
+            }
+            guard let source else { return }
+            let luma = await Task.detached(priority: .userInitiated) {
+                processor.averageLuma(of: source, around: mediaPoint, radius: 0.08)
+            }.value
+            guard let self, let luma else { return }
+            self.recordUndoPoint(force: true)
+            self.adjustments[.exposure] = Self.meteredExposure(regionLuma: luma)
+            self.adjustmentsChanged()
+        }
+    }
+
+    // MARK: Photographic Styles
+
+    func openStylesPad() {
+        isControlPanelOpen = false
+        showFilterPicker = false
+        showStylesPad = true
+    }
+
+    func setStyle(_ style: PhotographicStyle) {
+        guard style != adjustments.style else { return }
+        recordUndoPoint(force: true)
+        adjustments.style = style
+        adjustmentsChanged()
+    }
+
+    /// Pad position: `tone` up/down, `color` left/right, both -1...1.
+    func setStylePad(tone: Double, color: Double) {
+        recordUndoPoint()
+        adjustments.styleTone = min(max(tone, -1), 1)
+        adjustments.styleColor = min(max(color, -1), 1)
+        adjustmentsChanged()
+    }
+
+    func setStylePalette(_ value: Double) {
+        recordUndoPoint()
+        adjustments.stylePalette = min(max(value, 0), 1)
+        adjustmentsChanged()
+    }
+
+    func resetStylePad() {
+        recordUndoPoint(force: true)
+        adjustments.styleTone = 0
+        adjustments.styleColor = 0
+        adjustments.stylePalette = 1
+        adjustmentsChanged()
+    }
+
     func setFilter(_ filter: PhotoFilter) {
         guard filter != adjustments.filter else { return }
         recordUndoPoint(force: true)
@@ -735,6 +868,7 @@ final class CameraWorkspaceViewModel {
     /// Opens the glass filter pop-up and renders a live preview tile for each filter.
     func openFilterPicker() {
         isControlPanelOpen = false
+        showStylesPad = false
         showFilterPicker = true
         renderFilterThumbnails()
     }

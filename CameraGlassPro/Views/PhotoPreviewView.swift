@@ -13,6 +13,10 @@ struct PhotoPreviewView: View {
     @Environment(\.cameraReduceMotion) private var reduceMotion
     @State private var pinchStartZoom: CGFloat?
     @State private var panStart: CGPoint?
+    /// Decided on a drag's first move: sliding the ☀︎ exposure, or panning/swiping.
+    @State private var dragIsExposure: Bool?
+    /// Where the current touch started (used for the long-press AE/AF lock position).
+    @State private var touchStart: CGPoint?
 
     var body: some View {
         GeometryReader { proxy in
@@ -103,6 +107,13 @@ struct PhotoPreviewView: View {
                 }
 
             overlayLayer
+
+            if let point = vm.focusPoint {
+                FocusBox(exposure: vm.adjustments.exposure, isDimmed: vm.isFocusDimmed,
+                         isDragging: vm.isDraggingExposure, pulse: vm.focusPulse)
+                    .position(point)
+                    .transition(.opacity)
+            }
         }
         .frame(width: frame.width, height: frame.height)
         .clipped()
@@ -119,13 +130,35 @@ struct PhotoPreviewView: View {
         .accessibilityAction(named: "Pan right") { vm.setPan(CGPoint(x: vm.pan.x - 0.25, y: vm.pan.y)) }
         .accessibilityAction(named: "Pan up") { vm.setPan(CGPoint(x: vm.pan.x, y: vm.pan.y + 0.25)) }
         .accessibilityAction(named: "Pan down") { vm.setPan(CGPoint(x: vm.pan.x, y: vm.pan.y - 0.25)) }
-        .onTapGesture {
-            if vm.isControlPanelOpen || vm.showFilterPicker {
+        .onTapGesture(coordinateSpace: .local) { location in
+            if vm.isControlPanelOpen || vm.showFilterPicker || vm.showStylesPad {
                 withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) {
                     vm.isControlPanelOpen = false
                     vm.showFilterPicker = false
+                    vm.showStylesPad = false
                 }
+                return
             }
+            // Tap to focus/expose.
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                vm.focus(atView: location, mediaPoint: FramingGeometry.mediaPoint(
+                    tap: location, frame: frame, media: mediaSize, zoom: vm.zoom, pan: vm.pan), lock: false)
+            }
+        }
+        .onLongPressGesture(minimumDuration: 0.6) {
+            // Touch and hold: AE/AF LOCK at the touch point.
+            guard let location = touchStart else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                vm.focus(atView: location, mediaPoint: FramingGeometry.mediaPoint(
+                    tap: location, frame: frame, media: mediaSize, zoom: vm.zoom, pan: vm.pan), lock: true)
+            }
+        }
+        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { value in
+            if touchStart != value.startLocation { touchStart = value.startLocation }
+        })
+        .accessibilityAction(named: "Focus and expose here") {
+            vm.focus(atView: CGPoint(x: frame.width / 2, y: frame.height / 2),
+                     mediaPoint: CGPoint(x: 0.5, y: 0.5), lock: false)
         }
     }
 
@@ -145,6 +178,16 @@ struct PhotoPreviewView: View {
     private func panGesture(maxOffset: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 4)
             .onChanged { value in
+                // With the focus box up, a mostly vertical drag slides the ☀︎ exposure instead.
+                if dragIsExposure == nil {
+                    dragIsExposure = vm.focusPoint != nil
+                        && abs(value.translation.height) > abs(value.translation.width)
+                    if dragIsExposure == true { vm.beginExposureDrag() }
+                }
+                if dragIsExposure == true {
+                    vm.updateExposureDrag(by: value.translation.height)
+                    return
+                }
                 guard maxOffset.width > 0 || maxOffset.height > 0 else { return }
                 let start = panStart ?? vm.pan
                 panStart = start
@@ -154,6 +197,12 @@ struct PhotoPreviewView: View {
             }
             .onEnded { value in
                 panStart = nil
+                if dragIsExposure == true {
+                    dragIsExposure = nil
+                    vm.endExposureDrag()
+                    return
+                }
+                dragIsExposure = nil
                 // Not zoomed in: a sideways swipe moves through a multi-selection.
                 guard maxOffset.width <= 0, vm.library.count > 1,
                       abs(value.translation.width) > 60,

@@ -105,6 +105,20 @@ enum FramingGeometry {
                       width: width, height: height)
     }
 
+    /// Converts a tap in the viewfinder frame (points) to a normalized point on the media (0...1,
+    /// top-left origin), accounting for fill scale, zoom and pan. Nil if the tap misses the media.
+    static func mediaPoint(tap: CGPoint, frame: CGSize, media: CGSize, zoom: CGFloat, pan: CGPoint) -> CGPoint? {
+        let scale = baseScale(image: media, frame: frame, fill: true) * ZoomLimits.clamp(zoom)
+        let shown = CGSize(width: media.width * scale, height: media.height * scale)
+        guard shown.width > 0, shown.height > 0 else { return nil }
+        let offset = maxOffset(image: media, frame: frame, zoom: zoom, fill: true)
+        let origin = CGPoint(x: frame.width / 2 + pan.x * offset.width - shown.width / 2,
+                             y: frame.height / 2 + pan.y * offset.height - shown.height / 2)
+        let point = CGPoint(x: (tap.x - origin.x) / shown.width, y: (tap.y - origin.y) / shown.height)
+        guard (0...1).contains(point.x), (0...1).contains(point.y) else { return nil }
+        return point
+    }
+
     /// Zoom at which the mini-map appears (past the 5× telephoto stop, as in the Camera app).
     static let miniMapThreshold: CGFloat = 6
 

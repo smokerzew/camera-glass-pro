@@ -129,7 +129,7 @@ extension CameraWorkspaceViewModel {
         case .aspect: "Cycles full screen, 4:3, 16:9 and 1:1 framing"
         case .timer: "Delays opening the photo picker"
         case .exposure: "Shows the exposure slider"
-        case .styles: "Opens light and color adjustments"
+        case .styles: "Opens Photographic Styles: style, tone and color pad, palette"
         case .filter: "Opens the filter picker: Classic, Y2K, Quality and DigiCam FX"
         case .depth: "Preview-only depth look with a soft vignette"
         case .nightMode: "Lifts shadows and reduces noise"
@@ -158,7 +158,7 @@ extension CameraWorkspaceViewModel {
             } else {
                 isExposureDialVisible.toggle()
             }
-        case .styles: showAdjustments = true
+        case .styles: openStylesPad()
         case .filter: openFilterPicker()
         case .depth: setDepth(!depthEffect)
         case .nightMode: setNightLook(!adjustments.nightLook)

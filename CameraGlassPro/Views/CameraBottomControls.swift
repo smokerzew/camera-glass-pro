@@ -46,6 +46,10 @@ struct CameraStatusRow: View {
                     .accessibilityAction(named: "Previous") { vm.showPrevious() }
             }
 
+            if vm.isAELocked {
+                CameraTag(text: "AE/AF LOCK").transition(.opacity)
+            }
+
             // Shown briefly after toggling depth, then faded out (as in the Camera app).
             if let tag = vm.depthTag {
                 CameraTag(text: tag, isOff: !vm.depthEffect).transition(.opacity)

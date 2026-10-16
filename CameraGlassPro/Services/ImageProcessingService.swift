@@ -66,6 +66,7 @@ final class ImageProcessingService: @unchecked Sendable {
             image = filter.outputImage ?? image
         }
 
+        image = applyStyle(a, to: image)
         image = applyLook(a.filter, to: image, extent: input.extent)
 
         if a.grain > 0 {
@@ -74,6 +75,64 @@ final class ImageProcessingService: @unchecked Sendable {
 
         // Some filters sample beyond the edges; keep the original bounds.
         return image.cropped(to: input.extent)
+    }
+
+    /// Average sRGB luminance (0...1) of a square around `point` (normalized, top-left origin).
+    func averageLuma(of image: CGImage, around point: CGPoint, radius: CGFloat) -> Double? {
+        let input = CIImage(cgImage: image)
+        let extent = input.extent
+        let side = min(extent.width, extent.height) * radius * 2
+        let region = CGRect(x: extent.minX + point.x * extent.width - side / 2,
+                            y: extent.minY + (1 - point.y) * extent.height - side / 2, // CI is bottom-left
+                            width: side, height: side).intersection(extent)
+        guard !region.isEmpty,
+              let average = CIFilter(name: "CIAreaAverage", parameters: [
+                  kCIInputImageKey: input, kCIInputExtentKey: CIVector(cgRect: region),
+              ])?.outputImage else { return nil }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        context.render(average, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                       format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        return (0.2126 * Double(pixel[0]) + 0.7152 * Double(pixel[1]) + 0.0722 * Double(pixel[2])) / 255
+    }
+
+    /// Photographic Style: undertone + Tone (contrast/shadow depth) + Color (saturation), scaled by Palette.
+    func applyStyle(_ a: PhotoAdjustmentState, to image: CIImage) -> CIImage {
+        let style = a.style
+        let palette = min(max(a.stylePalette, 0), 1)
+        let tone = min(max(a.styleTone + style.character.tone * palette, -1), 1)
+        let color = min(max(a.styleColor + style.character.color * palette, -1), 1)
+        guard style != .standard || tone != 0 || color != 0 else { return image }
+
+        var output = image
+        if tone != 0 {
+            // Up: richer contrast and deeper shadows. Down: brighter, flatter shadows.
+            let controls = CIFilter.colorControls()
+            controls.inputImage = output
+            controls.contrast = Float(1 + tone * 0.22)
+            controls.brightness = Float(-tone * 0.025)
+            output = controls.outputImage ?? output
+            let shadows = CIFilter.highlightShadowAdjust()
+            shadows.inputImage = output
+            shadows.shadowAmount = Float(-tone * 0.35)
+            shadows.highlightAmount = 1
+            output = shadows.outputImage ?? output
+        }
+        let saturation = style.isMonochrome ? 0 : 1 + color * 0.55
+        if saturation != 1 {
+            let controls = CIFilter.colorControls()
+            controls.inputImage = output
+            controls.saturation = Float(max(0, saturation))
+            if style.isMonochrome { controls.contrast = Float(style == .starkBW ? 1.15 : 0.92) }
+            output = controls.outputImage ?? output
+        }
+        let tint = style.undertone
+        if !style.isMonochrome, (tint.r, tint.g, tint.b) != (0.0, 0.0, 0.0), palette > 0 {
+            let matrix = CIFilter.colorMatrix()
+            matrix.inputImage = output
+            matrix.biasVector = CIVector(x: tint.r * palette, y: tint.g * palette, z: tint.b * palette, w: 0)
+            output = matrix.outputImage ?? output
+        }
+        return output
     }
 
     /// Monochrome noise centered on zero, added on top; scaled so grain looks similar at any resolution.
