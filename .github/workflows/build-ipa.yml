@@ -1,0 +1,64 @@
+# Builds and tests Camera Glass Pro on a GitHub-hosted Mac and uploads an UNSIGNED .ipa.
+# An unsigned .ipa does not install on its own: sign it with Xcode, or with a tool such as
+# Sideloadly/AltStore using your own Apple ID (see README > "Installing from Windows").
+name: Build IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i ios
+
+      - name: Unit tests (iOS Simulator)
+        run: |
+          SIM_ID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          runtimes = sorted((k for k in devices if ".iOS-" in k), reverse=True)
+          print(next(d["udid"] for k in runtimes for d in devices[k] if d["name"].startswith("iPhone")))')
+          xcodebuild test \
+            -project CameraGlassPro.xcodeproj \
+            -scheme CameraGlassPro \
+            -destination "id=$SIM_ID" \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Build unsigned device app
+        run: |
+          xcodebuild build \
+            -project CameraGlassPro.xcodeproj \
+            -scheme CameraGlassPro \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package unsigned .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/CameraGlassPro.app Payload/
+          zip -qry CameraGlassPro-unsigned.ipa Payload
+          ls -lh CameraGlassPro-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CameraGlassPro-unsigned-ipa
+          path: CameraGlassPro-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults.xcresult

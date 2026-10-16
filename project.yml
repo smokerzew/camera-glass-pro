@@ -1,0 +1,49 @@
+# Fallback only: regenerate the Xcode project with XcodeGen (`brew install xcodegen && xcodegen`)
+# if CameraGlassPro.xcodeproj ever fails to open.
+name: CameraGlassPro
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  CameraGlassPro:
+    type: application
+    platform: iOS
+    sources: [CameraGlassPro]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.CameraGlassPro
+        GENERATE_INFOPLIST_FILE: YES
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        INFOPLIST_KEY_CFBundleDisplayName: Camera Glass
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.photography
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: Camera Glass Pro saves exported copies of your photos to your library only when you choose Save Image.
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIStatusBarHidden: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+  CameraGlassProTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [CameraGlassProTests]
+    dependencies:
+      - target: CameraGlassPro
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.CameraGlassProTests
+schemes:
+  CameraGlassPro:
+    build:
+      targets:
+        CameraGlassPro: all
+    test:
+      targets: [CameraGlassProTests]
