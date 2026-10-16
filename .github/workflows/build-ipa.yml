@@ -8,6 +8,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write # lets the job publish the .ipa as a release file (public, no sign-in to download)
+
 jobs:
   build:
     runs-on: macos-26
@@ -51,6 +54,14 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/CameraGlassPro.app Payload/
           zip -qry CameraGlassPro-unsigned.ipa Payload
           ls -lh CameraGlassPro-unsigned.ipa
+
+      - name: Publish .ipa to the "latest" release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest CameraGlassPro-unsigned.ipa             --title "Latest build" --notes "Unsigned build of ${GITHUB_SHA::7}" --latest
 
       - uses: actions/upload-artifact@v4
         with:
