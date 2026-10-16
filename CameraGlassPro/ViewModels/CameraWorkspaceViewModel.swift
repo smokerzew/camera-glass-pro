@@ -40,13 +40,24 @@ final class CameraWorkspaceViewModel {
     private(set) var snapshotFrame: CGImage?
     /// True while "Save Video with UI" is recording the screen.
     private(set) var isRecordingUI = false
+    /// Trim range of the loaded video, in seconds.
+    private(set) var trimStart: Double = 0
+    private(set) var trimEnd: Double = 0
+    var showTrim = false
 
     // MARK: Pro tools (display only)
     private(set) var scopeMode: ScopeMode = .off
     private(set) var scopeData: ScopeData?
     private(set) var focusPeaking = false
-    /// Red edge overlay for photos (videos get peaking inside the live compositor).
-    private(set) var peakingImage: CGImage?
+    /// Highlight clipping stripes.
+    private(set) var zebras = false
+    /// Peaking/zebra overlay for photos (videos get it inside the live compositor).
+    private(set) var overlayImage: CGImage?
+
+    // MARK: Undo / presets
+    private(set) var canUndo = false
+    private(set) var canRedo = false
+    private(set) var presets: [StylePreset] = []
 
     // MARK: Import
     private(set) var isImporting = false
@@ -118,6 +129,9 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var analysisTask: Task<Void, Never>?
     @ObservationIgnored private var stopRecordingRequested = false
     @ObservationIgnored private var dialHideTask: Task<Void, Never>?
+    @ObservationIgnored private var undoStack: [PhotoAdjustmentState] = []
+    @ObservationIgnored private var redoStack: [PhotoAdjustmentState] = []
+    @ObservationIgnored private var lastUndoPoint = Date.distantPast
 
     init(
         importer: PhotoImporting = PhotoImportService(),
@@ -133,6 +147,7 @@ final class CameraWorkspaceViewModel {
         showLevel = defaults.bool(forKey: SettingsKey.showLevel)
         exportFormat = ExportFormat(rawValue: defaults.string(forKey: SettingsKey.exportFormat) ?? "") ?? .jpeg
         topBarControls = CameraControl.decode(defaults.string(forKey: SettingsKey.topBarControls))
+        presets = StylePreset.load(from: defaults)
         resetFraming()
     }
 
@@ -311,6 +326,7 @@ final class CameraWorkspaceViewModel {
         if !defaults.bool(forKey: SettingsKey.keepAdjustmentsOnReplace) {
             adjustments = PhotoAdjustmentState()
         }
+        clearUndoHistory()
         recipe.value = adjustments
 
         switch media {
@@ -348,8 +364,8 @@ final class CameraWorkspaceViewModel {
         player.actionAtItemEnd = .none
         endObserver = NotificationCenter.default.addObserver(
             forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main
-        ) { [weak player] _ in
-            player?.seek(to: .zero)
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.loopToTrimStart() }
         }
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(value: 1, timescale: 4), queue: .main
@@ -358,7 +374,9 @@ final class CameraWorkspaceViewModel {
         }
         self.player = player
         playbackTime = 0
-        player.play()
+        trimStart = 0
+        trimEnd = video.duration
+        player.playImmediately(atRate: playbackRate)
         isPlaying = true
         updateVideoScopeSampling()
     }
@@ -379,8 +397,57 @@ final class CameraWorkspaceViewModel {
 
     func togglePlayback() {
         guard let player else { return }
-        if isPlaying { player.pause() } else { player.play() }
+        if isPlaying { player.pause() } else { player.playImmediately(atRate: playbackRate) }
         isPlaying.toggle()
+    }
+
+    /// 1× normally; ¼× in SLO-MO and 8× in TIME-LAPSE.
+    var playbackRate: Float { mode.playbackRate }
+
+    /// Re-applies the speed when the mode changes during playback.
+    func modeChanged() {
+        guard let player, isPlaying else { return }
+        player.rate = playbackRate
+    }
+
+    // MARK: Trim
+
+    var videoDuration: Double { video?.duration ?? 0 }
+    var isTrimmed: Bool { video != nil && (trimStart > 0.05 || trimEnd < videoDuration - 0.05) }
+
+    var trimRange: CMTimeRange? {
+        guard isTrimmed else { return nil }
+        return CMTimeRange(start: CMTime(seconds: trimStart, preferredTimescale: 600),
+                           end: CMTime(seconds: trimEnd, preferredTimescale: 600))
+    }
+
+    /// Sets the trim; keeps at least half a second and stays inside the video.
+    func setTrim(start: Double, end: Double) {
+        let duration = videoDuration
+        guard duration > 0 else { return }
+        let minimumLength = min(0.5, duration)
+        let newEnd = min(max(end, minimumLength), duration)
+        let newStart = min(max(start, 0), newEnd - minimumLength)
+        trimStart = newStart
+        trimEnd = newEnd
+        player?.currentItem?.forwardPlaybackEndTime = newEnd < duration - 0.05
+            ? CMTime(seconds: newEnd, preferredTimescale: 600) : .invalid
+        invalidateExport()
+    }
+
+    func resetTrim() { setTrim(start: 0, end: videoDuration) }
+
+    /// Shows the frame at `seconds` while a trim handle is dragged.
+    func scrub(to seconds: Double) {
+        guard let player else { return }
+        if isPlaying { player.pause(); isPlaying = false }
+        player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    private func loopToTrimStart() {
+        guard let player else { return }
+        player.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        if isPlaying { player.rate = playbackRate }
     }
 
     /// While paused, re-render the current frame so adjustment changes show immediately.
@@ -441,32 +508,101 @@ final class CameraWorkspaceViewModel {
     /// True when any camera-style control differs from its default (rings the panel button yellow).
     var hasActiveControls: Bool {
         hasEdits || flash != .off || livePreference || timer != .off || depthEffect || aspect != .original || showLevel
-            || scopeMode != .off || focusPeaking
+            || scopeMode != .off || focusPeaking || zebras
     }
 
     func setAdjustment(_ parameter: AdjustmentParameter, to value: Double) {
+        recordUndoPoint()
         adjustments[parameter] = value
         adjustmentsChanged()
     }
 
     func resetAdjustment(_ parameter: AdjustmentParameter) {
+        recordUndoPoint(force: true)
         adjustments.reset(parameter)
         adjustmentsChanged()
     }
 
     func cycleFilter() {
+        recordUndoPoint(force: true)
         adjustments.filter = adjustments.filter.next
         adjustmentsChanged()
     }
 
     func setNightLook(_ enabled: Bool) {
+        recordUndoPoint(force: true)
         adjustments.nightLook = enabled
         adjustmentsChanged()
     }
 
     func resetAllAdjustments() {
+        recordUndoPoint(force: true)
         adjustments = PhotoAdjustmentState()
         adjustmentsChanged()
+    }
+
+    // MARK: Undo / redo
+
+    /// Saves the current recipe before a change. Rapid changes (one slider drag) share one undo step.
+    private func recordUndoPoint(force: Bool = false) {
+        let now = Date()
+        if force || now.timeIntervalSince(lastUndoPoint) > 0.6 {
+            undoStack.append(adjustments)
+            if undoStack.count > 50 { undoStack.removeFirst() }
+            redoStack.removeAll()
+        }
+        lastUndoPoint = now
+        updateUndoState()
+    }
+
+    func undo() {
+        guard let previous = undoStack.popLast() else { return }
+        redoStack.append(adjustments)
+        adjustments = previous
+        lastUndoPoint = .distantPast
+        updateUndoState()
+        adjustmentsChanged()
+    }
+
+    func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(adjustments)
+        adjustments = next
+        lastUndoPoint = .distantPast
+        updateUndoState()
+        adjustmentsChanged()
+    }
+
+    private func clearUndoHistory() {
+        undoStack.removeAll()
+        redoStack.removeAll()
+        updateUndoState()
+    }
+
+    private func updateUndoState() {
+        canUndo = !undoStack.isEmpty
+        canRedo = !redoStack.isEmpty
+    }
+
+    // MARK: Style presets
+
+    func savePreset(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        presets.removeAll { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }
+        presets.append(StylePreset(name: trimmed, adjustments: adjustments))
+        StylePreset.save(presets, to: defaults)
+    }
+
+    func applyPreset(_ preset: StylePreset) {
+        recordUndoPoint(force: true)
+        adjustments = preset.adjustments.clamped()
+        adjustmentsChanged()
+    }
+
+    func deletePreset(_ preset: StylePreset) {
+        presets.removeAll { $0.id == preset.id }
+        StylePreset.save(presets, to: defaults)
     }
 
     /// Hold-to-compare: shows the unedited photo or video while held.
@@ -489,7 +625,17 @@ final class CameraWorkspaceViewModel {
     func setFocusPeaking(_ enabled: Bool) {
         focusPeaking = enabled
         recipe.peaking = enabled
-        if !enabled { peakingImage = nil }
+        overlaysChanged()
+    }
+
+    func setZebras(_ enabled: Bool) {
+        zebras = enabled
+        recipe.zebras = enabled
+        overlaysChanged()
+    }
+
+    private func overlaysChanged() {
+        if !focusPeaking && !zebras { overlayImage = nil }
         refreshPausedVideoFrame()
         refreshPhotoAnalysis()
     }
@@ -497,18 +643,20 @@ final class CameraWorkspaceViewModel {
     /// Recomputes scope data / peaking overlay for the photo currently on screen (off the main thread).
     private func refreshPhotoAnalysis() {
         analysisTask?.cancel()
-        guard photo != nil, let image = displayedImage, scopeMode != .off || focusPeaking else { return }
+        guard photo != nil, let image = displayedImage, scopeMode != .off || focusPeaking || zebras else { return }
         let wantsScopes = scopeMode != .off
         let wantsPeaking = focusPeaking
+        let wantsZebras = zebras
         let processor = self.processor
         analysisTask = Task { [weak self] in
             let result = await Task.detached(priority: .utility) { () -> (ScopeData?, CGImage?) in
                 (wantsScopes ? ScopeData.compute(from: image) : nil,
-                 wantsPeaking ? processor.renderPeakingOverlay(image) : nil)
+                 wantsPeaking || wantsZebras
+                    ? processor.renderAnalysisOverlay(image, peaking: wantsPeaking, zebras: wantsZebras) : nil)
             }.value
             guard !Task.isCancelled, let self, self.displayedImage === image else { return }
             if wantsScopes { self.scopeData = result.0 }
-            if wantsPeaking { self.peakingImage = result.1 }
+            if wantsPeaking || wantsZebras { self.overlayImage = result.1 }
         }
     }
 
@@ -599,6 +747,8 @@ final class CameraWorkspaceViewModel {
         let processor = self.processor
         let adjustments = self.adjustments
         let isEdited = options.content == .adjusted
+        let speed = Double(playbackRate)
+        let trimRange = self.trimRange
         let work: @Sendable () async throws -> URL
 
         if let video {
@@ -607,7 +757,8 @@ final class CameraWorkspaceViewModel {
                 if isEdited {
                     let url = exporter.directory.appendingPathComponent(
                         PhotoExportService.fileName(content: .adjusted, fileExtension: "mov"))
-                    try await VideoService.exportEdited(video, adjustments: adjustments, processor: processor, to: url)
+                    try await VideoService.exportEdited(video, adjustments: adjustments, processor: processor, to: url,
+                                                       timeRange: trimRange, speed: speed)
                     return url
                 }
                 let url = exporter.directory.appendingPathComponent(
@@ -698,19 +849,17 @@ final class CameraWorkspaceViewModel {
             }
             self.stopRecordingRequested = false
             self.isRecordingUI = true
-            _ = await player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
-            player.play()
+            _ = await player.seek(to: CMTime(seconds: self.trimStart, preferredTimescale: 600),
+                                  toleranceBefore: .zero, toleranceAfter: .zero)
+            player.playImmediately(atRate: self.playbackRate)
             self.isPlaying = true
 
-            let limit = min(max(video.duration, 1), 60)
+            // One pass through the trimmed range at the mode's speed, capped at 60 s.
+            let length = (self.trimEnd - self.trimStart) / Double(max(self.playbackRate, 0.01))
+            let limit = min(max(length, 1), 60)
             let started = Date()
-            var lastTime = 0.0
-            while !self.stopRecordingRequested {
+            while !self.stopRecordingRequested, Date().timeIntervalSince(started) < limit {
                 try? await Task.sleep(for: .milliseconds(100))
-                let now = player.currentTime().seconds
-                let wrapped = now + 0.5 < lastTime // the looping player jumped back to the start
-                if wrapped || now >= limit - 0.1 || Date().timeIntervalSince(started) > limit + 2 { break }
-                lastTime = now
             }
 
             player.pause()

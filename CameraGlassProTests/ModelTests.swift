@@ -129,10 +129,15 @@ final class FramingTests: XCTestCase {
     func testModesAreHonest() {
         XCTAssertFalse(CameraMode.photo.isPreviewOnly)
         XCTAssertTrue(CameraMode.video.explanation.contains("does not record"))
-        for mode in CameraMode.allCases where mode != .photo && mode != .video {
-            XCTAssertTrue(mode.isPreviewOnly)
+        XCTAssertFalse(CameraMode.sloMo.isPreviewOnly)
+        XCTAssertFalse(CameraMode.timeLapse.isPreviewOnly)
+        for mode in CameraMode.allCases where mode.isPreviewOnly {
             XCTAssertTrue(mode.explanation.hasPrefix("Preview only"), "\(mode) must say it is preview-only")
         }
+        XCTAssertEqual(CameraMode.sloMo.playbackRate, 0.25)
+        XCTAssertEqual(CameraMode.timeLapse.playbackRate, 8)
+        XCTAssertEqual(CameraMode.photo.playbackRate, 1)
+        XCTAssertEqual(CameraMode.timeLapse.title, "TIME-LAPSE")
     }
 }
 

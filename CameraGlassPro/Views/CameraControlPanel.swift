@@ -59,7 +59,7 @@ struct CameraControlPanel: View {
         VStack(spacing: 18) {
             LazyVGrid(columns: columns, spacing: 18) {
                 ForEach(CameraControl.allCases) { control in
-                    let unavailable = !vm.isEditingTopBar && control.requiresMedia && !vm.hasMedia
+                    let unavailable = !vm.isEditingTopBar && !vm.isAvailable(control)
                     PanelControlButton(
                         systemImage: vm.symbol(for: control),
                         title: control.title,

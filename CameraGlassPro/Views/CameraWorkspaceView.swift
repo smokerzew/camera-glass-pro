@@ -33,6 +33,7 @@ struct CameraWorkspaceView: View {
             }
             .sheet(isPresented: $vm.showAdjustments) { PhotoAdjustmentView(vm: vm) }
             .sheet(isPresented: $vm.showExport) { PhotoExportView(vm: vm) }
+            .sheet(isPresented: $vm.showTrim) { VideoTrimView(vm: vm) }
             .appAlert(vm)
             .sensoryFeedback(.success, trigger: vm.importSuccessCount)
             .sensoryFeedback(.selection, trigger: vm.mode)
@@ -41,6 +42,7 @@ struct CameraWorkspaceView: View {
             .sensoryFeedback(.impact(weight: .light), trigger: vm.flashPulse)
             .sensoryFeedback(.error, trigger: vm.alert?.id) { _, new in new != nil }
             .onChange(of: vm.flashPulse) { playFlash() }
+            .onChange(of: vm.mode) { vm.modeChanged() }
             .onChange(of: vm.isControlPanelOpen) { _, open in
                 if !open { vm.isEditingTopBar = false }
             }

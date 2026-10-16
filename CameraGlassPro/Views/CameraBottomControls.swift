@@ -15,8 +15,8 @@ struct CameraStatusRow: View {
             HStack(spacing: 22) {
                 ForEach(vm.visibleTopBarControls) { control in
                     topBarItem(control)
-                        .disabled(control.requiresMedia && !vm.hasMedia)
-                        .opacity(control.requiresMedia && !vm.hasMedia ? 0.4 : 1)
+                        .disabled(!vm.isAvailable(control))
+                        .opacity(vm.isAvailable(control) ? 1 : 0.4)
                 }
             }
             .buttonStyle(PressableButtonStyle())

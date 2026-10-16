@@ -57,10 +57,42 @@ final class ImageProcessingService: @unchecked Sendable {
             image = filter.outputImage ?? image
         }
 
+        if a.texture != 0 {
+            // Unsharp mask with a size-relative radius: positive adds local contrast, negative softens.
+            let filter = CIFilter.unsharpMask()
+            filter.inputImage = image
+            filter.radius = Float(max(2, input.extent.width / 300))
+            filter.intensity = Float(a.texture * 0.8)
+            image = filter.outputImage ?? image
+        }
+
         image = applyLook(a.filter, to: image)
+
+        if a.grain > 0 {
+            image = addGrain(amount: a.grain, to: image, extent: input.extent)
+        }
 
         // Some filters sample beyond the edges; keep the original bounds.
         return image.cropped(to: input.extent)
+    }
+
+    /// Monochrome noise centered on zero, added on top; scaled so grain looks similar at any resolution.
+    private func addGrain(amount: Double, to image: CIImage, extent: CGRect) -> CIImage {
+        guard let noise = CIFilter.randomGenerator().outputImage else { return image }
+        let scale = max(1, extent.width / 1500)
+        let strength = CGFloat(amount * 0.18)
+        let mono = CIFilter.colorMatrix()
+        mono.inputImage = noise.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        mono.rVector = CIVector(x: strength, y: 0, z: 0, w: 0)
+        mono.gVector = CIVector(x: strength, y: 0, z: 0, w: 0)
+        mono.bVector = CIVector(x: strength, y: 0, z: 0, w: 0)
+        mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        mono.biasVector = CIVector(x: -strength / 2, y: -strength / 2, z: -strength / 2, w: 1)
+        guard let grain = mono.outputImage?.cropped(to: extent) else { return image }
+        let add = CIFilter.additionCompositing()
+        add.inputImage = grain
+        add.backgroundImage = image
+        return add.outputImage ?? image
     }
 
     private func applyLook(_ look: PhotoFilter, to image: CIImage) -> CIImage {
@@ -105,9 +137,48 @@ final class ImageProcessingService: @unchecked Sendable {
         return (clamp.outputImage ?? CIImage.empty()).cropped(to: input.extent)
     }
 
-    func renderPeakingOverlay(_ source: CGImage) -> CGImage? {
+    /// Highlight clipping ("zebras"): diagonal red stripes where luminance is near white. Display-only.
+    func zebraOverlay(for input: CIImage) -> CIImage {
+        // Mask alpha rises steeply above ~96% luminance.
+        let mask = CIFilter.colorMatrix()
+        mask.inputImage = input
+        mask.rVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        mask.gVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        mask.bVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        mask.aVector = CIVector(x: 0.2126 * 40, y: 0.7152 * 40, z: 0.0722 * 40, w: 0)
+        mask.biasVector = CIVector(x: 1, y: 1, z: 1, w: -0.96 * 40)
+        let clamp = CIFilter.colorClamp()
+        clamp.inputImage = mask.outputImage
+        clamp.minComponents = CIVector(x: 0, y: 0, z: 0, w: 0)
+        clamp.maxComponents = CIVector(x: 1, y: 1, z: 1, w: 1)
+
+        let stripes = CIFilter.stripesGenerator()
+        stripes.color0 = CIColor(red: 1, green: 0.25, blue: 0.25, alpha: 0.85)
+        stripes.color1 = CIColor(red: 0, green: 0, blue: 0, alpha: 0)
+        stripes.width = Float(max(4, input.extent.width / 120))
+        stripes.sharpness = 1
+        let diagonal = (stripes.outputImage ?? CIImage.empty())
+            .transformed(by: CGAffineTransform(rotationAngle: .pi / 4))
+            .cropped(to: input.extent)
+
+        let blend = CIFilter.blendWithAlphaMask()
+        blend.inputImage = diagonal
+        blend.backgroundImage = CIImage.empty().cropped(to: input.extent)
+        blend.maskImage = clamp.outputImage
+        return (blend.outputImage ?? CIImage.empty()).cropped(to: input.extent)
+    }
+
+    /// Peaking and/or zebras combined into one transparent overlay.
+    func analysisOverlay(for input: CIImage, peaking: Bool, zebras: Bool) -> CIImage {
+        var overlay = CIImage.empty().cropped(to: input.extent)
+        if zebras { overlay = zebraOverlay(for: input).composited(over: overlay) }
+        if peaking { overlay = peakingOverlay(for: input).composited(over: overlay) }
+        return overlay
+    }
+
+    func renderAnalysisOverlay(_ source: CGImage, peaking: Bool, zebras: Bool) -> CGImage? {
         let input = CIImage(cgImage: source)
-        return context.createCGImage(peakingOverlay(for: input), from: input.extent)
+        return context.createCGImage(analysisOverlay(for: input, peaking: peaking, zebras: zebras), from: input.extent)
     }
 
     func renderPreview(_ source: CGImage, adjustments: PhotoAdjustmentState) -> CGImage? {

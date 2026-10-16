@@ -10,12 +10,34 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var warmth: Double = 0
     var highlights: Double = 0
     var shadows: Double = 0
+    /// Local contrast (iOS 27 "Styles 3" texture): + crisper detail, − softer.
+    var texture: Double = 0
+    /// Film-like luminance grain.
+    var grain: Double = 0
     /// "Night Look": lifts shadows and reduces noise. A real filter, not a capture mode.
     var nightLook = false
     /// Photo look applied after the adjustments (the panel's FILTER control).
     var filter: PhotoFilter = .none
 
     var isIdentity: Bool { self == PhotoAdjustmentState() }
+
+    init() {}
+
+    /// Missing keys fall back to defaults, so presets saved by older versions keep loading.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        exposure = try c.decodeIfPresent(Double.self, forKey: .exposure) ?? 0
+        brightness = try c.decodeIfPresent(Double.self, forKey: .brightness) ?? 0
+        contrast = try c.decodeIfPresent(Double.self, forKey: .contrast) ?? 1
+        saturation = try c.decodeIfPresent(Double.self, forKey: .saturation) ?? 1
+        warmth = try c.decodeIfPresent(Double.self, forKey: .warmth) ?? 0
+        highlights = try c.decodeIfPresent(Double.self, forKey: .highlights) ?? 0
+        shadows = try c.decodeIfPresent(Double.self, forKey: .shadows) ?? 0
+        texture = try c.decodeIfPresent(Double.self, forKey: .texture) ?? 0
+        grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
+        nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
+        filter = try c.decodeIfPresent(PhotoFilter.self, forKey: .filter) ?? .none
+    }
 
     subscript(parameter: AdjustmentParameter) -> Double {
         get { self[keyPath: parameter.keyPath] }
@@ -41,7 +63,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
 }
 
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
-    case exposure, brightness, contrast, saturation, warmth, highlights, shadows
+    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, grain
 
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
@@ -55,6 +77,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .warmth: "thermometer.medium"
         case .highlights: "circle.righthalf.filled.inverse"
         case .shadows: "circle.bottomhalf.filled"
+        case .texture: "circle.hexagongrid"
+        case .grain: "circle.dotted"
         }
     }
 
@@ -67,6 +91,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .warmth: -1...1
         case .highlights: -1...0        // 0 = unchanged, -1 = strongest recovery
         case .shadows: -1...1
+        case .texture: -1...1
+        case .grain: 0...1
         }
     }
 
@@ -86,6 +112,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .warmth: \.warmth
         case .highlights: \.highlights
         case .shadows: \.shadows
+        case .texture: \.texture
+        case .grain: \.grain
         }
     }
 

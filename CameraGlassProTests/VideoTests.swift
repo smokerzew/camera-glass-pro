@@ -78,6 +78,38 @@ final class VideoPipelineTests: XCTestCase {
     }
 }
 
+final class VideoRetimeTests: XCTestCase {
+    private func duration(of url: URL) async throws -> Double {
+        try await AVURLAsset(url: url).load(.duration).seconds
+    }
+
+    func testTrimAndSlowMotionExport() async throws {
+        // 30 frames at 30 fps = 1 s source.
+        let source = try await VideoPipelineTests.makeTestMovie(frames: 30)
+        let video = try await VideoService.load(localURL: VideoService.makeLocalCopy(of: source))
+        let half = CMTimeRange(start: .zero, duration: CMTime(seconds: 0.5, preferredTimescale: 600))
+
+        let slow = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
+        try await VideoService.exportEdited(video, adjustments: PhotoAdjustmentState(), processor: .shared,
+                                            to: slow, timeRange: half, speed: 0.25)
+        let slowDuration = try await duration(of: slow)
+        XCTAssertEqual(slowDuration, 2.0, accuracy: 0.2, "0.5 s at quarter speed lasts 2 s")
+
+        let fast = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
+        try await VideoService.exportEdited(video, adjustments: PhotoAdjustmentState(), processor: .shared,
+                                            to: fast, timeRange: nil, speed: 4)
+        let fastDuration = try await duration(of: fast)
+        XCTAssertEqual(fastDuration, 0.25, accuracy: 0.1, "1 s at 4x lasts a quarter second")
+    }
+
+    func testRetimeLeavesSourceAloneWhenUnchanged() async throws {
+        let source = try await VideoPipelineTests.makeTestMovie()
+        let asset = AVURLAsset(url: source)
+        let result = try await VideoService.retimedAsset(asset, timeRange: nil, speed: 1)
+        XCTAssertTrue(result === asset)
+    }
+}
+
 @MainActor
 final class DepthTagTests: XCTestCase {
     func testDepthTagShowsThenFades() async throws {

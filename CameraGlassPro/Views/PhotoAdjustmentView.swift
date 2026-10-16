@@ -4,12 +4,15 @@ import SwiftUI
 struct PhotoAdjustmentView: View {
     @Bindable var vm: CameraWorkspaceViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var isNamingPreset = false
+    @State private var presetName = ""
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     statusRow
+                    presetsRow
 
                     ForEach(AdjustmentParameter.allCases) { parameter in
                         AdjustmentSliderRow(
@@ -47,9 +50,22 @@ struct PhotoAdjustmentView: View {
                     Button("Reset All", role: .destructive) { vm.resetAllAdjustments() }
                         .disabled(!vm.hasEdits)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { vm.undo() } label: { Image(systemName: "arrow.uturn.backward") }
+                        .disabled(!vm.canUndo)
+                        .accessibilityLabel("Undo")
+                    Button { vm.redo() } label: { Image(systemName: "arrow.uturn.forward") }
+                        .disabled(!vm.canRedo)
+                        .accessibilityLabel("Redo")
                     Button("Done") { dismiss() }
                 }
+            }
+            .alert("Save Style", isPresented: $isNamingPreset) {
+                TextField("Name", text: $presetName)
+                Button("Save") { vm.savePreset(named: presetName) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Saves the current adjustments so you can apply them to other photos and videos.")
             }
         }
         .presentationDetents([.height(380), .medium, .large])
@@ -58,6 +74,40 @@ struct PhotoAdjustmentView: View {
         .modifier(GlassSheetBackground())
         .appAlert(vm)
         .onDisappear { vm.setShowOriginal(false) }
+    }
+
+    /// Saved styles: tap to apply, long-press to delete, + to save the current adjustments.
+    private var presetsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button {
+                    presetName = ""
+                    isNamingPreset = true
+                } label: {
+                    Label("Save Style", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 34)
+                        .cameraGlass(.interactive, in: Capsule())
+                }
+                .disabled(!vm.hasEdits)
+
+                ForEach(vm.presets) { preset in
+                    Button { vm.applyPreset(preset) } label: {
+                        Text(preset.name)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(vm.adjustments == preset.adjustments ? Color.yellow : .primary)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 34)
+                            .cameraGlass(vm.adjustments == preset.adjustments ? .selected : .regular, in: Capsule())
+                    }
+                    .contextMenu {
+                        Button("Delete Style", systemImage: "trash", role: .destructive) { vm.deletePreset(preset) }
+                    }
+                    .accessibilityHint("Applies this saved style. Touch and hold to delete.")
+                }
+            }
+        }
     }
 
     private var statusRow: some View {

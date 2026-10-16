@@ -57,8 +57,8 @@ struct PhotoPreviewView: View {
                 Image(decorative: image, scale: 1)
                     .resizable()
                     .interpolation(.high)
-                if vm.focusPeaking, let peaking = vm.peakingImage {
-                    Image(decorative: peaking, scale: 1)
+                if vm.focusPeaking || vm.zebras, let overlay = vm.overlayImage {
+                    Image(decorative: overlay, scale: 1)
                         .resizable()
                         .transition(.opacity)
                 }

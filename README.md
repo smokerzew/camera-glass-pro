@@ -38,7 +38,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Flash | Off / Auto / On. "On" plays a screen flash when you use the center control. | Visual only |
 | Live | Shows a LIVE badge | Preference only |
 | Timer | 3 s / 10 s countdown before the photo picker opens | Real delay |
-| Modes | PHOTO is the working mode. PORTRAIT adds a vignette, and VIDEO / CINEMATIC / PANO show framing bands. Each one says "Preview only". | Simulated looks |
+| Modes | PHOTO is the working mode. PORTRAIT adds a vignette; VIDEO, SLO-MO and TIME-LAPSE play imported videos; CINEMATIC and PANO say "Preview only". | Simulated looks |
 | Export | Original as an exact byte-for-byte copy, or an edited copy (JPEG/HEIC/PNG) at full resolution. Optional crop to framing and optional burned-in guides. Uses the native share sheet (Save Image, Files, AirDrop). | Real |
 | ⠿ panel | FLASH, LIVE, ASPECT, TIMER, EXPOSURE (slider), STYLES (adjustments), FILTER (Vivid/Mono/Noir/Chrome/Fade/Instant), DEPTH, NIGHT MODE, FORMAT (export format) | Real except Flash/Live (visual) and Depth (preview-only vignette) |
 | Video | Import videos from Photos or Files. Full-screen looping playback; the red center control plays/pauses (stop square while playing) with a running timecode. Exposure, Styles, Filter and Night Look apply live per frame and to the edited MOV export. | Real |
@@ -50,6 +50,11 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Save Video with UI | Export sheet › Save Video with UI: records the screen with ReplayKit while your video plays once (≤ 60 s; shutter stops early), then saves it to Photos. | Real |
 | Landscape | The layout stays portrait; icons, zoom labels and the level turn upright when you hold the phone sideways (CoreMotion, with hysteresis). | Real |
 | App icon | Standard, dark and tinted Home Screen variants. | — |
+| Styles 3 | Texture (local contrast) and Grain sliders in Adjust. | Real |
+| Highlight clipping | ZEBRAS control stripes near-white areas (display only). | Real |
+| Undo / presets | Undo/redo in Adjust (a slider drag is one step); save, apply and delete named styles. | Real |
+| SLO-MO / TIME-LAPSE | Imported videos play at 1/4 or 8x in these modes; the edited MOV exports at that speed. | Real |
+| Trim | TRIM control: start/end handles; playback loops inside, edited export and Save Video with UI use it. | Real |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 

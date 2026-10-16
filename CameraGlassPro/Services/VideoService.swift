@@ -40,6 +40,7 @@ final class AdjustmentBox: @unchecked Sendable {
     private let lock = NSLock()
     private var stored = PhotoAdjustmentState()
     private var storedPeaking = false
+    private var storedZebras = false
 
     var value: PhotoAdjustmentState {
         get { lock.withLock { stored } }
@@ -49,6 +50,11 @@ final class AdjustmentBox: @unchecked Sendable {
     var peaking: Bool {
         get { lock.withLock { storedPeaking } }
         set { lock.withLock { storedPeaking = newValue } }
+    }
+
+    var zebras: Bool {
+        get { lock.withLock { storedZebras } }
+        set { lock.withLock { storedZebras = newValue } }
     }
 }
 
@@ -101,6 +107,29 @@ enum VideoService {
         )
     }
 
+    /// The source as-is, or a composition holding just `timeRange`, scaled to `speed`.
+    static func retimedAsset(_ source: AVAsset, timeRange: CMTimeRange?, speed: Double) async throws -> AVAsset {
+        guard timeRange != nil || speed != 1 else { return source }
+        let duration = try await source.load(.duration)
+        let range = timeRange ?? CMTimeRange(start: .zero, duration: duration)
+        let composition = AVMutableComposition()
+        let types: [AVMediaType] = speed == 1 ? [.video, .audio] : [.video]
+        for type in types {
+            for track in try await source.loadTracks(withMediaType: type) {
+                guard let copy = composition.addMutableTrack(withMediaType: type, preferredTrackID: kCMPersistentTrackID_Invalid) else { continue }
+                try copy.insertTimeRange(range, of: track, at: .zero)
+                if type == .video { copy.preferredTransform = try await track.load(.preferredTransform) }
+            }
+        }
+        if speed != 1, speed > 0 {
+            composition.scaleTimeRange(
+                CMTimeRange(start: .zero, duration: range.duration),
+                toDuration: CMTimeMultiplyByFloat64(range.duration, multiplier: 1 / speed)
+            )
+        }
+        return composition
+    }
+
     /// Maps a track's rotation to the EXIF orientation that turns its frames upright.
     static func exifOrientation(for transform: CGAffineTransform) -> Int32 {
         let degrees = Int((atan2(transform.b, transform.a) * 180 / .pi).rounded())
@@ -126,8 +155,9 @@ enum VideoService {
     ) async throws -> AVVideoComposition {
         try await AVMutableVideoComposition.videoComposition(with: asset) { request in
             var output = processor.apply(recipe.value, to: request.sourceImage)
-            if recipe.peaking {
-                output = processor.peakingOverlay(for: output).composited(over: output)
+            let peaking = recipe.peaking, zebras = recipe.zebras
+            if peaking || zebras {
+                output = processor.analysisOverlay(for: output, peaking: peaking, zebras: zebras).composited(over: output)
             }
             request.finish(with: output, context: processor.context)
         }
@@ -144,17 +174,21 @@ enum VideoService {
         return try await generator.image(at: time).image
     }
 
-    /// Full-quality edited copy with the adjustments baked in.
+    /// Full-quality edited copy with the adjustments baked in, optionally trimmed and re-timed.
+    /// `speed` < 1 slows down (SLO-MO), > 1 speeds up (TIME-LAPSE); audio is kept only at 1×.
     static func exportEdited(
         _ video: ImportedVideo,
         adjustments: PhotoAdjustmentState,
         processor: ImageProcessingService,
-        to url: URL
+        to url: URL,
+        timeRange: CMTimeRange? = nil,
+        speed: Double = 1
     ) async throws {
+        let asset = try await retimedAsset(video.asset, timeRange: timeRange, speed: speed)
         let recipe = AdjustmentBox()
         recipe.value = adjustments
-        let composition = try await composition(for: video.asset, recipe: recipe, processor: processor)
-        guard let session = AVAssetExportSession(asset: video.asset, presetName: AVAssetExportPresetHighestQuality) else {
+        let composition = try await composition(for: asset, recipe: recipe, processor: processor)
+        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
             throw PhotoExportError.renderFailed
         }
         session.videoComposition = composition

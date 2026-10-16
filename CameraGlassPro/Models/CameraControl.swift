@@ -2,7 +2,7 @@ import Foundation
 
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
-    case flash, live, aspect, timer, exposure, styles, filter, depth, nightMode, grid, level, scopes, peaking, format
+    case flash, live, aspect, timer, exposure, styles, filter, depth, nightMode, grid, level, scopes, peaking, zebras, trim, format
 
     var id: String { rawValue }
 
@@ -16,7 +16,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
     /// Controls that act on the imported photo or video and are disabled until there is one.
     var requiresMedia: Bool {
         switch self {
-        case .exposure, .styles, .filter, .depth, .nightMode, .scopes, .peaking: true
+        case .exposure, .styles, .filter, .depth, .nightMode, .scopes, .peaking, .zebras, .trim: true
         default: false
         }
     }
@@ -37,6 +37,12 @@ enum CameraControl: String, CaseIterable, Identifiable {
 }
 
 extension CameraWorkspaceViewModel {
+    /// Whether a control can be used right now (TRIM needs a video, editing controls need media).
+    func isAvailable(_ control: CameraControl) -> Bool {
+        if control == .trim { return video != nil }
+        return !control.requiresMedia || hasMedia
+    }
+
     func symbol(for control: CameraControl) -> String {
         switch control {
         case .flash: flash == .off ? "bolt.slash" : flash.systemImage
@@ -52,6 +58,8 @@ extension CameraWorkspaceViewModel {
         case .level: "level"
         case .scopes: "chart.bar.xaxis"
         case .peaking: "scope"
+        case .zebras: "line.diagonal"
+        case .trim: "timeline.selection"
         case .format: "photo"
         }
     }
@@ -71,6 +79,8 @@ extension CameraWorkspaceViewModel {
         case .level: showLevel
         case .scopes: scopeMode != .off
         case .peaking: focusPeaking
+        case .zebras: zebras
+        case .trim: isTrimmed
         case .format: false
         }
     }
@@ -102,6 +112,8 @@ extension CameraWorkspaceViewModel {
         case .level: showLevel ? "On" : "Off"
         case .scopes: scopeMode.label
         case .peaking: focusPeaking ? "On" : "Off"
+        case .zebras: zebras ? "On" : "Off"
+        case .trim: isTrimmed ? String(format: "%.1f s to %.1f s", trimStart, trimEnd) : "Full length"
         case .format: exportFormat.label
         }
     }
@@ -121,6 +133,8 @@ extension CameraWorkspaceViewModel {
         case .level: "Shows a level that follows your phone's tilt"
         case .scopes: "Cycles Luminance, RGB and RGB Parade exposure scopes"
         case .peaking: "Highlights the sharpest edges in red"
+        case .zebras: "Stripes the brightest areas that are close to clipping"
+        case .trim: "Choose where the video starts and ends"
         case .format: "Cycles the export format: JPEG, HEIF, PNG"
         }
     }
@@ -147,6 +161,8 @@ extension CameraWorkspaceViewModel {
         case .level: setShowLevel(!showLevel)
         case .scopes: setScopeMode(scopeMode.next)
         case .peaking: setFocusPeaking(!focusPeaking)
+        case .zebras: setZebras(!zebras)
+        case .trim: showTrim = true
         case .format: cycleExportFormat()
         }
     }
