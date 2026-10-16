@@ -1,6 +1,5 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
-import UIKit
 
 /// Filter groups shown as tabs in the filter picker.
 enum FilterCategory: String, CaseIterable, Identifiable {
@@ -26,79 +25,91 @@ extension PhotoFilter {
         case .none, .vivid, .mono, .noir, .chrome, .fade, .instant: .classic
         case .y2kGlow, .flashPop, .cyber, .pastel: .y2k
         case .hd, .clarity, .hdr, .crisp: .quality
-        case .digicam, .ccd, .lofi, .dateStamp: .digicam
+        case .digicam, .ccd, .retro: .digicam
         }
     }
 }
 
-/// The looks behind every `PhotoFilter`. All are Core Image chains, so they run the same on the
-/// photo preview, the full-resolution export and every video frame.
+/// The looks behind every `PhotoFilter`.
+///
+/// Rules every look follows (so they stay photographic on portraits, landscapes, indoor and night shots):
+/// - Tone is shaped with curves (soft shoulder, gently lifted toe) instead of raw contrast, so
+///   highlights roll off and shadows keep detail instead of clipping or crushing.
+/// - Color casts are split-toned: they tint shadows or highlights lightly and leave midtones (skin) alone.
+/// - No look adds grain, text, borders or frames. Grain is the separate Grain control.
+/// - Every radius scales with the image, so the preview matches the full-resolution export.
 extension ImageProcessingService {
     func applyLook(_ look: PhotoFilter, to image: CIImage, extent: CGRect) -> CIImage {
+        let w = extent.width
         switch look {
         case .none:
             return image
 
-        // Classic
-        case .vivid: return vibrance(image, 0.6)
+        // MARK: Classic (Apple's photo effects, plus a restrained Vivid)
+        case .vivid:
+            return curve(vibrance(image, 0.35), [(0, 0), (0.25, 0.23), (0.5, 0.5), (0.75, 0.78), (1, 1)])
         case .mono: return builtIn(CIFilter.photoEffectMono(), image)
         case .noir: return builtIn(CIFilter.photoEffectNoir(), image)
         case .chrome: return builtIn(CIFilter.photoEffectChrome(), image)
         case .fade: return builtIn(CIFilter.photoEffectFade(), image)
         case .instant: return builtIn(CIFilter.photoEffectInstant(), image)
 
-        // Y2K
+        // MARK: Y2K
         case .y2kGlow:
-            // Soft bloom, punchy color and a cool cast, like early-2000s glossy edits.
-            let base = tone(image, saturation: 1.3, contrast: 1.06, brightness: 0.03)
-            return tint(bloom(base, radius: extent.width / 60, intensity: 0.75), r: -0.02, g: 0, b: 0.04)
+            // Soft diffusion like a Pro-Mist filter: a faint, tight glow from the highlights only,
+            // slightly lifted blacks and cool shadows. No wide halos.
+            let glow = softGlow(image, radius: w / 260, amount: 0.22)
+            let toned = curve(glow, [(0, 0.03), (0.25, 0.26), (0.5, 0.52), (0.75, 0.77), (1, 0.98)])
+            return splitTone(saturation(toned, 1.06), shadows: (-0.004, 0.004, 0.018), highlights: (0.012, 0.006, 0), amount: 1)
         case .flashPop:
-            // Direct on-camera flash: bright subject, hard contrast, dark falloff.
-            let lit = tone(exposure(image, 0.45), saturation: 1.15, contrast: 1.28, brightness: 0)
-            return vignette(lit, intensity: 1.3, radius: 1.6)
+            // On-camera flash: brighter subject, firm but not clipped contrast, gentle edge falloff.
+            let lit = exposure(image, 0.18)
+            let snappy = curve(lit, [(0, 0), (0.25, 0.21), (0.5, 0.52), (0.75, 0.81), (1, 0.98)])
+            return vignette(saturation(snappy, 1.05), intensity: 0.45, radius: 1.8)
         case .cyber:
-            // Teal shadows, magenta highlights, glow.
-            let split = channels(image, r: 1.05, g: 0.92, b: 1.12, bias: (0.02, -0.01, 0.06))
-            return bloom(tone(split, saturation: 1.35, contrast: 1.15, brightness: 0), radius: extent.width / 80, intensity: 0.5)
+            // Night-city grade: teal-leaning shadows, faint magenta highlights, deep but not crushed blacks.
+            let toned = curve(image, [(0, 0.015), (0.25, 0.22), (0.5, 0.5), (0.75, 0.79), (1, 0.98)])
+            return splitTone(saturation(toned, 1.08), shadows: (-0.012, 0.006, 0.02), highlights: (0.016, -0.004, 0.012), amount: 1)
         case .pastel:
-            // Lifted, low-contrast, slightly pink.
-            let soft = tone(image, saturation: 0.72, contrast: 0.82, brightness: 0.08)
-            return tint(soft, r: 0.04, g: 0.0, b: 0.03)
+            // Airy and soft: lifted blacks, gentle contrast, slightly muted color, warm highlights.
+            let airy = curve(image, [(0, 0.07), (0.25, 0.3), (0.5, 0.54), (0.75, 0.78), (1, 0.97)])
+            return splitTone(saturation(airy, 0.86), shadows: (0.006, 0, 0.012), highlights: (0.012, 0.006, 0), amount: 1)
 
-        // Quality
+        // MARK: Quality
         case .hd:
-            let sharp = sharpen(unsharp(image, radius: extent.width / 400, intensity: 0.5), 0.6)
-            return vibrance(tone(sharp, saturation: 1.0, contrast: 1.08, brightness: 0), 0.3)
+            // Fine detail and a touch of vibrance; sharpening radius tracks resolution (no halos).
+            let sharp = sharpen(image, amount: 0.4, radius: max(1, w / 1600))
+            return vibrance(curve(sharp, [(0, 0), (0.25, 0.24), (0.5, 0.5), (0.75, 0.76), (1, 1)]), 0.15)
         case .clarity:
-            // Wide unsharp mask = local contrast; recover highlights and lift shadows.
-            let local = unsharp(image, radius: extent.width / 60, intensity: 0.6)
-            return highlightShadow(local, highlights: 0.75, shadows: 0.35)
+            // Local contrast (wide, low-strength unsharp mask) with highlight recovery.
+            let local = unsharp(image, radius: w / 90, intensity: 0.3)
+            return highlightShadow(local, highlights: 0.85, shadows: 0.15)
         case .hdr:
-            let recovered = highlightShadow(image, highlights: 0.55, shadows: 0.7)
-            return vibrance(unsharp(recovered, radius: extent.width / 50, intensity: 0.45), 0.45)
+            // Natural HDR: recover highlights, open shadows, a little local contrast. Not grungy.
+            let opened = highlightShadow(image, highlights: 0.65, shadows: 0.4)
+            return vibrance(unsharp(opened, radius: w / 70, intensity: 0.22), 0.18)
         case .crisp:
-            let clean = noiseReduce(image, level: 0.015, sharpness: 0.9)
-            return tone(sharpen(clean, 0.8), saturation: 1.05, contrast: 1.12, brightness: 0)
+            let clean = noiseReduce(image, level: 0.01, sharpness: 0.5)
+            return curve(sharpen(clean, amount: 0.45, radius: max(1, w / 1800)),
+                         [(0, 0), (0.25, 0.235), (0.5, 0.5), (0.75, 0.77), (1, 1)])
 
-        // DigiCam FX (early-2000s compact digital cameras)
+        // MARK: DigiCam FX (2000s compact digital cameras)
         case .digicam:
-            // Hot highlights with CCD bloom, cool white balance, crunchy sharpening, fine noise.
-            let hot = tone(exposure(image, 0.3), saturation: 1.22, contrast: 1.12, brightness: 0)
-            let cool = temperature(hot, shift: -900)
-            let crunchy = sharpen(bloom(cool, radius: extent.width / 120, intensity: 0.45), 0.9)
-            return grain(crunchy, amount: 0.25, extent: extent)
+            // Cool auto white balance, punchy CCD color, a firm shoulder that keeps highlights,
+            // a faint highlight bloom and light crisp sharpening.
+            let cool = temperature(image, shift: -350)
+            let toned = curve(cool, [(0, 0.01), (0.25, 0.23), (0.5, 0.52), (0.75, 0.8), (1, 0.97)])
+            let bloomed = softGlow(saturation(toned, 1.1), radius: w / 320, amount: 0.15)
+            return sharpen(bloomed, amount: 0.3, radius: max(1, w / 1600))
         case .ccd:
-            // Greenish-warm CCD color, clipped highlights, noise.
-            let tinted = channels(image, r: 1.04, g: 1.06, b: 0.9, bias: (0.01, 0.02, -0.01))
-            let clipped = tone(exposure(tinted, 0.25), saturation: 1.12, contrast: 1.2, brightness: 0.01)
-            return grain(clipped, amount: 0.35, extent: extent)
-        case .lofi:
-            // Low resolution, blocky upscale, saturated, noisy.
-            let small = lowResolution(image, factor: max(3, extent.width / 640), extent: extent)
-            return grain(tone(small, saturation: 1.25, contrast: 1.1, brightness: 0.02), amount: 0.3, extent: extent)
-        case .dateStamp:
-            let base = applyLook(.digicam, to: image, extent: extent)
-            return dateStamp(on: base, extent: extent)
+            // Old CCD sensor color: slightly warm-green midtones, creamy highlights, soft faded blacks.
+            let faded = curve(image, [(0, 0.04), (0.25, 0.27), (0.5, 0.52), (0.75, 0.77), (1, 0.96)])
+            return splitTone(saturation(faded, 1.04), shadows: (0, 0.008, -0.004), highlights: (0.014, 0.012, -0.006), amount: 1)
+        case .retro:
+            // Early-2000s snapshot: compressed dynamic range, warm-magenta cast in highlights, mild falloff.
+            let flat = curve(image, [(0, 0.05), (0.25, 0.28), (0.5, 0.52), (0.75, 0.76), (1, 0.94)])
+            let toned = splitTone(saturation(flat, 0.94), shadows: (0.004, 0, 0.01), highlights: (0.016, 0.004, 0.006), amount: 1)
+            return vignette(toned, intensity: 0.3, radius: 2)
         }
     }
 
@@ -109,12 +120,24 @@ extension ImageProcessingService {
         return filter.outputImage ?? image
     }
 
-    private func tone(_ image: CIImage, saturation: Double, contrast: Double, brightness: Double) -> CIImage {
+    /// Five-point tone curve on all channels (x, y in 0...1).
+    private func curve(_ image: CIImage, _ points: [(CGFloat, CGFloat)]) -> CIImage {
+        guard points.count == 5 else { return image }
+        let f = CIFilter.toneCurve()
+        f.inputImage = image
+        f.point0 = CGPoint(x: points[0].0, y: points[0].1)
+        f.point1 = CGPoint(x: points[1].0, y: points[1].1)
+        f.point2 = CGPoint(x: points[2].0, y: points[2].1)
+        f.point3 = CGPoint(x: points[3].0, y: points[3].1)
+        f.point4 = CGPoint(x: points[4].0, y: points[4].1)
+        return f.outputImage ?? image
+    }
+
+    private func saturation(_ image: CIImage, _ value: Double) -> CIImage {
+        guard value != 1 else { return image }
         let f = CIFilter.colorControls()
         f.inputImage = image
-        f.saturation = Float(saturation)
-        f.contrast = Float(contrast)
-        f.brightness = Float(brightness)
+        f.saturation = Float(value)
         return f.outputImage ?? image
     }
 
@@ -132,12 +155,22 @@ extension ImageProcessingService {
         return f.outputImage ?? image
     }
 
-    private func bloom(_ image: CIImage, radius: CGFloat, intensity: Double) -> CIImage {
-        let f = CIFilter.bloom()
-        f.inputImage = image
-        f.radius = Float(max(2, radius))
-        f.intensity = Float(intensity)
-        return f.outputImage ?? image
+    /// Glow from the highlights only, mixed in lightly: diffusion without halos around edges.
+    private func softGlow(_ image: CIImage, radius: CGFloat, amount: Double) -> CIImage {
+        let extent = image.extent
+        // Keep only the bright parts (luminance above ~70%), then blur them.
+        let highlights = curve(image, [(0, 0), (0.6, 0), (0.75, 0.15), (0.9, 0.6), (1, 1)])
+            .clampedToExtent()
+            .applyingGaussianBlur(sigma: Double(max(1, radius)))
+            .cropped(to: extent)
+        let scaled = highlights.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: amount, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: amount, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: amount, w: 0),
+        ])
+        // Screen blend never pushes past white, so highlights don't clip.
+        return scaled.applyingFilter("CIScreenBlendMode", parameters: [kCIInputBackgroundImageKey: image])
+            .cropped(to: extent)
     }
 
     private func vignette(_ image: CIImage, intensity: Double, radius: Double) -> CIImage {
@@ -148,25 +181,33 @@ extension ImageProcessingService {
         return f.outputImage ?? image
     }
 
-    private func tint(_ image: CIImage, r: CGFloat, g: CGFloat, b: CGFloat) -> CIImage {
-        channels(image, r: 1, g: 1, b: 1, bias: (r, g, b))
+    /// Tints shadows and highlights separately, weighted by luminance, so midtones (skin) stay neutral.
+    private func splitTone(_ image: CIImage, shadows: (CGFloat, CGFloat, CGFloat),
+                           highlights: (CGFloat, CGFloat, CGFloat), amount: CGFloat) -> CIImage {
+        let extent = image.extent
+        func tinted(_ bias: (CGFloat, CGFloat, CGFloat)) -> CIImage {
+            image.applyingFilter("CIColorMatrix", parameters: [
+                "inputBiasVector": CIVector(x: bias.0 * amount, y: bias.1 * amount, z: bias.2 * amount, w: 0),
+            ])
+        }
+        // Luminance mask: white in highlights, black in shadows.
+        let luminance = image.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0),
+            "inputGVector": CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0),
+            "inputBVector": CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0),
+        ])
+        let blend = CIFilter.blendWithMask()
+        blend.inputImage = tinted(highlights)
+        blend.backgroundImage = tinted(shadows)
+        blend.maskImage = luminance
+        return (blend.outputImage ?? image).cropped(to: extent)
     }
 
-    private func channels(_ image: CIImage, r: CGFloat, g: CGFloat, b: CGFloat, bias: (CGFloat, CGFloat, CGFloat)) -> CIImage {
-        let f = CIFilter.colorMatrix()
-        f.inputImage = image
-        f.rVector = CIVector(x: r, y: 0, z: 0, w: 0)
-        f.gVector = CIVector(x: 0, y: g, z: 0, w: 0)
-        f.bVector = CIVector(x: 0, y: 0, z: b, w: 0)
-        f.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-        f.biasVector = CIVector(x: bias.0, y: bias.1, z: bias.2, w: 0)
-        return f.outputImage ?? image
-    }
-
-    private func sharpen(_ image: CIImage, _ amount: Double) -> CIImage {
+    private func sharpen(_ image: CIImage, amount: Double, radius: CGFloat) -> CIImage {
         let f = CIFilter.sharpenLuminance()
         f.inputImage = image
         f.sharpness = Float(amount)
+        f.radius = Float(radius)
         return f.outputImage ?? image
     }
 
@@ -200,56 +241,5 @@ extension ImageProcessingService {
         f.neutral = CIVector(x: 6500, y: 0)
         f.targetNeutral = CIVector(x: 6500 - shift, y: 0)
         return f.outputImage ?? image
-    }
-
-    private func grain(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
-        guard let noise = CIFilter.randomGenerator().outputImage else { return image }
-        let scale = max(1, extent.width / 1500)
-        let strength = CGFloat(amount * 0.18)
-        let mono = CIFilter.colorMatrix()
-        mono.inputImage = noise.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        mono.rVector = CIVector(x: strength, y: 0, z: 0, w: 0)
-        mono.gVector = CIVector(x: strength, y: 0, z: 0, w: 0)
-        mono.bVector = CIVector(x: strength, y: 0, z: 0, w: 0)
-        mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-        mono.biasVector = CIVector(x: -strength / 2, y: -strength / 2, z: -strength / 2, w: 1)
-        guard let layer = mono.outputImage?.cropped(to: extent) else { return image }
-        let add = CIFilter.additionCompositing()
-        add.inputImage = layer
-        add.backgroundImage = image
-        return add.outputImage ?? image
-    }
-
-    /// Shrinks then enlarges with nearest-neighbor sampling for a low-megapixel, blocky look.
-    private func lowResolution(_ image: CIImage, factor: CGFloat, extent: CGRect) -> CIImage {
-        let down = image.cropped(to: extent)
-            .transformed(by: CGAffineTransform(scaleX: 1 / factor, y: 1 / factor))
-        return down.samplingNearest()
-            .transformed(by: CGAffineTransform(scaleX: factor, y: factor))
-            .cropped(to: extent)
-    }
-
-    /// Orange LCD-style date in the bottom-right corner, like a 2000s digicam print.
-    /// Uses today's date as a style element; no capture metadata is read or written.
-    private func dateStamp(on image: CIImage, extent: CGRect) -> CIImage {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "''yy  MM  dd"
-        let fontSize = max(10, extent.height * 0.035)
-        let text = NSAttributedString(string: formatter.string(from: .now), attributes: [
-            .font: UIFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold),
-            .foregroundColor: UIColor(red: 1, green: 0.55, blue: 0.12, alpha: 0.95),
-        ])
-        let generator = CIFilter.attributedTextImageGenerator()
-        generator.text = text
-        generator.scaleFactor = 1
-        guard let label = generator.outputImage else { return image }
-        let glow = bloom(label, radius: fontSize * 0.25, intensity: 0.8)
-        let margin = extent.height * 0.04
-        let placed = glow.transformed(by: CGAffineTransform(
-            translationX: extent.maxX - label.extent.width - margin - label.extent.minX,
-            y: extent.minY + margin - label.extent.minY
-        ))
-        return placed.composited(over: image)
     }
 }

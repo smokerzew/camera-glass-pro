@@ -43,6 +43,51 @@ struct FilterPickerView: View {
                 }
                 .onAppear { proxy.scrollTo(vm.adjustments.filter, anchor: .center) }
             }
+
+            // Grain is independent of the filter: 0 means no grain at all.
+            HStack(spacing: 10) {
+                Text("GRAIN")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.85))
+                Slider(value: Binding(get: { vm.adjustments.grain }, set: { vm.setAdjustment(.grain, to: $0) }), in: 0...1)
+                    .tint(.yellow)
+                    .accessibilityLabel("Film grain")
+                    .accessibilityValue(vm.adjustments.grain == 0 ? "Off" : "\(Int(vm.adjustments.grain * 100)) percent")
+                Text(vm.adjustments.grain == 0 ? "OFF" : "\(Int(vm.adjustments.grain * 100))")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(vm.adjustments.grain == 0 ? Color.white.opacity(0.6) : Color.yellow)
+                    .frame(width: 32, alignment: .trailing)
+            }
+            .padding(.horizontal, 6)
+
+            HStack {
+                // Hold to see the untouched original.
+                Text("HOLD FOR ORIGINAL")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(vm.showOriginal ? Color.yellow : .white)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 32)
+                    .cameraGlass(vm.showOriginal ? .selected : .interactive, in: Capsule())
+                    .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, perform: {}, onPressingChanged: { pressing in
+                        vm.setShowOriginal(pressing)
+                    })
+                    .opacity(vm.hasEdits ? 1 : 0.4)
+                    .allowsHitTesting(vm.hasEdits)
+                    .accessibilityRepresentation {
+                        Toggle("Show original", isOn: Binding(get: { vm.showOriginal }, set: { vm.setShowOriginal($0) }))
+                    }
+                Spacer()
+                Button("Reset All") {
+                    withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { vm.resetAllAdjustments() }
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(vm.hasEdits ? Color.yellow : .white.opacity(0.4))
+                .disabled(!vm.hasEdits)
+                .accessibilityHint("Removes every adjustment, filter, style and grain")
+            }
+            .padding(.horizontal, 6)
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 18)
@@ -59,6 +104,7 @@ struct FilterPickerView: View {
         )
         .padding(.horizontal, 12)
         .onAppear { category = vm.adjustments.filter.category }
+        .onDisappear { vm.setShowOriginal(false) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Filters")
         .accessibilityAction(.escape) { close() }

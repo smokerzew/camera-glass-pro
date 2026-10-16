@@ -50,7 +50,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Save Video with UI | Export sheet › Save Video with UI: records the screen with ReplayKit while your video plays once (≤ 60 s; shutter stops early), then saves it to Photos. | Real |
 | Landscape | The layout stays portrait; icons, zoom labels and the level turn upright when you hold the phone sideways (CoreMotion, with hysteresis). | Real |
 | App icon | Standard, dark and tinted Home Screen variants. | — |
-| Styles 3 | Texture (local contrast) and Grain sliders in Adjust. | Real |
+| Styles 3 | Texture (local contrast) and film Grain in Adjust. Grain is fine, monochrome and luminance-weighted (strongest in midtones, like film), sized to the image so preview and export match; 0 = no grain. | Real |
 | Highlight clipping | ZEBRAS control stripes near-white areas (display only). | Real |
 | Undo / presets | Undo/redo in Adjust (a slider drag is one step); save, apply and delete named styles. | Real |
 | SLO-MO / TIME-LAPSE | Imported videos play at 1/4 or 8x in these modes; the edited MOV exports at that speed. | Real |
@@ -59,7 +59,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Restore | Reopens the last photo/video with its edits, mode, zoom, aspect, pan and trim on relaunch (one copy kept in the app's private storage). | Real |
 | Live Text | TEXT control: on-device text recognition (Vision) with tappable boxes (tap = copy line), Show Text sheet with Copy All and on-device Translate. Pauses videos to scan the current frame. | Real |
 | Mode carousel | Slide the mode strip like iOS 27: the capsule opens to full width, the thumbnail and Files button hide, labels glide under a fixed glass pill, the centered mode lights up with a haptic tick, and it snaps on release. Tap a mode to jump; tap the selected one for controls. | — |
-| Filters | FILTER opens a glass pop-up with live preview tiles in four tabs: Classic (Vivid, Mono, Noir, Chrome, Fade, Instant), Y2K (Y2K Glow, Flash Pop, Cyber, Pastel), Quality (HD, Clarity, HDR, Crisp) and DigiCam FX (DigiCam, CCD, Lo-Fi, Date Stamp). Applied to the preview, video frames and exports. Date Stamp prints today's date as a style; no metadata is touched. | Real |
+| Filters | FILTER opens a glass pop-up with live preview tiles in four tabs: Classic (Vivid, Mono, Noir, Chrome, Fade, Instant), Y2K (Y2K Glow, Flash Pop, Cyber, Pastel), Quality (HD, Clarity, HDR, Crisp) and DigiCam FX (DigiCam, CCD, Retro). Looks use tone curves and luminance-weighted split toning; none adds grain, text, borders or watermarks. The pop-up also has an independent GRAIN slider (0 = none), hold-for-original compare and Reset All. | Real |
 | Tap to focus/expose | Tap the photo: yellow focus square meters exposure for that spot; drag up/down for the sun slider; touch and hold for AE/AF LOCK. | Real (exposure); focus is visual for imported media |
 | Photographic Styles | STYLES opens the iOS-style pad: 16 styles (Standard, Amber, Gold, Rose Gold, Neutral, Cool Rose, Cool, Vibrant, Natural, Luminous, Dramatic, Quiet, Cozy, Ethereal, Muted/Stark B&W), a Tone x Color touch pad and a Palette slider. | Real |
 | Portrait | Real background blur: Vision finds the subject (people, pets, objects), the background blurs by f-number (f1.4-16 slider from the top-bar f readout), and Portrait Lighting applies (Natural, Studio, Contour, Stage, Stage Mono, High-Key) via the cube button. Works on photos, video frames (person segmentation) and exports. | Real |

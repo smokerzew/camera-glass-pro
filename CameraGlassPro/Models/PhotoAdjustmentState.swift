@@ -45,7 +45,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         texture = try c.decodeIfPresent(Double.self, forKey: .texture) ?? 0
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
-        filter = try c.decodeIfPresent(PhotoFilter.self, forKey: .filter) ?? .none
+        filter = (try? c.decodeIfPresent(PhotoFilter.self, forKey: .filter)) ?? .none
         style = try c.decodeIfPresent(PhotographicStyle.self, forKey: .style) ?? .standard
         styleTone = min(max(try c.decodeIfPresent(Double.self, forKey: .styleTone) ?? 0, -1), 1)
         styleColor = min(max(try c.decodeIfPresent(Double.self, forKey: .styleColor) ?? 0, -1), 1)
@@ -151,7 +151,7 @@ enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case none, vivid, mono, noir, chrome, fade, instant
     case y2kGlow, flashPop, cyber, pastel
     case hd, clarity, hdr, crisp
-    case digicam, ccd, lofi, dateStamp
+    case digicam, ccd, retro
 
     var label: String {
         switch self {
@@ -163,8 +163,6 @@ enum PhotoFilter: String, CaseIterable, Codable, Sendable {
         case .hdr: "HDR"
         case .digicam: "DigiCam"
         case .ccd: "CCD"
-        case .lofi: "Lo-Fi"
-        case .dateStamp: "Date Stamp"
         default: rawValue.capitalized
         }
     }

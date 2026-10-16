@@ -77,7 +77,7 @@ final class ImageProcessingService: @unchecked Sendable {
         image = applyLook(a.filter, to: image, extent: input.extent)
 
         if a.grain > 0 {
-            image = addGrain(amount: a.grain, to: image, extent: input.extent)
+            image = filmGrain(image, amount: a.grain, extent: input.extent)
         }
 
         // Some filters sample beyond the edges; keep the original bounds.
@@ -142,23 +142,37 @@ final class ImageProcessingService: @unchecked Sendable {
         return output
     }
 
-    /// Monochrome noise centered on zero, added on top; scaled so grain looks similar at any resolution.
-    private func addGrain(amount: Double, to image: CIImage, extent: CGRect) -> CIImage {
-        guard let noise = CIFilter.randomGenerator().outputImage else { return image }
-        let scale = max(1, extent.width / 1500)
-        let strength = CGFloat(amount * 0.18)
-        let mono = CIFilter.colorMatrix()
-        mono.inputImage = noise.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        mono.rVector = CIVector(x: strength, y: 0, z: 0, w: 0)
-        mono.gVector = CIVector(x: strength, y: 0, z: 0, w: 0)
-        mono.bVector = CIVector(x: strength, y: 0, z: 0, w: 0)
-        mono.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-        mono.biasVector = CIVector(x: -strength / 2, y: -strength / 2, z: -strength / 2, w: 1)
-        guard let grain = mono.outputImage?.cropped(to: extent) else { return image }
-        let add = CIFilter.additionCompositing()
-        add.inputImage = grain
-        add.backgroundImage = image
-        return add.outputImage ?? image
+    /// Film grain, independent of filters. Fine, soft, monochrome grains whose visibility follows
+    /// luminance like real film (strongest in midtones, fading in deep shadows and bright highlights,
+    /// via a soft-light blend). Grain size scales with the image, so preview and export match.
+    /// `amount` 0 returns the image untouched.
+    func filmGrain(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
+        guard amount > 0, let random = CIFilter.randomGenerator().outputImage else { return image }
+        let size = max(1, extent.width / 2000) // ~1 px grains at 2000 px wide
+        // Average the three random channels: monochrome, near-Gaussian (no harsh speckle).
+        let third: CGFloat = 1.0 / 3.0
+        let mono = random.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: third, y: third, z: third, w: 0),
+            "inputGVector": CIVector(x: third, y: third, z: third, w: 0),
+            "inputBVector": CIVector(x: third, y: third, z: third, w: 0),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+        ])
+        // Round, soft-edged grains at the image's scale.
+        let grains = mono
+            .transformed(by: CGAffineTransform(scaleX: size, y: size))
+            .applyingGaussianBlur(sigma: Double(0.55 * size))
+            .cropped(to: extent)
+        // Contrast of the grain layer around mid-gray (0.5 = no change in a soft-light blend).
+        let k = CGFloat(min(max(amount, 0), 1) * 1.6)
+        let layer = grains.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: k, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: k, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: k, w: 0),
+            "inputBiasVector": CIVector(x: 0.5 - 0.5 * k, y: 0.5 - 0.5 * k, z: 0.5 - 0.5 * k, w: 0),
+        ])
+        return layer.applyingFilter("CISoftLightBlendMode", parameters: [kCIInputBackgroundImageKey: image])
+            .cropped(to: extent)
     }
 
     /// Focus peaking: transparent image with the strongest edges painted red.

@@ -1046,6 +1046,7 @@ final class CameraWorkspaceViewModel {
                     var state = recipe
                     state.filter = filter
                     state.portrait = false
+                    state.grain = 0 // tiles show the look itself, not grain
                     let output = processor.apply(state, to: small)
                     if let image = processor.context.createCGImage(output, from: small.extent) {
                         result[filter] = image
