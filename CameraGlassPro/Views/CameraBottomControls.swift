@@ -122,8 +122,24 @@ struct CameraShutterControls: View {
                 .transition(.opacity)
             }
 
+            if vm.isFindingSubject {
+                CameraTag(text: "FINDING SUBJECT…", isOff: true).transition(.opacity)
+            }
+
             if vm.hasMedia {
-                zoomArea
+                if vm.depthEffect && vm.isLightingPickerVisible {
+                    LightingPicker(vm: vm).transition(.opacity)
+                }
+                if vm.depthEffect && vm.isApertureDialVisible {
+                    ApertureSlider(vm: vm).transition(.opacity)
+                } else {
+                    zoomArea
+                        .overlay(alignment: .trailing) {
+                            if vm.depthEffect {
+                                LightingButton(vm: vm).padding(.trailing, 4).transition(.opacity)
+                            }
+                        }
+                }
             }
 
             HStack {

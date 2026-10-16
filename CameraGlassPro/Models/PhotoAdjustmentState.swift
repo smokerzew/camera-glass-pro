@@ -23,6 +23,10 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var styleTone: Double = 0
     var styleColor: Double = 0
     var stylePalette: Double = 1
+    /// Real Portrait: subject kept sharp, background blurred by `aperture` (ƒ1.4–16), with lighting.
+    var portrait = false
+    var aperture: Double = 2.8
+    var lighting: PortraitLighting = .natural
 
     var isIdentity: Bool { self == PhotoAdjustmentState() }
 
@@ -46,6 +50,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         styleTone = min(max(try c.decodeIfPresent(Double.self, forKey: .styleTone) ?? 0, -1), 1)
         styleColor = min(max(try c.decodeIfPresent(Double.self, forKey: .styleColor) ?? 0, -1), 1)
         stylePalette = min(max(try c.decodeIfPresent(Double.self, forKey: .stylePalette) ?? 1, 0), 1)
+        portrait = try c.decodeIfPresent(Bool.self, forKey: .portrait) ?? false
+        aperture = min(max(try c.decodeIfPresent(Double.self, forKey: .aperture) ?? 2.8, 1.4), 16)
+        lighting = try c.decodeIfPresent(PortraitLighting.self, forKey: .lighting) ?? .natural
     }
 
     subscript(parameter: AdjustmentParameter) -> Double {

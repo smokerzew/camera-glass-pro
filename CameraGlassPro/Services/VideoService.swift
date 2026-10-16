@@ -154,7 +154,7 @@ enum VideoService {
         processor: ImageProcessingService
     ) async throws -> AVVideoComposition {
         try await AVMutableVideoComposition.videoComposition(with: asset) { request in
-            var output = processor.apply(recipe.value, to: request.sourceImage)
+            var output = processor.apply(recipe.value, to: request.sourceImage, fastMask: true)
             let peaking = recipe.peaking, zebras = recipe.zebras
             if peaking || zebras {
                 output = processor.analysisOverlay(for: output, peaking: peaking, zebras: zebras).composited(over: output)

@@ -109,8 +109,13 @@ final class CameraWorkspaceViewModel {
     // MARK: Camera-style controls (visual preferences, not hardware)
     var flash: FlashSetting = .off
     var livePreference = false
-    /// Preview-only depth look (vignette + f-number readout). Not exported.
-    private(set) var depthEffect = false
+    /// Real Portrait on (subject sharp, background blurred); part of the edit, so it exports.
+    var depthEffect: Bool { adjustments.portrait }
+    /// Aperture slider / lighting picker visibility.
+    var isApertureDialVisible = false
+    var isLightingPickerVisible = false
+    /// True while Vision looks for the subject of a photo.
+    private(set) var isFindingSubject = false
     /// "PORTRAIT" / "PORTRAIT OFF" tag shown briefly after toggling depth, then faded out.
     private(set) var depthTag: String?
     var timer: TimerSetting = .off
@@ -173,6 +178,9 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var textTask: Task<Void, Never>?
     @ObservationIgnored private var thumbnailTask: Task<Void, Never>?
     @ObservationIgnored private var focusTask: Task<Void, Never>?
+    /// Portrait subject mask for the current photo preview (computed once per photo).
+    @ObservationIgnored private var previewSubjectMask: CIImage?
+    @ObservationIgnored private var previewSubjectSource: CGImage?
     @ObservationIgnored private var exposureDragStart: Double?
     @ObservationIgnored private var restoringState: SessionState?
     private let sessionStore: SessionStore?
@@ -621,6 +629,7 @@ final class CameraWorkspaceViewModel {
 
     /// Re-applies the speed when the mode changes during playback.
     func modeChanged() {
+        if mode == .portrait, hasMedia, !adjustments.portrait { setDepth(true) }
         guard let player, isPlaying else { return }
         player.rate = playbackRate
     }
@@ -708,8 +717,40 @@ final class CameraWorkspaceViewModel {
     // MARK: Depth
 
     func setDepth(_ enabled: Bool) {
-        depthEffect = enabled
+        if adjustments.portrait != enabled {
+            recordUndoPoint(force: true)
+            adjustments.portrait = enabled
+            adjustmentsChanged()
+        }
+        if !enabled { isApertureDialVisible = false; isLightingPickerVisible = false }
         depthTag = enabled ? "PORTRAIT" : "PORTRAIT OFF"
+        depthTagTask?.cancel()
+        depthTagTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.6))
+            guard !Task.isCancelled else { return }
+            self?.depthTag = nil
+        }
+    }
+
+    // MARK: Portrait aperture and lighting
+
+    func setAperture(_ value: Double) {
+        recordUndoPoint()
+        adjustments.aperture = min(max(value, 1.4), 16)
+        adjustmentsChanged()
+    }
+
+    func setLighting(_ lighting: PortraitLighting) {
+        guard lighting != adjustments.lighting else { return }
+        recordUndoPoint(force: true)
+        adjustments.lighting = lighting
+        adjustmentsChanged()
+        showLightingTag()
+    }
+
+    /// Flashes the lighting name (e.g. STUDIO LIGHT) like the Camera app.
+    private func showLightingTag() {
+        depthTag = adjustments.lighting.label
         depthTagTask?.cancel()
         depthTagTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.6))
@@ -887,6 +928,7 @@ final class CameraWorkspaceViewModel {
                 for filter in PhotoFilter.allCases {
                     var state = recipe
                     state.filter = filter
+                    state.portrait = false
                     let output = processor.apply(state, to: small)
                     if let image = processor.context.createCGImage(output, from: small.extent) {
                         result[filter] = image
@@ -1095,11 +1137,26 @@ final class CameraWorkspaceViewModel {
             return
         }
         let processor = self.processor
+        let cachedMask = previewSubjectSource === source ? previewSubjectMask : nil
+        let needsMask = recipe.portrait && cachedMask == nil
+        if needsMask { isFindingSubject = true }
         renderTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(12)) // coalesce rapid slider ticks
             guard !Task.isCancelled else { return }
+            var mask = cachedMask
+            if needsMask {
+                mask = await Task.detached(priority: .userInitiated) {
+                    SubjectMasker.mask(for: CIImage(cgImage: source))
+                }.value
+                guard !Task.isCancelled, let self, self.photo?.preview === source else { return }
+                self.previewSubjectMask = mask
+                self.previewSubjectSource = source
+                self.isFindingSubject = false
+                if mask == nil { self.showToast("No subject found for Portrait") }
+            }
+            let finalMask = mask
             let rendered = await Task.detached(priority: .userInitiated) {
-                processor.renderPreview(source, adjustments: recipe)
+                processor.renderPreview(source, adjustments: recipe, subjectMask: finalMask)
             }.value
             guard !Task.isCancelled, let self, self.photo?.preview === source else { return }
             if let rendered {

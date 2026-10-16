@@ -93,7 +93,7 @@ extension CameraWorkspaceViewModel {
         switch control {
         case .aspect: aspect == .original ? nil : aspect.rawValue
         case .timer: timer == .off ? nil : timer.label
-        case .depth: depthEffect ? "4.5" : nil
+        case .depth: depthEffect ? String(format: "ƒ%.1f", adjustments.aperture) : nil
         case .scopes: scopeMode.shortLabel
         case .format: exportFormat == .heic ? "HEIF" : exportFormat.label
         default: nil
@@ -109,7 +109,7 @@ extension CameraWorkspaceViewModel {
         case .exposure: AdjustmentParameter.exposure.format(adjustments.exposure)
         case .styles: hasEdits ? "Edited" : "No edits"
         case .filter: adjustments.filter.label
-        case .depth: depthEffect ? "On, f 4.5" : "Off"
+        case .depth: depthEffect ? String(format: "On, f %.1f, %@", adjustments.aperture, adjustments.lighting.label.capitalized) : "Off"
         case .nightMode: adjustments.nightLook ? "On" : "Off"
         case .grid: gridStyle.label
         case .level: showLevel ? "On" : "Off"
@@ -131,7 +131,7 @@ extension CameraWorkspaceViewModel {
         case .exposure: "Shows the exposure slider"
         case .styles: "Opens Photographic Styles: style, tone and color pad, palette"
         case .filter: "Opens the filter picker: Classic, Y2K, Quality and DigiCam FX"
-        case .depth: "Preview-only depth look with a soft vignette"
+        case .depth: "Blurs the background behind the subject; tap the f-number to change depth"
         case .nightMode: "Lifts shadows and reduces noise"
         case .grid: "Cycles off, rule of thirds and fine grid"
         case .level: "Shows a level that follows your phone's tilt"
@@ -160,7 +160,9 @@ extension CameraWorkspaceViewModel {
             }
         case .styles: openStylesPad()
         case .filter: openFilterPicker()
-        case .depth: setDepth(!depthEffect)
+        case .depth:
+            // From the top bar, the f-number readout opens the aperture slider (as in the Camera app).
+            if fromTopBar && depthEffect { isApertureDialVisible.toggle() } else { setDepth(!depthEffect) }
         case .nightMode: setNightLook(!adjustments.nightLook)
         case .grid: setGridStyle(gridStyle.next)
         case .level: setShowLevel(!showLevel)

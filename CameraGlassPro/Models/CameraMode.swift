@@ -15,12 +15,12 @@ enum CameraMode: String, CaseIterable, Identifiable {
         }
     }
 
-    var isPreviewOnly: Bool { self == .cinematic || self == .portrait || self == .pano }
+    var isPreviewOnly: Bool { self == .cinematic || self == .pano }
 
     var explanation: String {
         switch self {
         case .photo: "Import, frame, adjust and export a photo."
-        case .portrait: "Preview only: adds a soft vignette. No depth capture."
+        case .portrait: "Blurs the background behind people, pets and objects, with Portrait Lighting."
         case .video: "Plays imported videos. This app does not record video."
         case .sloMo: "Plays imported videos at ¼ speed; the edited copy exports slowed down."
         case .timeLapse: "Plays imported videos 8× faster; the edited copy exports sped up."

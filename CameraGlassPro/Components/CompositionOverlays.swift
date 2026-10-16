@@ -95,19 +95,3 @@ struct CenterGuide: View {
         .accessibilityHidden(true)
     }
 }
-
-/// Soft vignette for the preview-only Portrait look.
-struct PortraitVignette: View {
-    var body: some View {
-        GeometryReader { proxy in
-            RadialGradient(
-                colors: [.clear, .black.opacity(0.55)],
-                center: .center,
-                startRadius: min(proxy.size.width, proxy.size.height) * 0.3,
-                endRadius: max(proxy.size.width, proxy.size.height) * 0.75
-            )
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}

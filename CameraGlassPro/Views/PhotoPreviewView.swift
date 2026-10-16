@@ -165,7 +165,6 @@ struct PhotoPreviewView: View {
     /// Guides sit above the image and below the controls; none of them touch image data.
     private var overlayLayer: some View {
         ZStack {
-            if vm.mode == .portrait || vm.depthEffect { PortraitVignette() }
             CameraGridOverlay(style: vm.gridStyle, opacity: gridOpacity)
             if vm.showLevel { CameraLevelGuide(angle: motion.levelAngle, isUpright: motion.isUpright).rotatesWithDevice() }
             if showCenter { CenterGuide() }
