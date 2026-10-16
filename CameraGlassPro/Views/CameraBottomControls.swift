@@ -33,6 +33,19 @@ struct CameraStatusRow: View {
                     .accessibilityLabel("Playback time \(vm.timecode)")
             }
 
+            if vm.library.count > 1 {
+                Text("\(vm.libraryIndex + 1) / \(vm.library.count)")
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .cameraGlass(.subtle, in: Capsule())
+                    .accessibilityLabel("Item \(vm.libraryIndex + 1) of \(vm.library.count)")
+                    .accessibilityHint("Swipe the photo sideways to move between items")
+                    .accessibilityAction(named: "Next") { vm.showNext() }
+                    .accessibilityAction(named: "Previous") { vm.showPrevious() }
+            }
+
             // Shown briefly after toggling depth, then faded out (as in the Camera app).
             if let tag = vm.depthTag {
                 CameraTag(text: tag, isOff: !vm.depthEffect).transition(.opacity)
@@ -88,6 +101,21 @@ struct CameraShutterControls: View {
         VStack(spacing: 14) {
             if vm.depthTag != nil, vm.depthEffect {
                 CameraTag(text: "NATURAL LIGHT").transition(.opacity)
+            }
+
+            if vm.liveTextEnabled, vm.hasMedia {
+                Button { vm.showTextSheet = true } label: {
+                    Label(vm.isRecognizingText ? "Finding Text…" : "Show Text (\(vm.recognizedText.count))",
+                          systemImage: "text.viewfinder")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                        .cameraGlass(.interactive, in: Capsule())
+                }
+                .buttonStyle(PressableButtonStyle())
+                .disabled(vm.recognizedText.isEmpty)
+                .transition(.opacity)
             }
 
             if vm.hasMedia {
@@ -193,9 +221,41 @@ extension CameraShutterControls {
 /// Black bar under the viewfinder: thumbnail (export), mode capsule, round import button.
 struct CameraBottomBar: View {
     @Bindable var vm: CameraWorkspaceViewModel
+    @Environment(\.cameraReduceMotion) private var reduceMotion
+    /// True while the mode strip is being slid; the side buttons step aside.
+    @State private var isSlidingModes = false
+
+    private let sideButtonSize: CGFloat = 50
+    private let horizontalPadding: CGFloat = 20
 
     var body: some View {
-        HStack(spacing: 12) {
+        GeometryReader { proxy in
+            ZStack {
+                CameraModeSelector(
+                    selection: $vm.mode,
+                    isInteracting: $isSlidingModes,
+                    collapsedWidth: max(160, proxy.size.width - 2 * (horizontalPadding + sideButtonSize + 12))
+                ) {
+                    withAnimation(.spring(duration: 0.4, bounce: 0.18)) { vm.isControlPanelOpen = true }
+                }
+
+                HStack(spacing: 12) {
+                    thumbnail
+                    Spacer(minLength: 0)
+                    filesButton
+                }
+                .padding(.horizontal, horizontalPadding)
+                .opacity(isSlidingModes ? 0 : 1)
+                .scaleEffect(isSlidingModes && !reduceMotion ? 0.85 : 1)
+                .allowsHitTesting(!isSlidingModes)
+                .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.1), value: isSlidingModes)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .frame(height: 70)
+    }
+
+    private var thumbnail: some View {
             Button { vm.showExport = true } label: {
                 Group {
                     if let image = vm.displayedImage {
@@ -216,23 +276,15 @@ struct CameraBottomBar: View {
             .accessibilityLabel("Export photo")
             .accessibilityValue(!vm.hasMedia ? "Nothing imported" : (vm.hasEdits ? "Edited" : "No edits"))
             .accessibilityHint("Share or save the original or an edited copy")
+    }
 
-            Spacer(minLength: 0)
-            CameraModeSelector(selection: $vm.mode) {
-                withAnimation(.spring(duration: 0.4, bounce: 0.18)) { vm.isControlPanelOpen = true }
-            }
-                .frame(maxWidth: 250)
-            Spacer(minLength: 0)
-
-            GlassIconButton(
-                systemImage: "arrow.triangle.2.circlepath",
-                label: "Import from Files",
-                hint: "Choose a photo from the Files app",
-                size: 50
-            ) { vm.showFileImporter = true }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+    private var filesButton: some View {
+        GlassIconButton(
+            systemImage: "arrow.triangle.2.circlepath",
+            label: "Import from Files",
+            hint: "Choose photos or videos from the Files app",
+            size: sideButtonSize
+        ) { vm.showFileImporter = true }
     }
 }
 
