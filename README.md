@@ -99,6 +99,49 @@ xcodebuild -exportArchive -archivePath build/CameraGlassPro.xcarchive -exportPat
 
 This writes `build/ipa/CameraGlassPro.ipa`, which is development-signed and installs on devices registered to your team. You can also use Xcode's **Product › Archive**, then **Distribute App**.
 
+## Building on Windows, no Mac (xtool + WSL)
+
+[xtool](https://github.com/xtool-org/xtool) is an open-source Xcode replacement for Linux and Windows (WSL). It builds this repo's `Package.swift` into a real iOS app with Apple's iOS SDK. It can also sign the app with your Apple ID, package an `.ipa`, and install it over USB. `Package.swift`, `xtool.yml` and `Packaging/Info.plist` hold the configuration, and they build the same `CameraGlassPro/` sources as the Xcode project.
+
+**One-time setup**
+
+1. In PowerShell, install Ubuntu 24.04 in WSL. On first launch it asks you to create a Linux username and password.
+   ```bash
+   wsl --install -d Ubuntu-24.04
+   ```
+2. Install Swift 6.4, xtool, usbmuxd and the build dependencies. Run this in the Ubuntu terminal:
+   ```bash
+   cd /mnt/e/workclaude/camera_glass_pro && ./scripts/setup-wsl.sh
+   ```
+3. In a Windows browser, sign in with your Apple ID and download **Xcode 27** (`.xip`, about 3 GB) from <https://developer.apple.com/download/all/?q=Xcode>. You don't need a Mac for this. xtool only extracts the iOS SDK from the file.
+4. In Ubuntu, run the setup below. It asks for your Apple ID, then the path to the xip, for example `/mnt/c/Users/<you>/Downloads/Xcode_27.0.xip`.
+   ```bash
+   xtool setup
+   ```
+   - **Login mode 1 (password):** works with a free Apple ID. It uses private Apple APIs, so the xtool docs suggest a spare Apple ID.
+   - **Login mode 0 (API key):** needs the paid Developer Program.
+5. In `xtool.yml`, change `bundleID` to something unique, such as `com.yourname.CameraGlassPro`.
+
+**Build**
+
+From Ubuntu, in the project folder:
+
+| Command | Result |
+|---|---|
+| `./scripts/build-ipa.sh` | Unsigned `dist/CameraGlassPro.ipa`. Sign it later with Sideloadly or AltStore. |
+| `./scripts/build-ipa.sh --sign` | `.ipa` signed with your Apple ID |
+| `./scripts/build-ipa.sh --install` | Builds, signs and installs straight to a USB-connected iPhone |
+
+On Windows you can double-click `build-ipa.cmd` instead.
+
+- **USB install:** needs USB passthrough into WSL ([usbipd](https://learn.microsoft.com/en-us/windows/wsl/connect-usb)). Otherwise, copy the `.ipa` to Windows and use Sideloadly.
+- **First launch:** trust the developer on the iPhone in Settings › General › VPN & Device Management.
+- **First build:** slow, because SwiftPM compiles the iOS SDK modules once.
+
+**What the xtool build doesn't do:**
+- Run the XCTest suite. Use Xcode or the GitHub workflow for tests.
+- Compile `Assets.xcassets`. The app icon comes from `xtool.yml` instead. Nothing in the code reads the accent color.
+
 ## Building without a Mac (GitHub Actions)
 
 1. Push this folder to a GitHub repository. Private works.

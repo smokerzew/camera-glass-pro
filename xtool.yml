@@ -1,0 +1,7 @@
+version: 1
+# Change this to something unique to you (e.g. com.yourname.CameraGlassPro) before signing:
+# App IDs are global, and a free Apple ID can't register one someone else already owns.
+bundleID: com.example.CameraGlassPro
+product: CameraGlassPro
+infoPath: Packaging/Info.plist
+iconPath: CameraGlassPro/Assets.xcassets/AppIcon.appiconset/AppIcon.png

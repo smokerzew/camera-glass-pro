@@ -6,3 +6,9 @@ Payload/
 *.xcresult
 xcuserdata/
 .DS_Store
+
+# xtool / SwiftPM (Windows/Linux builds)
+.build/
+/xtool/
+.swiftpm/
+dist/
