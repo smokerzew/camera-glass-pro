@@ -13,19 +13,9 @@ enum CameraMode: String, CaseIterable, Identifiable {
         switch self {
         case .photo: "Import, frame, adjust and export a photo."
         case .portrait: "Preview only: adds a soft vignette. No depth capture."
-        case .video: "Preview only: shows 16:9 framing. This app does not record video."
-        case .cinematic: "Preview only: shows 2.39:1 framing. No video or depth capture."
-        case .pano: "Preview only: shows a panorama strip guide. No capture."
-        }
-    }
-
-    /// Landscape band (width / height) drawn as a framing guide in this mode.
-    var framingGuideRatio: CGFloat? {
-        switch self {
-        case .video: 16.0 / 9.0
-        case .cinematic: 2.39
-        case .pano: 3.0
-        case .photo, .portrait: nil
+        case .video: "Plays imported videos. This app does not record video."
+        case .cinematic: "Preview only: plays imported videos. No video or depth capture."
+        case .pano: "Preview only. No panorama capture."
         }
     }
 

@@ -128,7 +128,8 @@ final class FramingTests: XCTestCase {
 
     func testModesAreHonest() {
         XCTAssertFalse(CameraMode.photo.isPreviewOnly)
-        for mode in CameraMode.allCases where mode != .photo {
+        XCTAssertTrue(CameraMode.video.explanation.contains("does not record"))
+        for mode in CameraMode.allCases where mode != .photo && mode != .video {
             XCTAssertTrue(mode.isPreviewOnly)
             XCTAssertTrue(mode.explanation.hasPrefix("Preview only"), "\(mode) must say it is preview-only")
         }

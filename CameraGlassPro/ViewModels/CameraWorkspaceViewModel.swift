@@ -80,7 +80,10 @@ final class CameraWorkspaceViewModel {
 
     // MARK: Presentation
     var isControlPanelOpen = false
-    var isZoomSliderVisible = false
+    /// Curved zoom dial (shown by swiping the zoom row or tapping the active zoom value).
+    private(set) var isZoomDialVisible = false
+    /// Drag position of zoomed media, -1...1 per axis (see `FramingGeometry.visibleRect`).
+    private(set) var pan: CGPoint = .zero
     /// Exposure slider shown inside the control panel.
     var isExposureDialVisible = false
     /// Width / height of the on-screen viewfinder; "Full" framing uses it so the media fills the screen.
@@ -114,6 +117,7 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var scopeTask: Task<Void, Never>?
     @ObservationIgnored private var analysisTask: Task<Void, Never>?
     @ObservationIgnored private var stopRecordingRequested = false
+    @ObservationIgnored private var dialHideTask: Task<Void, Never>?
 
     init(
         importer: PhotoImporting = PhotoImportService(),
@@ -391,7 +395,23 @@ final class CameraWorkspaceViewModel {
         zoom = ZoomLimits.clamp(value)
     }
 
+    func setPan(_ value: CGPoint) {
+        pan = FramingGeometry.clampPan(value)
+    }
+
+    /// Shows the zoom dial and hides it again 2 s after the last interaction.
+    func showZoomDial() {
+        isZoomDialVisible = true
+        dialHideTask?.cancel()
+        dialHideTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            self?.isZoomDialVisible = false
+        }
+    }
+
     func resetFraming() {
+        pan = .zero
         zoom = ZoomLimits.clamp(CGFloat(defaults.object(forKey: SettingsKey.defaultZoom) as? Double ?? 1))
         aspect = AspectRatioOption(rawValue: defaults.string(forKey: SettingsKey.defaultAspect) ?? "") ?? .original
     }
@@ -400,7 +420,7 @@ final class CameraWorkspaceViewModel {
     var normalizedFraming: CGRect? {
         guard let photo else { return nil }
         return FramingGeometry.normalizedVisibleRect(
-            image: photo.previewSize, ratio: previewRatio, zoom: zoom, fill: true)
+            image: photo.previewSize, ratio: previewRatio, zoom: zoom, fill: true, pan: pan)
     }
 
     // MARK: Depth
@@ -511,8 +531,15 @@ final class CameraWorkspaceViewModel {
         guard output.hasNewPixelBuffer(forItemTime: time) || scopeData == nil,
               let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) else { return }
         let processor = self.processor
+        let orientation = video?.exifOrientation ?? 1
+        let wantsPortrait = (video?.displaySize.height ?? 0) > (video?.displaySize.width ?? 0)
         let data = await Task.detached(priority: .utility) { () -> ScopeData? in
-            let frame = CIImage(cvPixelBuffer: buffer)
+            var frame = CIImage(cvPixelBuffer: buffer)
+            // Decoded frames arrive in the track's stored orientation; turn them upright so
+            // RGB Parade's left/right matches the picture. Skip if they're already upright.
+            if (frame.extent.height > frame.extent.width) != wantsPortrait {
+                frame = frame.oriented(forExifOrientation: orientation)
+            }
             let scale = 160 / max(frame.extent.width, 1)
             let small = frame.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
             guard let image = processor.context.createCGImage(small, from: small.extent) else { return nil }

@@ -96,25 +96,6 @@ struct CenterGuide: View {
     }
 }
 
-/// Dims everything outside a centered landscape band (video, cinematic, pano guides).
-struct ModeFramingGuide: View {
-    let ratio: CGFloat
-
-    var body: some View {
-        GeometryReader { proxy in
-            let bandHeight = min(proxy.size.height, proxy.size.width / ratio)
-            let inset = (proxy.size.height - bandHeight) / 2
-            VStack(spacing: 0) {
-                Color.black.opacity(0.55).frame(height: inset)
-                Rectangle().strokeBorder(.white.opacity(0.6), lineWidth: 1).frame(height: bandHeight)
-                Color.black.opacity(0.55).frame(height: inset)
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
 /// Soft vignette for the preview-only Portrait look.
 struct PortraitVignette: View {
     var body: some View {

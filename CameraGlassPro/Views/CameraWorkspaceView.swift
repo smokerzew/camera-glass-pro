@@ -8,6 +8,7 @@ struct CameraWorkspaceView: View {
     @State private var vm = CameraWorkspaceViewModel()
     @State private var pickerItem: PhotosPickerItem?
     @State private var flashOpacity = 0.0
+    @State private var motion = MotionLevel()
 
     @AppStorage(SettingsKey.reduceMotion) private var appReduceMotion = false
     @AppStorage(SettingsKey.highContrast) private var appHighContrast = false
@@ -46,6 +47,9 @@ struct CameraWorkspaceView: View {
             .environment(\.cameraReduceMotion, reduceMotion)
             .environment(\.cameraHighContrast, appHighContrast || systemContrast == .increased)
             .environment(\.cameraLargeLabels, largeLabels)
+            .environment(\.cameraIconRotation, motion.iconRotation)
+            .onAppear { motion.start() }
+            .onDisappear { motion.stop() }
             .statusBarHidden()
     }
 
@@ -55,7 +59,7 @@ struct CameraWorkspaceView: View {
 
             VStack(spacing: 0) {
                 ZStack(alignment: .topLeading) {
-                    PhotoPreviewView(vm: vm)
+                    PhotoPreviewView(vm: vm, motion: motion)
                     VStack(spacing: 0) {
                         CameraStatusRow(vm: vm)
                         Spacer(minLength: 0)

@@ -28,6 +28,7 @@ struct GlassIconButton: View {
                 .font(.system(size: size * 0.38, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(isActive ? Color.yellow : .white)
+                .rotatesWithDevice()
                 .frame(width: size, height: size)
                 .contentShape(Circle())
         }
@@ -71,6 +72,7 @@ struct PanelControlButton: View {
                     }
                 }
                 .foregroundStyle(isActive ? Color.yellow : .white)
+                .rotatesWithDevice()
                 .frame(width: 62, height: 62)
                 .overlay { if isActive { Circle().strokeBorder(.yellow.opacity(0.7), lineWidth: 1.5) } }
                 .overlay(alignment: .topTrailing) {

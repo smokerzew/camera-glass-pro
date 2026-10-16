@@ -30,9 +30,9 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 |---|---|---|
 | Import | `PhotosPicker` (no library permission needed). Files via `fileImporter`. iCloud originals download through the picker. Shows a loading state and has Cancel. | Real |
 | Large images | ImageIO downsampled preview (2400 px max). The original bytes stay in memory as compressed data. Images over 250 MP are rejected. | Real |
-| Zoom | .5 / 1 / 2 / 5 presets, a fine slider (0.5–5×), pinch to zoom, and double-tap to reset to 1×. | Real (preview crop) |
+| Zoom | .5 / 1 / 2 / 5 presets; swipe the zoom row (or tap the active value) for the curved zoom dial (log scale, haptic ticks at presets); pinch; drag to pan when zoomed in; double-tap resets. | Real (preview crop; crop export follows the pan) |
 | Aspect | Original, 4:3, 16:9, 1:1. Fixed ratios follow the photo's orientation. | Real (preview framing) |
-| Guides | Rule-of-thirds grid, fine grid, opacity, level guide, center crosshair, and mode framing bands | Real overlays. The level follows the phone's sideways tilt (CoreMotion) and turns yellow within 1° of level. |
+| Guides | Rule-of-thirds grid, fine grid, opacity, level guide and center crosshair | Real overlays. The level follows the phone's sideways tilt (CoreMotion) and turns yellow within 1° of level. |
 | Adjustments | Exposure, brightness, contrast, saturation, warmth, highlights and shadows (Core Image). Per-control reset, Reset All, and hold-to-compare. | Real, non-destructive |
 | Night Look | Shadow lift plus noise reduction | Real filter. It is not a capture mode. |
 | Flash | Off / Auto / On. "On" plays a screen flash when you use the center control. | Visual only |
@@ -48,6 +48,8 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Exposure scopes | SCOPES control cycles Luminance histogram, RGB histogram and RGB Parade waveform, in a panel top-left of the viewfinder (live for videos, ~4×/s). | Real |
 | Focus peaking | PEAKING control paints the sharpest edges red (display only, never exported). | Real |
 | Save Video with UI | Export sheet › Save Video with UI: records the screen with ReplayKit while your video plays once (≤ 60 s; shutter stops early), then saves it to Photos. | Real |
+| Landscape | The layout stays portrait; icons, zoom labels and the level turn upright when you hold the phone sideways (CoreMotion, with hysteresis). | Real |
+| App icon | Standard, dark and tinted Home Screen variants. | — |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 
@@ -205,7 +207,6 @@ Everything is processed on the device. There are no network calls, analytics or 
 ## Known limitations
 
 - Not compiled or tested yet (see Build status).
-- Zoom is centered. You can't drag to pan, so "crop to framing" always crops around the center.
 - The level shows phone tilt, not the horizon inside the photo.
 - Modes other than Photo are preview-only looks.
 - Burned-in guides cover the grid and center crosshair only, not the level guide or mode bands.

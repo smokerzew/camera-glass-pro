@@ -67,6 +67,7 @@ struct CameraStatusRow: View {
                 }
             }
             .foregroundStyle(active ? Color.yellow : .white)
+            .rotatesWithDevice()
             .frame(minWidth: 36, minHeight: 36)
             .contentShape(Rectangle())
         }
@@ -80,7 +81,8 @@ struct CameraStatusRow: View {
 /// Zoom row, ƒ (depth) button, shutter and ⠿ (more controls) button, floating over the photo.
 struct CameraShutterControls: View {
     @Bindable var vm: CameraWorkspaceViewModel
-    @Environment(\.cameraReduceMotion) private var reduceMotion
+    @Environment(\.cameraReduceMotion) var reduceMotion
+    @State var dialStartZoom: CGFloat?
 
     var body: some View {
         VStack(spacing: 14) {
@@ -89,29 +91,7 @@ struct CameraShutterControls: View {
             }
 
             if vm.hasMedia {
-                if vm.isZoomSliderVisible {
-                    Slider(
-                        value: Binding(get: { Double(vm.zoom) }, set: { vm.setZoom(CGFloat($0)) }),
-                        in: Double(ZoomLimits.minimum)...Double(ZoomLimits.maximum)
-                    )
-                    .tint(.yellow)
-                    .frame(width: 240)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 44)
-                    .cameraGlass(.regular, in: Capsule())
-                    .accessibilityLabel("Preview zoom")
-                    .accessibilityValue("\(ZoomLimits.label(for: vm.zoom)) times")
-                    .transition(.opacity)
-                }
-                ZoomSelector(
-                    zoom: vm.zoom,
-                    onSelect: { preset in
-                        withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.12)) { vm.setZoom(preset) }
-                    },
-                    onToggleSlider: {
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { vm.isZoomSliderVisible.toggle() }
-                    }
-                )
+                zoomArea
             }
 
             HStack {
@@ -149,6 +129,67 @@ struct CameraShutterControls: View {
     }
 }
 
+extension CameraShutterControls {
+    /// Zoom row that turns into the curved dial: tap the active value or swipe sideways to show it,
+    /// keep swiping to zoom (log scale, haptic tick at each preset); it hides 2 s after you let go.
+    var zoomArea: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .bottom) {
+                if vm.isZoomDialVisible {
+                    ZoomDial(zoom: vm.zoom)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottom)))
+                } else {
+                    ZoomSelector(
+                        zoom: vm.zoom,
+                        onSelect: { preset in
+                            withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.12)) { vm.setZoom(preset) }
+                        },
+                        onToggleSlider: {
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { vm.showZoomDial() }
+                        }
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { value in
+                        let start = dialStartZoom ?? vm.zoom
+                        dialStartZoom = start
+                        if !vm.isZoomDialVisible {
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { vm.showZoomDial() }
+                        } else {
+                            vm.showZoomDial() // keeps it visible while dragging
+                        }
+                        vm.setZoom(ZoomDial.zoom(from: start, dragDistance: value.translation.width,
+                                                 radius: proxy.size.width * 0.95))
+                    }
+                    .onEnded { _ in dialStartZoom = nil }
+            )
+        }
+        .frame(height: vm.isZoomDialVisible ? 86 : 44)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: vm.isZoomDialVisible)
+        .sensoryFeedback(.selection, trigger: presetIndex)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Preview zoom")
+        .accessibilityValue("\(ZoomLimits.label(for: vm.zoom)) times")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: vm.setZoom(vm.zoom * 1.25)
+            case .decrement: vm.setZoom(vm.zoom / 1.25)
+            @unknown default: break
+            }
+        }
+    }
+
+    /// Index of the last preset at or below the current zoom; changes fire one haptic tick.
+    private var presetIndex: Int {
+        ZoomLimits.presets.lastIndex { $0 <= vm.zoom + 0.001 } ?? 0
+    }
+}
+
 /// Black bar under the viewfinder: thumbnail (export), mode capsule, round import button.
 struct CameraBottomBar: View {
     @Bindable var vm: CameraWorkspaceViewModel
@@ -165,6 +206,7 @@ struct CameraBottomBar: View {
                         Color.white.opacity(0.08)
                     }
                 }
+                .rotatesWithDevice()
                 .frame(width: 50, height: 50)
                 .clipShape(Circle())
                 .cameraGlass(.regular, in: Circle())
@@ -207,6 +249,7 @@ struct RingedCircleButton<Content: View>: View {
         Button(action: action) {
             content
                 .foregroundStyle(isActive ? Color.yellow : .white)
+                .rotatesWithDevice()
                 .frame(width: 48, height: 48)
                 .overlay { if isActive { Circle().strokeBorder(.yellow, lineWidth: 1.5) } }
                 .contentShape(Circle())

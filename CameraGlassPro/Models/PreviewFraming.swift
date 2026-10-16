@@ -78,19 +78,36 @@ enum FramingGeometry {
         return fill ? max(sx, sy) : min(sx, sy)
     }
 
-    /// Centered region of the image (pixels, top-left origin) visible in a frame of `ratio` at `zoom`.
-    static func visibleRect(image: CGSize, ratio: CGFloat, zoom: CGFloat, fill: Bool) -> CGRect {
+    /// How far (points) the zoomed media can be dragged from center before an edge would show.
+    static func maxOffset(image: CGSize, frame: CGSize, zoom: CGFloat, fill: Bool) -> CGSize {
+        let scale = baseScale(image: image, frame: frame, fill: fill) * ZoomLimits.clamp(zoom)
+        return CGSize(width: max(0, (image.width * scale - frame.width) / 2),
+                      height: max(0, (image.height * scale - frame.height) / 2))
+    }
+
+    /// Keeps a pan value inside -1...1 on both axes.
+    static func clampPan(_ pan: CGPoint) -> CGPoint {
+        CGPoint(x: min(max(pan.x, -1), 1), y: min(max(pan.y, -1), 1))
+    }
+
+    /// Region of the image (pixels, top-left origin) visible in a frame of `ratio` at `zoom`.
+    /// `pan` is -1...1 per axis: the on-screen offset as a fraction of `maxOffset`
+    /// (+x = media dragged right, so the visible region moves left).
+    static func visibleRect(image: CGSize, ratio: CGFloat, zoom: CGFloat, fill: Bool, pan: CGPoint = .zero) -> CGRect {
         guard image.width > 0, image.height > 0, ratio > 0 else { return .zero }
         let frame = CGSize(width: ratio, height: 1) // scale-invariant, only the ratio matters
         let scale = baseScale(image: image, frame: frame, fill: fill) * ZoomLimits.clamp(zoom)
         let width = min(image.width, frame.width / scale)
         let height = min(image.height, frame.height / scale)
-        return CGRect(x: (image.width - width) / 2, y: (image.height - height) / 2, width: width, height: height)
+        let pan = clampPan(pan)
+        return CGRect(x: (image.width - width) / 2 * (1 - pan.x),
+                      y: (image.height - height) / 2 * (1 - pan.y),
+                      width: width, height: height)
     }
 
     /// `visibleRect` expressed in 0...1 units of the image.
-    static func normalizedVisibleRect(image: CGSize, ratio: CGFloat, zoom: CGFloat, fill: Bool) -> CGRect {
-        let rect = visibleRect(image: image, ratio: ratio, zoom: zoom, fill: fill)
+    static func normalizedVisibleRect(image: CGSize, ratio: CGFloat, zoom: CGFloat, fill: Bool, pan: CGPoint = .zero) -> CGRect {
+        let rect = visibleRect(image: image, ratio: ratio, zoom: zoom, fill: fill, pan: pan)
         guard image.width > 0, image.height > 0 else { return CGRect(x: 0, y: 0, width: 1, height: 1) }
         return CGRect(x: rect.minX / image.width, y: rect.minY / image.height,
                       width: rect.width / image.width, height: rect.height / image.height)

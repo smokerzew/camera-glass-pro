@@ -23,6 +23,7 @@ struct ZoomSelector: View {
                     Text(isActive ? ZoomLimits.label(for: zoom) + "×" : ZoomLimits.label(for: preset))
                         .font(.system(size: isActive ? 13 : 15, weight: .medium))
                         .monospacedDigit()
+                        .rotatesWithDevice()
                         .foregroundStyle(isActive ? Color.yellow : .white)
                         .frame(width: isActive ? 40 : 32, height: isActive ? 40 : 32)
                         .background {

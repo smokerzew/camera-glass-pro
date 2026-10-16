@@ -8,7 +8,6 @@ enum SettingsKey {
     static let gridOpacity = "settings.gridOpacity"
     static let showLevel = "settings.showLevel"
     static let showCenter = "settings.showCenter"
-    static let showModeGuides = "settings.showModeGuides"
     static let defaultZoom = "settings.defaultZoom"
     static let defaultAspect = "settings.defaultAspect"
     static let keepAdjustmentsOnReplace = "settings.keepAdjustmentsOnReplace"
@@ -92,4 +91,22 @@ extension EnvironmentValues {
     /// System Increase Contrast OR the in-app preference.
     @Entry var cameraHighContrast = false
     @Entry var cameraLargeLabels = false
+    /// Degrees icons turn to stay upright when the phone is held sideways (0, 90 or -90).
+    @Entry var cameraIconRotation: Double = 0
+}
+
+/// Turns a control's glyph upright in landscape, as the Camera app does (the layout itself stays put).
+struct RotatesWithDevice: ViewModifier {
+    @Environment(\.cameraIconRotation) private var degrees
+    @Environment(\.cameraReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(degrees))
+            .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.1), value: degrees)
+    }
+}
+
+extension View {
+    func rotatesWithDevice() -> some View { modifier(RotatesWithDevice()) }
 }

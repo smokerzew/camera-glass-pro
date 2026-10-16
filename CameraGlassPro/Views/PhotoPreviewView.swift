@@ -5,13 +5,14 @@ import SwiftUI
 /// Overlays share the viewfinder frame with the image so they stay aligned at every zoom.
 struct PhotoPreviewView: View {
     @Bindable var vm: CameraWorkspaceViewModel
+    /// Shared with the workspace (also drives icon rotation).
+    let motion: MotionLevel
 
     @AppStorage(SettingsKey.gridOpacity) private var gridOpacity = 0.45
     @AppStorage(SettingsKey.showCenter) private var showCenter = false
-    @AppStorage(SettingsKey.showModeGuides) private var showModeGuides = true
     @Environment(\.cameraReduceMotion) private var reduceMotion
     @State private var pinchStartZoom: CGFloat?
-    @State private var motion = MotionLevel()
+    @State private var panStart: CGPoint?
 
     var body: some View {
         GeometryReader { proxy in
@@ -31,11 +32,7 @@ struct PhotoPreviewView: View {
             .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.15), value: vm.previewRatio)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: vm.photo?.id ?? vm.video?.id)
             .onAppear { updateViewfinderRatio(proxy.size) }
-            .task(id: vm.showLevel) {
-                // Motion updates run only while the level is visible.
-                if vm.showLevel { motion.start() } else { motion.stop() }
-            }
-            .onDisappear { motion.stop() }
+
             .onChange(of: proxy.size) { _, size in updateViewfinderRatio(size) }
         }
     }
@@ -71,10 +68,12 @@ struct PhotoPreviewView: View {
 
     private func viewfinder(mediaSize: CGSize, frame: CGSize) -> some View {
         let scale = FramingGeometry.baseScale(image: mediaSize, frame: frame, fill: true)
+        let maxOffset = FramingGeometry.maxOffset(image: mediaSize, frame: frame, zoom: vm.zoom, fill: true)
         return ZStack {
             mediaContent
                 .frame(width: mediaSize.width * scale, height: mediaSize.height * scale)
                 .scaleEffect(vm.zoom)
+                .offset(x: vm.pan.x * maxOffset.width, y: vm.pan.y * maxOffset.height)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(vm.video != nil ? "Imported video" : (vm.showOriginal ? "Imported photo, original" : "Imported photo preview"))
                 .accessibilityValue("\(ZoomLimits.label(for: vm.zoom)) times zoom, \(vm.aspect.label) framing")
@@ -93,9 +92,17 @@ struct PhotoPreviewView: View {
         .clipped()
         .contentShape(Rectangle())
         .gesture(magnification)
+        .simultaneousGesture(panGesture(maxOffset: maxOffset))
         .onTapGesture(count: 2) {
-            withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) { vm.setZoom(1) }
+            withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) {
+                vm.setZoom(1)
+                vm.setPan(.zero)
+            }
         }
+        .accessibilityAction(named: "Pan left") { vm.setPan(CGPoint(x: vm.pan.x + 0.25, y: vm.pan.y)) }
+        .accessibilityAction(named: "Pan right") { vm.setPan(CGPoint(x: vm.pan.x - 0.25, y: vm.pan.y)) }
+        .accessibilityAction(named: "Pan up") { vm.setPan(CGPoint(x: vm.pan.x, y: vm.pan.y + 0.25)) }
+        .accessibilityAction(named: "Pan down") { vm.setPan(CGPoint(x: vm.pan.x, y: vm.pan.y - 0.25)) }
         .onTapGesture {
             if vm.isControlPanelOpen {
                 withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) { vm.isControlPanelOpen = false }
@@ -107,13 +114,26 @@ struct PhotoPreviewView: View {
     private var overlayLayer: some View {
         ZStack {
             if vm.mode == .portrait || vm.depthEffect { PortraitVignette() }
-            if showModeGuides, let ratio = vm.mode.framingGuideRatio { ModeFramingGuide(ratio: ratio) }
             CameraGridOverlay(style: vm.gridStyle, opacity: gridOpacity)
-            if vm.showLevel { CameraLevelGuide(angle: motion.angle, isUpright: motion.isUpright) }
+            if vm.showLevel { CameraLevelGuide(angle: motion.levelAngle, isUpright: motion.isUpright).rotatesWithDevice() }
             if showCenter { CenterGuide() }
         }
         .allowsHitTesting(false)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.gridStyle)
+    }
+
+    /// Drag to move around zoomed media; stops at the edges so no background shows.
+    private func panGesture(maxOffset: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { value in
+                guard maxOffset.width > 0 || maxOffset.height > 0 else { return }
+                let start = panStart ?? vm.pan
+                panStart = start
+                let dx = maxOffset.width > 0 ? value.translation.width / maxOffset.width : 0
+                let dy = maxOffset.height > 0 ? value.translation.height / maxOffset.height : 0
+                vm.setPan(CGPoint(x: start.x + dx, y: start.y + dy))
+            }
+            .onEnded { _ in panStart = nil }
     }
 
     private var magnification: some Gesture {

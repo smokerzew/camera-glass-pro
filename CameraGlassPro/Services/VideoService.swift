@@ -15,6 +15,8 @@ struct ImportedVideo: Identifiable {
     let displaySize: CGSize
     let duration: Double
     let typeIdentifier: String?
+    /// EXIF orientation equivalent of the track's preferred transform (1 = upright).
+    var exifOrientation: Int32 = 1
 
     var formatLabel: String {
         typeIdentifier.flatMap { UTType($0)?.preferredFilenameExtension?.uppercased() } ?? "MOV"
@@ -94,8 +96,25 @@ enum VideoService {
             poster: poster,
             displaySize: CGSize(width: abs(oriented.width), height: abs(oriented.height)),
             duration: duration.isFinite ? duration : 0,
-            typeIdentifier: UTType(filenameExtension: url.pathExtension)?.identifier
+            typeIdentifier: UTType(filenameExtension: url.pathExtension)?.identifier,
+            exifOrientation: exifOrientation(for: transform)
         )
+    }
+
+    /// Maps a track's rotation to the EXIF orientation that turns its frames upright.
+    static func exifOrientation(for transform: CGAffineTransform) -> Int32 {
+        let degrees = Int((atan2(transform.b, transform.a) * 180 / .pi).rounded())
+        switch degrees {
+        case 90: return 6
+        case -90: return 8
+        case 180, -180: return 3
+        default: return 1
+        }
+    }
+
+    /// Removes video copies left behind by earlier launches (call once at launch).
+    static func purgeStaleCopies() {
+        try? FileManager.default.removeItem(at: directory)
     }
 
     /// Core Image composition that applies the shared adjustment pipeline to every frame.
