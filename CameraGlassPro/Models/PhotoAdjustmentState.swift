@@ -12,6 +12,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var shadows: Double = 0
     /// "Night Look": lifts shadows and reduces noise. A real filter, not a capture mode.
     var nightLook = false
+    /// Photo look applied after the adjustments (the panel's FILTER control).
+    var filter: PhotoFilter = .none
 
     var isIdentity: Bool { self == PhotoAdjustmentState() }
 
@@ -97,5 +99,18 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         if self == .exposure { return String(format: "%+.1f EV", value) }
         let relative = Int(((value - defaultValue) * 100).rounded())
         return relative == 0 ? "0" : String(format: "%+ld", relative)
+    }
+}
+
+/// Core Image photo looks cycled by the panel's FILTER control.
+enum PhotoFilter: String, CaseIterable, Codable, Sendable {
+    case none, vivid, mono, noir, chrome, fade, instant
+
+    var label: String { self == .none ? "Off" : rawValue.capitalized }
+
+    var next: PhotoFilter {
+        let all = Self.allCases
+        let index = all.firstIndex(of: self) ?? 0
+        return all[(index + 1) % all.count]
     }
 }

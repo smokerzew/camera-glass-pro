@@ -8,7 +8,7 @@ struct PhotoExportView: View {
 
     @AppStorage(SettingsKey.exportContent) private var content = ExportContent.adjusted
     @AppStorage(SettingsKey.exportFormat) private var format = ExportFormat.jpeg
-    @AppStorage(SettingsKey.gridStyle) private var gridStyle = GridStyle.off
+    @AppStorage(SettingsKey.gridStyle) private var gridStyle = GridStyle.thirds
     @AppStorage(SettingsKey.showCenter) private var showCenter = false
     @State private var cropToFraming = false
     @State private var burnOverlays = false

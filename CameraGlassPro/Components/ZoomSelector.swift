@@ -14,14 +14,14 @@ struct ZoomSelector: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 14) {
             ForEach(ZoomLimits.presets, id: \.self) { preset in
                 let isActive = preset == activePreset
                 Button {
                     isActive ? onToggleSlider() : onSelect(preset)
                 } label: {
                     Text(isActive ? ZoomLimits.label(for: zoom) + "×" : ZoomLimits.label(for: preset))
-                        .font(.system(size: isActive ? 13 : 12, weight: .bold, design: .rounded))
+                        .font(.system(size: isActive ? 13 : 15, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(isActive ? Color.yellow : .white)
                         .frame(width: isActive ? 40 : 32, height: isActive ? 40 : 32)
@@ -40,8 +40,7 @@ struct ZoomSelector: View {
                 .accessibilityAddTraits(isActive ? .isSelected : [])
             }
         }
-        .padding(4)
-        .cameraGlass(.regular, in: Capsule())
+        .shadow(color: .black.opacity(0.45), radius: 2)
         .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.2), value: activePreset)
     }
 }

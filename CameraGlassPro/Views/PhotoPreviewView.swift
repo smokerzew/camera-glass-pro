@@ -1,17 +1,15 @@
 import SwiftUI
 
-/// The viewfinder: photo, composition overlays and the empty state.
+/// The viewfinder: the photo fills the available area (iOS Camera style), with composition guides on top.
 /// Overlays share the viewfinder frame with the image so they stay aligned at every zoom.
 struct PhotoPreviewView: View {
     @Bindable var vm: CameraWorkspaceViewModel
 
-    @AppStorage(SettingsKey.gridStyle) private var gridStyle = GridStyle.off
+    @AppStorage(SettingsKey.gridStyle) private var gridStyle = GridStyle.thirds
     @AppStorage(SettingsKey.gridOpacity) private var gridOpacity = 0.45
     @AppStorage(SettingsKey.showLevel) private var showLevel = false
     @AppStorage(SettingsKey.showCenter) private var showCenter = false
     @AppStorage(SettingsKey.showModeGuides) private var showModeGuides = true
-    @AppStorage(SettingsKey.showImportedBadge) private var showImportedBadge = true
-    @AppStorage(SettingsKey.imageFit) private var imageFit = ImageFit.fill
     @Environment(\.cameraReduceMotion) private var reduceMotion
     @State private var pinchStartZoom: CGFloat?
 
@@ -32,11 +30,18 @@ struct PhotoPreviewView: View {
             .frame(width: proxy.size.width, height: proxy.size.height)
             .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.15), value: vm.previewRatio)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: vm.photo?.id)
+            .onAppear { updateViewfinderRatio(proxy.size) }
+            .onChange(of: proxy.size) { _, size in updateViewfinderRatio(size) }
         }
     }
 
+    private func updateViewfinderRatio(_ size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        vm.viewfinderRatio = size.width / size.height
+    }
+
     private func viewfinder(image: CGImage, imageSize: CGSize, frame: CGSize) -> some View {
-        let scale = FramingGeometry.baseScale(image: imageSize, frame: frame, fill: imageFit == .fill)
+        let scale = FramingGeometry.baseScale(image: imageSize, frame: frame, fill: true)
         return ZStack {
             Image(decorative: image, scale: 1)
                 .resizable()
@@ -74,28 +79,11 @@ struct PhotoPreviewView: View {
     /// Guides sit above the image and below the controls; none of them touch image data.
     private var overlayLayer: some View {
         ZStack {
-            if vm.mode == .portrait { PortraitVignette() }
+            if vm.mode == .portrait || vm.depthEffect { PortraitVignette() }
             if showModeGuides, let ratio = vm.mode.framingGuideRatio { ModeFramingGuide(ratio: ratio) }
             CameraGridOverlay(style: gridStyle, opacity: gridOpacity)
             if showLevel { CameraLevelGuide() }
             if showCenter { CenterGuide() }
-
-            VStack {
-                HStack(alignment: .top) {
-                    if vm.livePreference {
-                        GlassPill(text: "LIVE", systemImage: "livephoto")
-                            .accessibilityLabel("Live preference on. Imported photos are still images.")
-                    }
-                    Spacer()
-                    if vm.showOriginal {
-                        GlassPill(text: "ORIGINAL")
-                    } else if showImportedBadge {
-                        GlassPill(text: "IMPORTED PHOTO", systemImage: "square.and.arrow.down")
-                    }
-                }
-                Spacer()
-            }
-            .padding(10)
         }
         .allowsHitTesting(false)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: gridStyle)
@@ -109,6 +97,21 @@ struct PhotoPreviewView: View {
                 vm.setZoom(start * value.magnification)
             }
             .onEnded { _ in pinchStartZoom = nil }
+    }
+}
+
+/// Small yellow capsule label, as the Camera app uses for PORTRAIT / NATURAL LIGHT.
+struct CameraTag: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .tracking(0.4)
+            .foregroundStyle(.black)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.yellow, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 }
 
@@ -128,38 +131,12 @@ struct EmptyStateView: View {
                 Text("Import a photo to begin")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
-                Text("Frame, adjust and export your existing photos with camera-style controls. Nothing is captured or uploaded.")
+                Text("Tap the shutter to choose a photo. Nothing is captured or uploaded.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, 32)
-
-            GlassGroup(spacing: 10) {
-                VStack(spacing: 10) {
-                    Button { vm.showPhotosPicker = true } label: {
-                        Label("Import Photo", systemImage: "photo.badge.plus")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 26)
-                            .frame(minHeight: 50)
-                            .background(.white, in: Capsule())
-                    }
-                    .buttonStyle(PressableButtonStyle())
-                    .accessibilityHint("Opens the system photo picker")
-
-                    Button { vm.showFileImporter = true } label: {
-                        Label("Browse Files", systemImage: "folder")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 22)
-                            .frame(minHeight: 44)
-                            .cameraGlass(.interactive, in: Capsule())
-                    }
-                    .buttonStyle(PressableButtonStyle())
-                    .accessibilityHint("Imports an image from the Files app")
-                }
-            }
         }
         .frame(maxWidth: 420)
     }

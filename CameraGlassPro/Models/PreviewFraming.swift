@@ -7,7 +7,7 @@ enum AspectRatioOption: String, CaseIterable, Identifiable {
     case square = "1:1"
 
     var id: String { rawValue }
-    var label: String { self == .original ? "Original" : rawValue }
+    var label: String { self == .original ? "Full" : rawValue }
 
     /// Long side / short side, nil for the image's own ratio.
     private var longToShort: CGFloat? {

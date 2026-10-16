@@ -57,8 +57,28 @@ final class ImageProcessingService: @unchecked Sendable {
             image = filter.outputImage ?? image
         }
 
+        image = applyLook(a.filter, to: image)
+
         // Some filters sample beyond the edges; keep the original bounds.
         return image.cropped(to: input.extent)
+    }
+
+    private func applyLook(_ look: PhotoFilter, to image: CIImage) -> CIImage {
+        let filter: CIFilter
+        switch look {
+        case .none: return image
+        case .vivid:
+            let vibrance = CIFilter.vibrance()
+            vibrance.amount = 0.6
+            filter = vibrance
+        case .mono: filter = CIFilter.photoEffectMono()
+        case .noir: filter = CIFilter.photoEffectNoir()
+        case .chrome: filter = CIFilter.photoEffectChrome()
+        case .fade: filter = CIFilter.photoEffectFade()
+        case .instant: filter = CIFilter.photoEffectInstant()
+        }
+        filter.setValue(image, forKey: kCIInputImageKey)
+        return filter.outputImage ?? image
     }
 
     func renderPreview(_ source: CGImage, adjustments: PhotoAdjustmentState) -> CGImage? {

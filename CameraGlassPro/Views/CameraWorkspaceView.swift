@@ -1,15 +1,14 @@
 import PhotosUI
 import SwiftUI
 
-/// Full-screen camera-inspired workspace: top toolbar, viewfinder, floating zoom/panel, bottom controls.
+/// Full-screen workspace laid out like the iOS 27 Camera app: the photo fills the viewfinder,
+/// status icons float over its top, zoom/shutter controls over its bottom, and a black bar holds
+/// the thumbnail, the mode capsule and a round action button.
 struct CameraWorkspaceView: View {
     @State private var vm = CameraWorkspaceViewModel()
     @State private var pickerItem: PhotosPickerItem?
     @State private var flashOpacity = 0.0
 
-    @AppStorage(SettingsKey.appearance) private var appearance = AppearanceSetting.dark
-    @AppStorage(SettingsKey.controlOpacity) private var controlOpacity = 1.0
-    @AppStorage(SettingsKey.previewBackground) private var previewBackground = PreviewBackground.black
     @AppStorage(SettingsKey.reduceMotion) private var appReduceMotion = false
     @AppStorage(SettingsKey.highContrast) private var appHighContrast = false
     @AppStorage(SettingsKey.largeLabels) private var largeLabels = false
@@ -20,7 +19,7 @@ struct CameraWorkspaceView: View {
 
     var body: some View {
         workspace
-            .environment(\.colorScheme, .dark) // the viewfinder is always dark; sheets follow the appearance setting
+            .environment(\.colorScheme, .dark) // the viewfinder is always dark; sheets follow the system
             .photosPicker(isPresented: $vm.showPhotosPicker, selection: $pickerItem,
                           matching: .images, preferredItemEncoding: .current)
             .onChange(of: pickerItem) { _, item in
@@ -33,39 +32,45 @@ struct CameraWorkspaceView: View {
             }
             .sheet(isPresented: $vm.showAdjustments) { PhotoAdjustmentView(vm: vm) }
             .sheet(isPresented: $vm.showExport) { PhotoExportView(vm: vm) }
-            .sheet(isPresented: $vm.showSettings) { CameraSettingsView() }
             .appAlert(vm)
             .sensoryFeedback(.success, trigger: vm.importSuccessCount)
             .sensoryFeedback(.selection, trigger: vm.mode)
             .sensoryFeedback(.selection, trigger: vm.aspect)
+            .sensoryFeedback(.selection, trigger: vm.adjustments.filter)
             .sensoryFeedback(.impact(weight: .light), trigger: vm.flashPulse)
             .sensoryFeedback(.error, trigger: vm.alert?.id) { _, new in new != nil }
             .onChange(of: vm.flashPulse) { playFlash() }
             .environment(\.cameraReduceMotion, reduceMotion)
             .environment(\.cameraHighContrast, appHighContrast || systemContrast == .increased)
             .environment(\.cameraLargeLabels, largeLabels)
-            .preferredColorScheme(appearance.colorScheme)
             .statusBarHidden()
     }
 
     private var workspace: some View {
-        ZStack {
-            background
+        ZStack(alignment: .bottom) {
+            Color.black.ignoresSafeArea()
 
-            VStack(spacing: 8) {
-                CameraToolbar(vm: vm)
-                    .opacity(controlOpacity)
-
-                ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                ZStack {
                     PhotoPreviewView(vm: vm)
-                    floatingControls
+                    VStack(spacing: 0) {
+                        CameraStatusRow(vm: vm)
+                        Spacer(minLength: 0)
+                        CameraShutterControls(vm: vm)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                CameraBottomControls(vm: vm)
-                    .opacity(controlOpacity)
+                CameraBottomBar(vm: vm)
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility1) // camera chrome has fixed geometry
+
+            if vm.isControlPanelOpen {
+                CameraControlPanel(vm: vm)
+                    .padding(.bottom, 6)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(1)
+            }
 
             Color.white
                 .opacity(flashOpacity)
@@ -75,74 +80,17 @@ struct CameraWorkspaceView: View {
             if let seconds = vm.countdown {
                 CountdownOverlay(seconds: seconds) { vm.cancelCountdown() }
                     .transition(.opacity)
+                    .zIndex(2)
             }
 
             if vm.isImporting {
                 LoadingOverlay(message: vm.importMessage) { vm.cancelImport() }
                     .transition(.opacity)
+                    .zIndex(3)
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.isImporting)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.countdown)
-    }
-
-    @ViewBuilder
-    private var background: some View {
-        switch previewBackground {
-        case .black:
-            Color.black.ignoresSafeArea()
-        case .graphite:
-            Color(white: 0.09).ignoresSafeArea()
-        case .ambient:
-            Color.black
-                .overlay {
-                    if let image = vm.displayedImage {
-                        Image(decorative: image, scale: 1)
-                            .resizable()
-                            .scaledToFill()
-                            .blur(radius: 60)
-                            .opacity(0.45)
-                    }
-                }
-                .clipped()
-                .ignoresSafeArea()
-                .accessibilityHidden(true)
-        }
-    }
-
-    private var floatingControls: some View {
-        VStack(spacing: 10) {
-            if vm.isControlPanelOpen {
-                CameraControlPanel(vm: vm)
-                    .transition(reduceMotion ? .opacity : .scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
-            } else if vm.photo != nil {
-                if vm.isZoomSliderVisible {
-                    Slider(
-                        value: Binding(get: { Double(vm.zoom) }, set: { vm.setZoom(CGFloat($0)) }),
-                        in: Double(ZoomLimits.minimum)...Double(ZoomLimits.maximum)
-                    )
-                    .tint(.yellow)
-                    .frame(width: 240)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 44)
-                    .cameraGlass(.regular, in: Capsule())
-                    .accessibilityLabel("Preview zoom")
-                    .accessibilityValue("\(ZoomLimits.label(for: vm.zoom)) times")
-                    .transition(.opacity)
-                }
-                ZoomSelector(
-                    zoom: vm.zoom,
-                    onSelect: { preset in
-                        withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.12)) { vm.setZoom(preset) }
-                    },
-                    onToggleSlider: {
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { vm.isZoomSliderVisible.toggle() }
-                    }
-                )
-                .opacity(controlOpacity)
-            }
-        }
-        .padding(.bottom, 12)
     }
 
     private func playFlash() {

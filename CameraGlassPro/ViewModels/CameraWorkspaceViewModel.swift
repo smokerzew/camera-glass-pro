@@ -35,6 +35,8 @@ final class CameraWorkspaceViewModel {
     // MARK: Camera-style controls (visual preferences, not hardware)
     var flash: FlashSetting = .off
     var livePreference = false
+    /// Preview-only depth look (vignette + f-number readout). Not exported.
+    var depthEffect = false
     var timer: TimerSetting = .off
     private(set) var countdown: Int?
     private(set) var flashPulse = 0
@@ -42,10 +44,13 @@ final class CameraWorkspaceViewModel {
     // MARK: Presentation
     var isControlPanelOpen = false
     var isZoomSliderVisible = false
+    /// Exposure slider shown inside the control panel.
+    var isExposureDialVisible = false
+    /// Width / height of the on-screen viewfinder; "Full" framing uses it so the photo fills the screen.
+    var viewfinderRatio: CGFloat = 9.0 / 19.5
     var showPhotosPicker = false
     var showFileImporter = false
     var showAdjustments = false
-    var showSettings = false
     var showExport = false
     var alert: AppAlert?
 
@@ -86,11 +91,8 @@ final class CameraWorkspaceViewModel {
     var hasEdits: Bool { !adjustments.isIdentity }
 
     var previewRatio: CGFloat {
-        aspect.resolvedRatio(imageSize: photo?.previewSize ?? CGSize(width: 3, height: 4))
-    }
-
-    var imageFit: ImageFit {
-        ImageFit(rawValue: defaults.string(forKey: SettingsKey.imageFit) ?? "") ?? .fill
+        guard aspect != .original else { return viewfinderRatio }
+        return aspect.resolvedRatio(imageSize: photo?.previewSize ?? CGSize(width: 3, height: 4))
     }
 
     // MARK: Import
@@ -196,7 +198,7 @@ final class CameraWorkspaceViewModel {
     var normalizedFraming: CGRect? {
         guard let photo else { return nil }
         return FramingGeometry.normalizedVisibleRect(
-            image: photo.previewSize, ratio: previewRatio, zoom: zoom, fill: imageFit == .fill)
+            image: photo.previewSize, ratio: previewRatio, zoom: zoom, fill: true)
     }
 
     // MARK: Adjustments
@@ -209,6 +211,16 @@ final class CameraWorkspaceViewModel {
     func resetAdjustment(_ parameter: AdjustmentParameter) {
         adjustments.reset(parameter)
         adjustmentsChanged()
+    }
+
+    func cycleFilter() {
+        adjustments.filter = adjustments.filter.next
+        adjustmentsChanged()
+    }
+
+    /// True when any camera-style control differs from its default (rings the panel button yellow).
+    var hasActiveControls: Bool {
+        hasEdits || flash != .off || livePreference || timer != .off || depthEffect || aspect != .original
     }
 
     func setNightLook(_ enabled: Bool) {

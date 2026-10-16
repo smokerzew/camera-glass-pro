@@ -39,6 +39,21 @@ final class ImageProcessingTests: XCTestCase {
         XCTAssertEqual(processor.apply(state, to: input).extent, input.extent)
     }
 
+    func testFiltersKeepExtentAndChangePixels() {
+        let input = solid(0.8, 0.3, 0.2, size: 32)
+        for look in PhotoFilter.allCases where look != .none {
+            var state = PhotoAdjustmentState()
+            state.filter = look
+            XCTAssertFalse(state.isIdentity)
+            let output = processor.apply(state, to: input)
+            XCTAssertEqual(output.extent, input.extent, "\(look) changed the extent")
+        }
+        var mono = PhotoAdjustmentState()
+        mono.filter = .mono
+        let rgb = averageRGB(processor.apply(mono, to: input))
+        XCTAssertEqual(rgb.r, rgb.b, accuracy: 3, "mono should be gray")
+    }
+
     func testExposureBrightens() {
         var state = PhotoAdjustmentState()
         state.exposure = 1

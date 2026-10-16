@@ -40,32 +40,6 @@ struct GlassIconButton: View {
     }
 }
 
-/// Icon-only button meant to sit inside a shared glass capsule.
-struct CapsuleIconButton: View {
-    let systemImage: String
-    let label: String
-    var hint: String = ""
-    var value: String? = nil
-    var isActive = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .semibold))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(isActive ? Color.yellow : .white)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableButtonStyle())
-        .accessibilityLabel(label)
-        .accessibilityHint(hint)
-        .accessibilityValue(value ?? "")
-        .accessibilityAddTraits(isActive ? .isSelected : [])
-    }
-}
-
 /// Large captioned circle used in the expanded control panel (FLASH, LIVE, TIMER…).
 struct PanelControlButton: View {
     let systemImage: String
@@ -95,7 +69,7 @@ struct PanelControlButton: View {
                     }
                 }
                 .foregroundStyle(isActive ? Color.yellow : .white)
-                .frame(width: 58, height: 58)
+                .frame(width: 62, height: 62)
                 .overlay { if isActive { Circle().strokeBorder(.yellow.opacity(0.7), lineWidth: 1.5) } }
 
                 Text(title)
@@ -114,24 +88,5 @@ struct PanelControlButton: View {
         .accessibilityHint(hint)
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isActive ? .isSelected : [])
-    }
-}
-
-/// Small text pill (format label, imported badge).
-struct GlassPill: View {
-    let text: String
-    var systemImage: String? = nil
-
-    var body: some View {
-        HStack(spacing: 5) {
-            if let systemImage { Image(systemName: systemImage) }
-            Text(text)
-        }
-        .font(.caption.weight(.semibold))
-        .tracking(0.6)
-        .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .frame(minHeight: 30)
-        .cameraGlass(.subtle, in: Capsule())
     }
 }
