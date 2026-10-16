@@ -76,9 +76,16 @@ struct CameraWorkspaceView: View {
                         CameraShutterControls(vm: vm)
                     }
 
+                    if vm.photo?.livePhoto != nil {
+                        LiveBadge(vm: vm)
+                            .padding(.top, 58)
+                            .padding(.leading, 12)
+                            .transition(.opacity)
+                    }
+
                     if vm.scopeMode != .off, let data = vm.scopeData {
                         ScopeView(mode: vm.scopeMode, data: data)
-                            .padding(.top, 58)
+                            .padding(.top, vm.photo?.livePhoto != nil ? 98 : 58)
                             .padding(.leading, 12)
                             .allowsHitTesting(false)
                             .transition(.opacity)
@@ -101,6 +108,13 @@ struct CameraWorkspaceView: View {
                 CameraBottomBar(vm: vm)
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility1) // camera chrome has fixed geometry
+
+            if vm.showEffectsPicker {
+                EffectsPickerView(vm: vm)
+                    .padding(.bottom, 6)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(1)
+            }
 
             if vm.showStylesPad {
                 StylesPadView(vm: vm)
@@ -162,6 +176,12 @@ struct CameraWorkspaceView: View {
                 .allowsHitTesting(false)
                 .transition(.opacity)
                 .zIndex(4)
+            }
+
+            if vm.isRenderingEffect {
+                LoadingOverlay(message: vm.effectMessage) { vm.cancelEffect() }
+                    .transition(.opacity)
+                    .zIndex(3)
             }
 
             if vm.isImporting {

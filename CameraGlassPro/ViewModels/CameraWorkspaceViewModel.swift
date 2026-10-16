@@ -1,6 +1,7 @@
 import AVFoundation
 import Observation
 import QuartzCore
+import Photos
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -75,6 +76,13 @@ final class CameraWorkspaceViewModel {
 
     // MARK: Photographic Styles pad
     var showStylesPad = false
+
+    // MARK: Live Photos and effects
+    /// True while the Live Photo motion plays (touch and hold the LIVE badge).
+    var isPlayingLive = false
+    var showEffectsPicker = false
+    private(set) var isRenderingEffect = false
+    private(set) var effectMessage = ""
 
     // MARK: Filter picker
     var showFilterPicker = false
@@ -178,6 +186,7 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var textTask: Task<Void, Never>?
     @ObservationIgnored private var thumbnailTask: Task<Void, Never>?
     @ObservationIgnored private var focusTask: Task<Void, Never>?
+    @ObservationIgnored private var effectTask: Task<Void, Never>?
     /// Portrait subject mask for the current photo preview (computed once per photo).
     @ObservationIgnored private var previewSubjectMask: CIImage?
     @ObservationIgnored private var previewSubjectSource: CGImage?
@@ -358,6 +367,15 @@ final class CameraWorkspaceViewModel {
                 }
                 return .video(try await VideoService.load(localURL: file.url))
             }
+        } else if LivePhotoSupport.isLivePhoto(item) {
+            beginImport(message: "Loading Live Photo…") { importer in
+                var photo = try await importer.loadImage(from: item)
+                if let live = try? await item.loadTransferable(type: PHLivePhoto.self) {
+                    photo.livePhoto = live
+                    photo.pairedVideoURL = try? await LivePhotoSupport.extractPairedVideo(from: live)
+                }
+                return .photo(photo)
+            }
         } else {
             beginImport(message: "Loading from Photos…") { .photo(try await $0.loadImage(from: item)) }
         }
@@ -518,6 +536,8 @@ final class CameraWorkspaceViewModel {
         importSuccessCount += 1
         recognizedText = []
         if liveTextEnabled { recognizeText() }
+        isPlayingLive = false
+        autoPlayLivePhoto()
     }
 
     // MARK: Video playback
@@ -867,6 +887,7 @@ final class CameraWorkspaceViewModel {
     func openStylesPad() {
         isControlPanelOpen = false
         showFilterPicker = false
+        showEffectsPicker = false
         showStylesPad = true
     }
 
@@ -899,6 +920,101 @@ final class CameraWorkspaceViewModel {
         adjustmentsChanged()
     }
 
+    // MARK: Live Photos and effects
+
+    /// Motion source for Loop, Bounce, Long Exposure and Live Photo: the video, or a Live Photo's clip.
+    var effectSourceAsset: AVAsset? {
+        if let video { return video.asset }
+        return photo?.pairedVideoURL.map { AVURLAsset(url: $0) }
+    }
+
+    var canMakeEffects: Bool { effectSourceAsset != nil }
+
+    func openEffectsPicker() {
+        isControlPanelOpen = false
+        showFilterPicker = false
+        showStylesPad = false
+        showEffectsPicker = true
+    }
+
+    /// Plays a Live Photo's motion once (used when LIVE is on and a Live Photo opens).
+    private func autoPlayLivePhoto() {
+        guard livePreference, photo?.livePhoto != nil else { return }
+        isPlayingLive = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            self?.isPlayingLive = false
+        }
+    }
+
+    func runEffect(_ effect: LiveEffect) {
+        guard let asset = effectSourceAsset else { return }
+        showEffectsPicker = false
+        effectTask?.cancel()
+        isRenderingEffect = true
+        effectMessage = effect == .livePhoto ? "Making Live Photo…" : "Creating \(effect.title.capitalized)…"
+
+        let processor = self.processor
+        let recipe = adjustments
+        let isVideo = video != nil
+        let range = trimRange
+        let keySeconds = player?.currentTime().seconds ?? 0
+        effectTask = Task { [weak self] in
+            do {
+                let duration = try await asset.load(.duration)
+                let full = CMTimeRange(start: .zero, duration: duration)
+                let available = isVideo ? (range ?? full) : full
+                switch effect {
+                case .loop, .bounce:
+                    let url = try LiveEffectsService.newURL("mov")
+                    try await LiveEffectsService.renderMovie(
+                        from: asset, times: LiveEffectsService.sequence(for: effect, in: available),
+                        adjustments: recipe, processor: processor, to: url)
+                    try Task.checkCancellation()
+                    self?.showEffectResult(url, toast: "\(effect.title.capitalized) created")
+                case .longExposure:
+                    let data = try await LiveEffectsService.longExposure(
+                        from: asset, range: available, adjustments: recipe, processor: processor)
+                    try Task.checkCancellation()
+                    let url = try LiveEffectsService.newURL("jpg")
+                    try data.write(to: url)
+                    self?.showEffectResult(url, toast: "Long Exposure created")
+                case .livePhoto:
+                    let window = LiveEffectsService.livePhotoRange(center: keySeconds, available: available)
+                    let key = CMTime(seconds: min(max(keySeconds, window.start.seconds), window.end.seconds - 0.05),
+                                     preferredTimescale: 600)
+                    let pair = try await LiveEffectsService.makeLivePhoto(
+                        from: asset, range: window, keyTime: key, adjustments: recipe, processor: processor)
+                    try Task.checkCancellation()
+                    try await LiveEffectsService.saveLivePhotoToLibrary(photo: pair.photo, video: pair.video)
+                    self?.showToast("Live Photo saved to Photos")
+                }
+            } catch is CancellationError {
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? "The effect couldn't be created."
+                self?.alert = AppAlert(title: "Couldn't Create Effect", message: message)
+            }
+            self?.isRenderingEffect = false
+        }
+    }
+
+    func cancelEffect() {
+        effectTask?.cancel()
+        isRenderingEffect = false
+    }
+
+    /// Adds an effect's output as a new item after the current one and shows it (the original stays).
+    private func showEffectResult(_ url: URL, toast message: String) {
+        if let current = currentEntryID { entryEdits[current] = adjustments }
+        let entry = LibraryEntry(source: .file(url))
+        let index = min(libraryIndex + 1, library.count)
+        library.insert(entry, at: index)
+        entryEdits[entry.id] = PhotoAdjustmentState() // the effect already includes the edits
+        libraryIndex = index
+        load(entry)
+        showToast(message)
+    }
+
     func setFilter(_ filter: PhotoFilter) {
         guard filter != adjustments.filter else { return }
         recordUndoPoint(force: true)
@@ -910,6 +1026,7 @@ final class CameraWorkspaceViewModel {
     func openFilterPicker() {
         isControlPanelOpen = false
         showStylesPad = false
+        showEffectsPicker = false
         showFilterPicker = true
         renderFilterThumbnails()
     }

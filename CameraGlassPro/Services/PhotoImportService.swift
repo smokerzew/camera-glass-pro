@@ -11,6 +11,9 @@ struct ImportedPhoto: Identifiable {
     let preview: CGImage
     let pixelSize: CGSize
     let typeIdentifier: String?
+    /// Set when a Live Photo was picked: the original for playback, and its motion clip for effects.
+    var livePhoto: PHLivePhoto?
+    var pairedVideoURL: URL?
 
     var previewSize: CGSize { CGSize(width: preview.width, height: preview.height) }
 

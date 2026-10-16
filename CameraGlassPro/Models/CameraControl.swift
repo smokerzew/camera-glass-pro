@@ -2,7 +2,7 @@ import Foundation
 
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
-    case flash, live, aspect, timer, exposure, styles, filter, depth, nightMode, grid, level, scopes, peaking, zebras, liveText, trim, format
+    case flash, live, aspect, timer, exposure, styles, filter, depth, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, format
 
     var id: String { rawValue }
 
@@ -17,7 +17,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
     /// Controls that act on the imported photo or video and are disabled until there is one.
     var requiresMedia: Bool {
         switch self {
-        case .exposure, .styles, .filter, .depth, .nightMode, .scopes, .peaking, .zebras, .liveText, .trim: true
+        case .exposure, .styles, .filter, .depth, .nightMode, .scopes, .peaking, .zebras, .liveText, .effects, .trim: true
         default: false
         }
     }
@@ -41,6 +41,7 @@ extension CameraWorkspaceViewModel {
     /// Whether a control can be used right now (TRIM needs a video, editing controls need media).
     func isAvailable(_ control: CameraControl) -> Bool {
         if control == .trim { return video != nil }
+        if control == .effects { return canMakeEffects }
         return !control.requiresMedia || hasMedia
     }
 
@@ -62,6 +63,7 @@ extension CameraWorkspaceViewModel {
         case .zebras: "line.diagonal"
         case .trim: "timeline.selection"
         case .liveText: "text.viewfinder"
+        case .effects: "livephoto.play"
         case .format: "photo"
         }
     }
@@ -84,6 +86,7 @@ extension CameraWorkspaceViewModel {
         case .zebras: zebras
         case .trim: isTrimmed
         case .liveText: liveTextEnabled
+        case .effects: false
         case .format: false
         }
     }
@@ -118,6 +121,7 @@ extension CameraWorkspaceViewModel {
         case .zebras: zebras ? "On" : "Off"
         case .trim: isTrimmed ? String(format: "%.1f s to %.1f s", trimStart, trimEnd) : "Full length"
         case .liveText: liveTextEnabled ? "\(recognizedText.count) lines found" : "Off"
+        case .effects: canMakeEffects ? "Loop, Bounce, Long Exposure, Live Photo" : "Needs a video or Live Photo"
         case .format: exportFormat.label
         }
     }
@@ -125,7 +129,7 @@ extension CameraWorkspaceViewModel {
     func hint(for control: CameraControl) -> String {
         switch control {
         case .flash: "Visual flash effect only"
-        case .live: "Shows Live as on; imported photos stay still images"
+        case .live: "Plays a Live Photo's motion when it opens; touch and hold LIVE to play it again"
         case .aspect: "Cycles full screen, 4:3, 16:9 and 1:1 framing"
         case .timer: "Delays opening the photo picker"
         case .exposure: "Shows the exposure slider"
@@ -140,6 +144,7 @@ extension CameraWorkspaceViewModel {
         case .zebras: "Stripes the brightest areas that are close to clipping"
         case .trim: "Choose where the video starts and ends"
         case .liveText: "Finds text you can copy or translate (pauses videos)"
+        case .effects: "Makes a Loop, Bounce or Long Exposure, or turns a video into a Live Photo"
         case .format: "Cycles the export format: JPEG, HEIF, PNG"
         }
     }
@@ -171,6 +176,7 @@ extension CameraWorkspaceViewModel {
         case .zebras: setZebras(!zebras)
         case .trim: showTrim = true
         case .liveText: setLiveText(!liveTextEnabled)
+        case .effects: openEffectsPicker()
         case .format: cycleExportFormat()
         }
     }
