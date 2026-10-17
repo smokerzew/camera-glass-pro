@@ -135,12 +135,13 @@ struct PhotoPreviewView: View {
         .accessibilityAction(named: "Pan up") { vm.setPan(CGPoint(x: vm.pan.x, y: vm.pan.y + 0.25)) }
         .accessibilityAction(named: "Pan down") { vm.setPan(CGPoint(x: vm.pan.x, y: vm.pan.y - 0.25)) }
         .onTapGesture(coordinateSpace: .local) { location in
-            if vm.isControlPanelOpen || vm.showFilterPicker || vm.showStylesPad || vm.showEffectsPicker {
+            if vm.isControlPanelOpen || vm.showFilterPicker || vm.showStylesPad || vm.showEffectsPicker || vm.showSubjectPicker {
                 withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) {
                     vm.isControlPanelOpen = false
                     vm.showFilterPicker = false
                     vm.showStylesPad = false
                     vm.showEffectsPicker = false
+                    vm.showSubjectPicker = false
                 }
                 return
             }

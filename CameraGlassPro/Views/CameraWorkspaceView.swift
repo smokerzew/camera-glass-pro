@@ -7,6 +7,7 @@ import SwiftUI
 struct CameraWorkspaceView: View {
     @State private var vm = CameraWorkspaceViewModel(sessionStore: .standard)
     @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var backgroundItem: PhotosPickerItem?
     @Environment(\.scenePhase) private var scenePhase
     @State private var flashOpacity = 0.0
     @State private var motion = MotionLevel()
@@ -33,6 +34,13 @@ struct CameraWorkspaceView: View {
             .fileImporter(isPresented: $vm.showFileImporter, allowedContentTypes: [.image, .movie],
                           allowsMultipleSelection: true) { result in
                 vm.importFromFiles(result)
+            }
+            .photosPicker(isPresented: $vm.showBackgroundPhotoPicker, selection: $backgroundItem,
+                          matching: .images, preferredItemEncoding: .current)
+            .onChange(of: backgroundItem) { _, item in
+                guard let item else { return }
+                vm.setCustomBackground(from: item)
+                backgroundItem = nil
             }
             .task { vm.restoreLastSession() }
             .onChange(of: scenePhase) { _, phase in
@@ -108,6 +116,13 @@ struct CameraWorkspaceView: View {
                 CameraBottomBar(vm: vm)
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility1) // camera chrome has fixed geometry
+
+            if vm.showSubjectPicker {
+                SubjectPickerView(vm: vm)
+                    .padding(.bottom, 6)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(1)
+            }
 
             if vm.showEffectsPicker {
                 EffectsPickerView(vm: vm)

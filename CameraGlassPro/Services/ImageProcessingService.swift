@@ -12,13 +12,13 @@ final class ImageProcessingService: @unchecked Sendable {
     /// `subjectMask` lets callers reuse a precomputed Portrait mask (the photo preview);
     /// without one, Portrait finds the subject itself (exports, video frames).
     func apply(_ adjustments: PhotoAdjustmentState, to input: CIImage, subjectMask: CIImage? = nil,
-               fastMask: Bool = false) -> CIImage {
+               fastMask: Bool = false, backgroundPhoto: CIImage? = nil) -> CIImage {
         let a = adjustments.clamped()
         guard !a.isIdentity else { return input }
         var image = input
 
-        if a.portrait, let mask = subjectMask ?? SubjectMasker.mask(for: input, fast: fastMask) {
-            image = applyPortrait(a, to: image, mask: mask)
+        if a.needsSubject, let mask = subjectMask ?? SubjectMasker.mask(for: input, fast: fastMask) {
+            image = composeSubject(a, to: image, mask: mask, backgroundPhoto: backgroundPhoto)
         }
 
         if a.exposure != 0 {
@@ -243,9 +243,11 @@ final class ImageProcessingService: @unchecked Sendable {
         return context.createCGImage(analysisOverlay(for: input, peaking: peaking, zebras: zebras), from: input.extent)
     }
 
-    func renderPreview(_ source: CGImage, adjustments: PhotoAdjustmentState, subjectMask: CIImage? = nil) -> CGImage? {
+    func renderPreview(_ source: CGImage, adjustments: PhotoAdjustmentState, subjectMask: CIImage? = nil,
+                       backgroundPhoto: CIImage? = nil) -> CGImage? {
         let input = CIImage(cgImage: source)
-        return context.createCGImage(apply(adjustments, to: input, subjectMask: subjectMask), from: input.extent)
+        return context.createCGImage(apply(adjustments, to: input, subjectMask: subjectMask,
+                                           backgroundPhoto: backgroundPhoto), from: input.extent)
     }
 
     func encode(_ image: CIImage, as format: ExportFormat) throws -> Data {

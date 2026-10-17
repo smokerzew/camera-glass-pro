@@ -69,6 +69,57 @@ final class PortraitRenderingTests: XCTestCase {
         XCTAssertEqual(processor.apply(state, to: flat, subjectMask: nil).extent, extent)
     }
 
+    func testColorSplashKeepsSubjectColorAndGraysBackground() {
+        var state = PhotoAdjustmentState()
+        state.colorSplash = true
+        XCTAssertTrue(state.needsSubject)
+        let output = processor.apply(state, to: scene, subjectMask: leftMask)
+        let subject = average(output, in: CGRect(x: 10, y: 20, width: 60, height: 60))
+        let background = average(output, in: CGRect(x: 130, y: 20, width: 60, height: 60))
+        XCTAssertGreaterThan(subject.0, 200, "subject stays red")
+        XCTAssertLessThan(subject.2, 40)
+        XCTAssertEqual(background.0, background.2, accuracy: 4, "background is black and white")
+    }
+
+    func testBackgroundSwapToWhiteAndSky() {
+        var white = PhotoAdjustmentState()
+        white.background = .white
+        let whiteOut = processor.apply(white, to: scene, subjectMask: leftMask)
+        XCTAssertGreaterThan(average(whiteOut, in: CGRect(x: 130, y: 20, width: 60, height: 60)).0, 230)
+        XCTAssertGreaterThan(average(whiteOut, in: CGRect(x: 10, y: 20, width: 60, height: 60)).0, 200, "subject kept")
+
+        var sky = PhotoAdjustmentState()
+        sky.background = .sky
+        let skyBG = average(processor.apply(sky, to: scene, subjectMask: leftMask), in: CGRect(x: 130, y: 20, width: 60, height: 60))
+        XCTAssertGreaterThan(skyBG.2, skyBG.0, "sky background is blue-leaning")
+    }
+
+    func testBackgroundSwapToAPhoto() {
+        var state = PhotoAdjustmentState()
+        state.background = .photo
+        let green = CIImage(color: CIColor(red: 0, green: 0.8, blue: 0)).cropped(to: CGRect(x: 0, y: 0, width: 50, height: 80))
+        let output = processor.apply(state, to: scene, subjectMask: leftMask, backgroundPhoto: green)
+        let background = average(output, in: CGRect(x: 130, y: 20, width: 60, height: 60))
+        XCTAssertGreaterThan(background.1, 150, "the chosen photo fills the background")
+        XCTAssertLessThan(background.2, 40)
+        // Without a chosen photo, PHOTO falls back to the original background.
+        let fallback = average(processor.apply(state, to: scene, subjectMask: leftMask), in: CGRect(x: 130, y: 20, width: 60, height: 60))
+        XCTAssertGreaterThan(fallback.2, 200)
+    }
+
+    func testAspectFillCoversTheFrame() {
+        let tall = CIImage(color: .red).cropped(to: CGRect(x: 0, y: 0, width: 100, height: 300))
+        let target = CGRect(x: 0, y: 0, width: 400, height: 200)
+        XCTAssertEqual(ImageProcessingService.aspectFill(tall, to: target).extent, target)
+    }
+
+    func testOldRecipesHaveNoSubjectEdits() throws {
+        let state = try JSONDecoder().decode(PhotoAdjustmentState.self, from: Data(#"{"exposure":0}"#.utf8))
+        XCTAssertEqual(state.background, .original)
+        XCTAssertFalse(state.colorSplash)
+        XCTAssertFalse(state.needsSubject)
+    }
+
     func testLightingNamesMatchTheCameraApp() {
         XCTAssertEqual(PortraitLighting.natural.label, "NATURAL LIGHT")
         XCTAssertEqual(PortraitLighting.stageMono.label, "STAGE LIGHT MONO")

@@ -2,7 +2,7 @@ import Foundation
 
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
-    case flash, live, aspect, timer, exposure, styles, filter, depth, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, format
+    case flash, live, aspect, timer, exposure, styles, filter, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, format
 
     var id: String { rawValue }
 
@@ -17,7 +17,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
     /// Controls that act on the imported photo or video and are disabled until there is one.
     var requiresMedia: Bool {
         switch self {
-        case .exposure, .styles, .filter, .depth, .nightMode, .scopes, .peaking, .zebras, .liveText, .effects, .trim: true
+        case .exposure, .styles, .filter, .depth, .subject, .nightMode, .scopes, .peaking, .zebras, .liveText, .effects, .trim: true
         default: false
         }
     }
@@ -64,6 +64,7 @@ extension CameraWorkspaceViewModel {
         case .trim: "timeline.selection"
         case .liveText: "text.viewfinder"
         case .effects: "livephoto.play"
+        case .subject: "person.crop.rectangle.stack"
         case .format: "photo"
         }
     }
@@ -87,6 +88,7 @@ extension CameraWorkspaceViewModel {
         case .trim: isTrimmed
         case .liveText: liveTextEnabled
         case .effects: false
+        case .subject: adjustments.colorSplash || adjustments.background != .original
         case .format: false
         }
     }
@@ -122,6 +124,9 @@ extension CameraWorkspaceViewModel {
         case .trim: isTrimmed ? String(format: "%.1f s to %.1f s", trimStart, trimEnd) : "Full length"
         case .liveText: liveTextEnabled ? "\(recognizedText.count) lines found" : "Off"
         case .effects: canMakeEffects ? "Loop, Bounce, Long Exposure, Live Photo" : "Needs a video or Live Photo"
+        case .subject: [adjustments.colorSplash ? "Color Splash" : nil,
+                        adjustments.background != .original ? "Background \(adjustments.background.label.capitalized)" : nil]
+            .compactMap { $0 }.joined(separator: ", ").ifEmpty("Off")
         case .format: exportFormat.label
         }
     }
@@ -145,6 +150,7 @@ extension CameraWorkspaceViewModel {
         case .trim: "Choose where the video starts and ends"
         case .liveText: "Finds text you can copy or translate (pauses videos)"
         case .effects: "Makes a Loop, Bounce or Long Exposure, or turns a video into a Live Photo"
+        case .subject: "Color Splash and Background Swap for people, pets and objects"
         case .format: "Cycles the export format: JPEG, HEIF, PNG"
         }
     }
@@ -177,7 +183,12 @@ extension CameraWorkspaceViewModel {
         case .trim: showTrim = true
         case .liveText: setLiveText(!liveTextEnabled)
         case .effects: openEffectsPicker()
+        case .subject: openSubjectPicker()
         case .format: cycleExportFormat()
         }
     }
+}
+
+private extension String {
+    func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }
 }

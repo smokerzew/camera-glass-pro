@@ -67,6 +67,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Effects | EFFECTS pop-up: Loop, Bounce and Long Exposure from a video or Live Photo (with your edits; result opens as a new item), and Live Photo: turns the whole video (or its trimmed part) into a real Live Photo saved to the library, with the frame on screen as the photo. | Real |
 | Export size | Edited photos: Full, 12 MP, 4 MP or 1 MP (long edge, Lanczos, never enlarged). Edited videos: Full, 4K, 1080p or 720p. Originals always export byte-for-byte. | Real |
 | Live Photo sound | Switch in Effects: Live Photos made from videos keep the video's sound (interleaved AAC) or save silent. Remembered. | Real |
+| Subject | SUBJECT pop-up: Color Splash (subject in color, background black and white) and Background Swap (Original, Blur, Black, White, Gray, Sky, Sunset, or one of your photos), using on-device subject detection; combines with Portrait. Photos, video frames and exports. | Real |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 

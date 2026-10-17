@@ -27,6 +27,13 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var portrait = false
     var aperture: Double = 2.8
     var lighting: PortraitLighting = .natural
+    /// Subject in color, background black and white.
+    var colorSplash = false
+    /// What goes behind the subject.
+    var background: BackgroundStyle = .original
+
+    /// Any edit that needs the subject mask.
+    var needsSubject: Bool { portrait || colorSplash || background != .original }
 
     var isIdentity: Bool { self == PhotoAdjustmentState() }
 
@@ -53,6 +60,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         portrait = try c.decodeIfPresent(Bool.self, forKey: .portrait) ?? false
         aperture = min(max(try c.decodeIfPresent(Double.self, forKey: .aperture) ?? 2.8, 1.4), 16)
         lighting = try c.decodeIfPresent(PortraitLighting.self, forKey: .lighting) ?? .natural
+        colorSplash = try c.decodeIfPresent(Bool.self, forKey: .colorSplash) ?? false
+        background = (try? c.decodeIfPresent(BackgroundStyle.self, forKey: .background)) ?? .original
     }
 
     subscript(parameter: AdjustmentParameter) -> Double {

@@ -89,43 +89,57 @@ extension ImageProcessingService {
         return CGFloat(strength) * width / 36
     }
 
-    /// Real Portrait: keeps the subject sharp, blurs the background by aperture and applies lighting.
-    func applyPortrait(_ a: PhotoAdjustmentState, to image: CIImage, mask rawMask: CIImage) -> CIImage {
+    /// Subject compositing for Portrait, Color Splash and Background Swap.
+    /// Order: choose the background (original or replacement) → Portrait depth blur and lighting →
+    /// Color Splash (background to black and white) → blend under the sharp subject.
+    func composeSubject(_ a: PhotoAdjustmentState, to image: CIImage, mask rawMask: CIImage,
+                        backgroundPhoto: CIImage?) -> CIImage {
         let extent = image.extent
         let feather = max(1, extent.width / 400)
         let mask = rawMask.clampedToExtent()
             .applyingGaussianBlur(sigma: Double(feather))
             .cropped(to: extent)
-
-        // Blur where the mask is dark (background).
-        let inverted = mask.applyingFilter("CIColorInvert")
-        let blur = CIFilter.maskedVariableBlur()
-        blur.inputImage = image.clampedToExtent()
-        blur.mask = inverted
-        blur.radius = Float(Self.portraitBlurRadius(aperture: a.aperture, width: extent.width))
-        var background = (blur.outputImage ?? image).cropped(to: extent)
         var subject = image
+        var background = replacementBackground(a.background, for: image, photo: backgroundPhoto) ?? image
 
-        switch a.lighting {
-        case .natural:
-            break
-        case .studio:
-            subject = subject.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: 0.3])
-                .applyingFilter("CIHighlightShadowAdjust", parameters: ["inputHighlightAmount": 0.85, "inputShadowAmount": 0.25])
-        case .contour:
-            subject = subject.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.18])
-                .applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": -0.3])
-            background = background.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: -0.35])
-        case .stage:
-            subject = subject.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: 0.15])
-            background = CIImage(color: .black).cropped(to: extent)
-        case .stageMono:
-            subject = subject.applyingFilter("CIPhotoEffectNoir")
-            background = CIImage(color: .black).cropped(to: extent)
-        case .highKey:
-            subject = subject.applyingFilter("CIPhotoEffectMono")
-                .applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: 0.25])
-            background = CIImage(color: .white).cropped(to: extent)
+        if a.portrait {
+            let radius = Self.portraitBlurRadius(aperture: a.aperture, width: extent.width)
+            if a.background == .original {
+                // Depth blur that respects the mask edge.
+                let blur = CIFilter.maskedVariableBlur()
+                blur.inputImage = image.clampedToExtent()
+                blur.mask = mask.applyingFilter("CIColorInvert")
+                blur.radius = Float(radius)
+                background = (blur.outputImage ?? image).cropped(to: extent)
+            } else if a.background == .photo, radius > 0.5 {
+                background = background.clampedToExtent().applyingGaussianBlur(sigma: Double(radius) / 2).cropped(to: extent)
+            }
+
+            switch a.lighting {
+            case .natural:
+                break
+            case .studio:
+                subject = subject.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: 0.3])
+                    .applyingFilter("CIHighlightShadowAdjust", parameters: ["inputHighlightAmount": 0.85, "inputShadowAmount": 0.25])
+            case .contour:
+                subject = subject.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.18])
+                    .applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": -0.3])
+                background = background.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: -0.35])
+            case .stage:
+                subject = subject.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: 0.15])
+                background = CIImage(color: .black).cropped(to: extent)
+            case .stageMono:
+                subject = subject.applyingFilter("CIPhotoEffectNoir")
+                background = CIImage(color: .black).cropped(to: extent)
+            case .highKey:
+                subject = subject.applyingFilter("CIPhotoEffectMono")
+                    .applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: 0.25])
+                background = CIImage(color: .white).cropped(to: extent)
+            }
+        }
+
+        if a.colorSplash {
+            background = background.applyingFilter("CIPhotoEffectMono")
         }
 
         let blend = CIFilter.blendWithMask()
@@ -133,5 +147,79 @@ extension ImageProcessingService {
         blend.backgroundImage = background
         blend.maskImage = mask
         return (blend.outputImage ?? image).cropped(to: extent)
+    }
+
+    /// The swapped background at the image's size, or nil to keep the original.
+    private func replacementBackground(_ style: BackgroundStyle, for image: CIImage, photo: CIImage?) -> CIImage? {
+        let extent = image.extent
+        switch style {
+        case .original:
+            return nil
+        case .blur:
+            return image.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 45)).cropped(to: extent)
+        case .black:
+            return CIImage(color: CIColor(red: 0.02, green: 0.02, blue: 0.02)).cropped(to: extent)
+        case .white:
+            return CIImage(color: CIColor(red: 0.97, green: 0.97, blue: 0.96)).cropped(to: extent)
+        case .gray:
+            return gradient(extent, top: CIColor(red: 0.62, green: 0.62, blue: 0.63), bottom: CIColor(red: 0.36, green: 0.36, blue: 0.38))
+        case .sky:
+            return gradient(extent, top: CIColor(red: 0.42, green: 0.66, blue: 0.93), bottom: CIColor(red: 0.82, green: 0.9, blue: 0.98))
+        case .sunset:
+            return gradient(extent, top: CIColor(red: 0.36, green: 0.27, blue: 0.55), bottom: CIColor(red: 0.98, green: 0.62, blue: 0.4))
+        case .photo:
+            guard let photo else { return nil }
+            return Self.aspectFill(photo, to: extent)
+        }
+    }
+
+    /// Soft vertical studio-style gradient.
+    private func gradient(_ extent: CGRect, top: CIColor, bottom: CIColor) -> CIImage {
+        let f = CIFilter.linearGradient()
+        f.point0 = CGPoint(x: extent.midX, y: extent.maxY)
+        f.point1 = CGPoint(x: extent.midX, y: extent.minY)
+        f.color0 = top
+        f.color1 = bottom
+        return (f.outputImage ?? CIImage(color: top)).cropped(to: extent)
+    }
+
+    /// Scales and centers `image` so it covers `extent`.
+    static func aspectFill(_ image: CIImage, to extent: CGRect) -> CIImage {
+        let source = image.extent
+        guard source.width > 0, source.height > 0 else { return image }
+        let scale = max(extent.width / source.width, extent.height / source.height)
+        let scaled = image.transformed(by: CGAffineTransform(translationX: -source.minX, y: -source.minY)
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale)))
+        let dx = extent.minX + (extent.width - source.width * scale) / 2
+        let dy = extent.minY + (extent.height - source.height * scale) / 2
+        return scaled.transformed(by: CGAffineTransform(translationX: dx, y: dy)).cropped(to: extent)
+    }
+}
+
+/// Backgrounds for Background Swap.
+enum BackgroundStyle: String, CaseIterable, Codable, Sendable, Identifiable {
+    case original, blur, black, white, gray, sky, sunset, photo
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .original: "ORIGINAL"
+        case .photo: "PHOTO…"
+        default: rawValue.uppercased()
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .original: "photo"
+        case .blur: "drop.halffull"
+        case .black: "circle.fill"
+        case .white: "circle"
+        case .gray: "circle.lefthalf.filled"
+        case .sky: "cloud.sun"
+        case .sunset: "sun.horizon"
+        case .photo: "photo.on.rectangle"
+        }
     }
 }

@@ -77,6 +77,12 @@ final class CameraWorkspaceViewModel {
     // MARK: Photographic Styles pad
     var showStylesPad = false
 
+    // MARK: Subject (Color Splash, Background Swap)
+    var showSubjectPicker = false
+    var showBackgroundPhotoPicker = false
+    /// Photo chosen for Background Swap (preview resolution; used for preview, video and export).
+    private(set) var customBackground: CGImage?
+
     // MARK: Live Photos and effects
     /// True while the Live Photo motion plays (touch and hold the LIVE badge).
     var isPlayingLive = false
@@ -888,6 +894,7 @@ final class CameraWorkspaceViewModel {
     // MARK: Photographic Styles
 
     func openStylesPad() {
+        showSubjectPicker = false
         isControlPanelOpen = false
         showFilterPicker = false
         showEffectsPicker = false
@@ -934,6 +941,7 @@ final class CameraWorkspaceViewModel {
     var canMakeEffects: Bool { effectSourceAsset != nil }
 
     func openEffectsPicker() {
+        showSubjectPicker = false
         isControlPanelOpen = false
         showFilterPicker = false
         showStylesPad = false
@@ -1025,6 +1033,56 @@ final class CameraWorkspaceViewModel {
         showToast(message)
     }
 
+    // MARK: Subject: Color Splash and Background Swap
+
+    func openSubjectPicker() {
+        isControlPanelOpen = false
+        showFilterPicker = false
+        showStylesPad = false
+        showEffectsPicker = false
+        showSubjectPicker = true
+    }
+
+    func setColorSplash(_ enabled: Bool) {
+        guard enabled != adjustments.colorSplash else { return }
+        recordUndoPoint(force: true)
+        adjustments.colorSplash = enabled
+        adjustmentsChanged()
+    }
+
+    /// Choosing PHOTO… without a background photo yet opens the picker first.
+    func setBackground(_ style: BackgroundStyle) {
+        if style == .photo && customBackground == nil {
+            showBackgroundPhotoPicker = true
+            return
+        }
+        guard style != adjustments.background else { return }
+        recordUndoPoint(force: true)
+        adjustments.background = style
+        adjustmentsChanged()
+    }
+
+    /// Loads the photo to put behind the subject, then switches the background to it.
+    func setCustomBackground(from item: PhotosPickerItem) {
+        let importer = self.importer
+        Task { [weak self] in
+            do {
+                let photo = try await importer.loadImage(from: item)
+                guard let self else { return }
+                self.customBackground = photo.preview
+                self.recipe.backgroundPhoto = CIImage(cgImage: photo.preview)
+                self.recordUndoPoint(force: true)
+                self.adjustments.background = .photo
+                self.adjustmentsChanged()
+            } catch {
+                let mapped = PhotoImportError.map(error)
+                if mapped != .cancelled {
+                    self?.alert = AppAlert(title: "Couldn't Use Photo", message: mapped.errorDescription ?? "")
+                }
+            }
+        }
+    }
+
     func setFilter(_ filter: PhotoFilter) {
         guard filter != adjustments.filter else { return }
         recordUndoPoint(force: true)
@@ -1034,6 +1092,7 @@ final class CameraWorkspaceViewModel {
 
     /// Opens the glass filter pop-up and renders a live preview tile for each filter.
     func openFilterPicker() {
+        showSubjectPicker = false
         isControlPanelOpen = false
         showStylesPad = false
         showEffectsPicker = false
@@ -1056,6 +1115,8 @@ final class CameraWorkspaceViewModel {
                     var state = recipe
                     state.filter = filter
                     state.portrait = false
+                    state.colorSplash = false
+                    state.background = .original
                     state.grain = 0 // tiles show the look itself, not grain
                     let output = processor.apply(state, to: small)
                     if let image = processor.context.createCGImage(output, from: small.extent) {
@@ -1266,7 +1327,8 @@ final class CameraWorkspaceViewModel {
         }
         let processor = self.processor
         let cachedMask = previewSubjectSource === source ? previewSubjectMask : nil
-        let needsMask = recipe.portrait && cachedMask == nil
+        let needsMask = recipe.needsSubject && cachedMask == nil
+        let backgroundPhoto = customBackground.map { CIImage(cgImage: $0) }
         if needsMask { isFindingSubject = true }
         renderTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(12)) // coalesce rapid slider ticks
@@ -1280,11 +1342,11 @@ final class CameraWorkspaceViewModel {
                 self.previewSubjectMask = mask
                 self.previewSubjectSource = source
                 self.isFindingSubject = false
-                if mask == nil { self.showToast("No subject found for Portrait") }
+                if mask == nil { self.showToast("No subject found") }
             }
             let finalMask = mask
             let rendered = await Task.detached(priority: .userInitiated) {
-                processor.renderPreview(source, adjustments: recipe, subjectMask: finalMask)
+                processor.renderPreview(source, adjustments: recipe, subjectMask: finalMask, backgroundPhoto: backgroundPhoto)
             }.value
             guard !Task.isCancelled, let self, self.photo?.preview === source else { return }
             if let rendered {
@@ -1311,6 +1373,7 @@ final class CameraWorkspaceViewModel {
         let speed = Double(playbackRate)
         let trimRange = self.trimRange
         let videoPreset = options.size.videoPreset
+        let backgroundPhoto = customBackground.map { CIImage(cgImage: $0) }
         let work: @Sendable () async throws -> URL
 
         if let video {
@@ -1320,7 +1383,8 @@ final class CameraWorkspaceViewModel {
                     let url = exporter.directory.appendingPathComponent(
                         PhotoExportService.fileName(content: .adjusted, fileExtension: "mov"))
                     try await VideoService.exportEdited(video, adjustments: adjustments, processor: processor, to: url,
-                                                       timeRange: trimRange, speed: speed, preset: videoPreset)
+                                                       timeRange: trimRange, speed: speed, preset: videoPreset,
+                                                       backgroundPhoto: backgroundPhoto)
                     return url
                 }
                 let url = exporter.directory.appendingPathComponent(
@@ -1335,7 +1399,8 @@ final class CameraWorkspaceViewModel {
                 adjustments: adjustments,
                 options: options,
                 normalizedCrop: isEdited && options.cropToFraming ? normalizedFraming : nil,
-                overlays: isEdited && options.burnOverlays ? overlays : OverlayBurnIn()
+                overlays: isEdited && options.burnOverlays ? overlays : OverlayBurnIn(),
+                backgroundPhoto: backgroundPhoto
             )
             work = { try await exporter.export(request) }
         } else {

@@ -98,6 +98,8 @@ struct ExportRequest: Sendable {
     /// 0...1 top-left-origin rect, nil = whole image.
     let normalizedCrop: CGRect?
     let overlays: OverlayBurnIn
+    /// Custom Background Swap photo, if one is chosen.
+    var backgroundPhoto: CIImage? = nil
 }
 
 enum PhotoExportError: LocalizedError {
@@ -172,7 +174,7 @@ struct PhotoExportService: Sendable {
         guard let source = CIImage(data: request.data, options: [.applyOrientationProperty: true]) else {
             throw PhotoExportError.decodeFailed
         }
-        var image = processor.apply(request.adjustments, to: source)
+        var image = processor.apply(request.adjustments, to: source, backgroundPhoto: request.backgroundPhoto)
         if let crop = request.normalizedCrop {
             image = Self.crop(image, normalized: crop)
         }

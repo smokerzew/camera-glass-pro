@@ -41,6 +41,7 @@ final class AdjustmentBox: @unchecked Sendable {
     private var stored = PhotoAdjustmentState()
     private var storedPeaking = false
     private var storedZebras = false
+    private var storedBackground: CIImage?
 
     var value: PhotoAdjustmentState {
         get { lock.withLock { stored } }
@@ -55,6 +56,12 @@ final class AdjustmentBox: @unchecked Sendable {
     var zebras: Bool {
         get { lock.withLock { storedZebras } }
         set { lock.withLock { storedZebras = newValue } }
+    }
+
+    /// Custom Background Swap photo (nil = none).
+    var backgroundPhoto: CIImage? {
+        get { lock.withLock { storedBackground } }
+        set { lock.withLock { storedBackground = newValue } }
     }
 }
 
@@ -154,7 +161,8 @@ enum VideoService {
         processor: ImageProcessingService
     ) async throws -> AVVideoComposition {
         try await AVMutableVideoComposition.videoComposition(with: asset) { request in
-            var output = processor.apply(recipe.value, to: request.sourceImage, fastMask: true)
+            var output = processor.apply(recipe.value, to: request.sourceImage, fastMask: true,
+                                         backgroundPhoto: recipe.backgroundPhoto)
             let peaking = recipe.peaking, zebras = recipe.zebras
             if peaking || zebras {
                 output = processor.analysisOverlay(for: output, peaking: peaking, zebras: zebras).composited(over: output)
@@ -183,11 +191,13 @@ enum VideoService {
         to url: URL,
         timeRange: CMTimeRange? = nil,
         speed: Double = 1,
-        preset: String = AVAssetExportPresetHighestQuality
+        preset: String = AVAssetExportPresetHighestQuality,
+        backgroundPhoto: CIImage? = nil
     ) async throws {
         let asset = try await retimedAsset(video.asset, timeRange: timeRange, speed: speed)
         let recipe = AdjustmentBox()
         recipe.value = adjustments
+        recipe.backgroundPhoto = backgroundPhoto
         let composition = try await composition(for: asset, recipe: recipe, processor: processor)
         guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
             throw PhotoExportError.renderFailed
