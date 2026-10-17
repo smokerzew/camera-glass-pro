@@ -144,38 +144,37 @@ final class ImageProcessingService: @unchecked Sendable {
         return output
     }
 
-    /// Film grain, independent of filters. Fine, soft, monochrome grains whose visibility follows
-    /// luminance like real film (strongest in midtones, fading in deep shadows and bright highlights,
-    /// via a soft-light blend). Grain size scales with the image, so preview and export match.
-    /// `amount` 0 returns the image untouched.
+    /// Film grain, independent of filters. Monochrome, soft-edged grains added equally to R, G and B
+    /// in display (sRGB) space, so they never tint colors. Strength follows luminance like film:
+    /// strongest in midtones, lighter in shadows, gone in bright highlights. Two grain sizes scaled
+    /// to the image, so preview and export match. `amount` 0 returns the image untouched.
     func filmGrain(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
-        guard amount > 0, let random = CIFilter.randomGenerator().outputImage else { return image }
-        let size = max(1, extent.width / 2000) // ~1 px grains at 2000 px wide
-        // Average the three random channels: monochrome, near-Gaussian (no harsh speckle).
-        let third: CGFloat = 1.0 / 3.0
-        let mono = random.applyingFilter("CIColorMatrix", parameters: [
-            "inputRVector": CIVector(x: third, y: third, z: third, w: 0),
-            "inputGVector": CIVector(x: third, y: third, z: third, w: 0),
-            "inputBVector": CIVector(x: third, y: third, z: third, w: 0),
-            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1),
-        ])
-        // Round, soft-edged grains at the image's scale.
-        let grains = mono
-            .transformed(by: CGAffineTransform(scaleX: size, y: size))
-            .applyingGaussianBlur(sigma: Double(0.55 * size))
-            .cropped(to: extent)
-        // Contrast of the grain layer around mid-gray (0.5 = no change in a soft-light blend).
-        let k = CGFloat(min(max(amount, 0), 1) * 1.6)
-        let layer = grains.applyingFilter("CIColorMatrix", parameters: [
-            "inputRVector": CIVector(x: k, y: 0, z: 0, w: 0),
-            "inputGVector": CIVector(x: 0, y: k, z: 0, w: 0),
-            "inputBVector": CIVector(x: 0, y: 0, z: k, w: 0),
-            "inputBiasVector": CIVector(x: 0.5 - 0.5 * k, y: 0.5 - 0.5 * k, z: 0.5 - 0.5 * k, w: 0),
-        ])
-        return layer.applyingFilter("CISoftLightBlendMode", parameters: [kCIInputBackgroundImageKey: image])
-            .cropped(to: extent)
+        guard amount > 0, let random = CIFilter.randomGenerator().outputImage,
+              let kernel = Self.grainKernel else { return image }
+        let cell = max(1, extent.width / 1100) // ~2 px grains on a 2400 px preview
+        func octave(_ scale: CGFloat, offset: CGFloat) -> CIImage {
+            random.transformed(by: CGAffineTransform(translationX: offset, y: offset * 0.6))
+                .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                .applyingGaussianBlur(sigma: Double(0.55 * scale))
+                .cropped(to: extent)
+        }
+        let display = image.applyingFilter("CILinearToSRGBToneCurve")
+        let strength = Float(min(amount, 1) * 14 / 255) // 1 ≈ 12/255 grain spread in midtones
+        guard let grained = kernel.apply(extent: extent,
+                                         arguments: [display, octave(cell, offset: 0), octave(cell * 2.2, offset: 517), strength])
+        else { return image }
+        return grained.applyingFilter("CISRGBToneCurveToLinear").cropped(to: extent)
     }
+
+    /// `fine`/`coarse`: blurred random noise; the RGB average has std ≈ 0.068, so `n` has unit std.
+    private static let grainKernel = CIColorKernel(source: """
+        kernel vec4 filmGrain(__sample s, __sample fine, __sample coarse, float strength) {
+            float n = ((dot(fine.rgb, vec3(1.0)) / 3.0 - 0.5) + 0.6 * (dot(coarse.rgb, vec3(1.0)) / 3.0 - 0.5)) * 12.6;
+            float y = clamp(dot(s.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+            float w = (0.35 + 2.6 * y * (1.0 - y)) * (1.0 - y * y * y * y);
+            return vec4(clamp(s.rgb + strength * n * w, 0.0, 1.0), s.a);
+        }
+        """)
 
     /// Focus peaking: transparent image with the strongest edges painted red.
     /// Display-only; never part of an export.

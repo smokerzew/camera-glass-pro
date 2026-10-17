@@ -97,6 +97,20 @@ final class FilterCatalogTests: XCTestCase {
         XCTAssertLessThan(strong, 30, "even at maximum it stays photographic, not a wall of noise")
     }
 
+    func testGrainNeverTintsColors() {
+        let input = CIImage(color: CIColor(red: 0.6, green: 0.3, blue: 0.2)).cropped(to: CGRect(x: 0, y: 0, width: 400, height: 300))
+        let output = processor.filmGrain(input, amount: 1, extent: input.extent).cropped(to: CGRect(x: 100, y: 100, width: 64, height: 48))
+            .transformed(by: CGAffineTransform(translationX: -100, y: -100))
+        var pixels = [UInt8](repeating: 0, count: 64 * 48 * 4)
+        processor.context.render(output, toBitmap: &pixels, rowBytes: 64 * 4, bounds: CGRect(x: 0, y: 0, width: 64, height: 48),
+                                 format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        let redMinusGreen = stride(from: 0, to: pixels.count, by: 4).map { Double(pixels[$0]) - Double(pixels[$0 + 1]) }
+        let mean = redMinusGreen.reduce(0, +) / Double(redMinusGreen.count)
+        let spread = (redMinusGreen.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(redMinusGreen.count)).squareRoot()
+        XCTAssertLessThan(spread, 1.5, "grain changes brightness only, never hue (no red/green speckle)")
+        XCTAssertGreaterThan(Set(stride(from: 0, to: pixels.count, by: 4).map { pixels[$0 + 1] }).count, 4, "grain is there")
+    }
+
     private func averageRed(_ image: CIImage) throws -> Double {
         let filter = try XCTUnwrap(CIFilter(name: "CIAreaAverage", parameters: [
             kCIInputImageKey: image, kCIInputExtentKey: CIVector(cgRect: image.extent),
