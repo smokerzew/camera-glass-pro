@@ -77,7 +77,7 @@ struct EffectsPickerView: View {
 
     private func hint(for effect: LiveEffect) -> String {
         switch effect {
-        case .livePhoto: "Saves a Live Photo made from about 3 seconds around the current frame"
+        case .livePhoto: "Saves a Live Photo of the whole video (or the trimmed part); the frame on screen becomes the photo"
         case .loop: "Repeats the clip as a seamless loop"
         case .bounce: "Plays the clip forward and backward"
         case .longExposure: "Blends the frames into one photo, like a slow shutter"

@@ -193,7 +193,7 @@ enum LiveEffectsService {
 
     // MARK: Video → Live Photo
 
-    /// Writes a Live Photo pair: a JPEG still (key frame) and a ≤3 s movie, linked by a shared
+    /// Writes a Live Photo pair: a JPEG still (key frame) and a movie of `range`, linked by a shared
     /// content identifier and a still-image-time marker, as Photos expects.
     static func makeLivePhoto(from asset: AVAsset, range: CMTimeRange, keyTime: CMTime,
                               adjustments: PhotoAdjustmentState, processor: ImageProcessingService) async throws -> (photo: URL, video: URL) {
@@ -248,15 +248,5 @@ enum LiveEffectsService {
             allocator: kCFAllocatorDefault, metadataType: kCMMetadataFormatType_Boxed,
             metadataSpecifications: [spec] as CFArray, formatDescriptionOut: &description)
         return description
-    }
-
-    /// A ≤3 s window around `center`, kept inside `available`.
-    static func livePhotoRange(center: Double, available: CMTimeRange) -> CMTimeRange {
-        let start = available.start.seconds
-        let end = available.end.seconds
-        let length = min(3, end - start)
-        let begin = min(max(center - length / 2, start), end - length)
-        return CMTimeRange(start: CMTime(seconds: begin, preferredTimescale: 600),
-                           duration: CMTime(seconds: length, preferredTimescale: 600))
     }
 }

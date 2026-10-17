@@ -980,11 +980,11 @@ final class CameraWorkspaceViewModel {
                     try data.write(to: url)
                     self?.showEffectResult(url, toast: "Long Exposure created")
                 case .livePhoto:
-                    let window = LiveEffectsService.livePhotoRange(center: keySeconds, available: available)
-                    let key = CMTime(seconds: min(max(keySeconds, window.start.seconds), window.end.seconds - 0.05),
+                    // The whole video (or the trimmed part) becomes the motion; the frame on screen is the photo.
+                    let key = CMTime(seconds: min(max(keySeconds, available.start.seconds), available.end.seconds - 0.05),
                                      preferredTimescale: 600)
                     let pair = try await LiveEffectsService.makeLivePhoto(
-                        from: asset, range: window, keyTime: key, adjustments: recipe, processor: processor)
+                        from: asset, range: available, keyTime: key, adjustments: recipe, processor: processor)
                     try Task.checkCancellation()
                     try await LiveEffectsService.saveLivePhotoToLibrary(photo: pair.photo, video: pair.video)
                     self?.showToast("Live Photo saved to Photos")

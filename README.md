@@ -64,7 +64,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Photographic Styles | STYLES opens the iOS-style pad: 16 styles (Standard, Amber, Gold, Rose Gold, Neutral, Cool Rose, Cool, Vibrant, Natural, Luminous, Dramatic, Quiet, Cozy, Ethereal, Muted/Stark B&W), a Tone x Color touch pad and a Palette slider. | Real |
 | Portrait | Real background blur: Vision finds the subject (people, pets, objects), the background blurs by f-number (f1.4-16 slider from the top-bar f readout), and Portrait Lighting applies (Natural, Studio, Contour, Stage, Stage Mono, High-Key) via the cube button. Works on photos, video frames (person segmentation) and exports. | Real |
 | Live Photos | Live Photos import with their motion: touch and hold the LIVE badge to play (LIVE on = plays once when opened). | Real |
-| Effects | EFFECTS pop-up: Loop, Bounce and Long Exposure from a video or Live Photo (with your edits; result opens as a new item), and Live Photo: turns about 3 s of a video into a real Live Photo saved to the library. | Real |
+| Effects | EFFECTS pop-up: Loop, Bounce and Long Exposure from a video or Live Photo (with your edits; result opens as a new item), and Live Photo: turns the whole video (or its trimmed part) into a real Live Photo saved to the library, with the frame on screen as the photo. | Real |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 

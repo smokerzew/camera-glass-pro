@@ -14,15 +14,15 @@ final class LiveEffectsTests: XCTestCase {
         XCTAssertEqual(bounce[30], LiveEffectsService.frameTimes(in: oneSecond)[28], "turns around without repeating the last frame")
     }
 
-    func testLivePhotoWindowStaysInside() {
-        let ten = CMTimeRange(start: .zero, duration: CMTime(seconds: 10, preferredTimescale: 600))
-        let early = LiveEffectsService.livePhotoRange(center: 1, available: ten)
-        XCTAssertEqual(early.start.seconds, 0, accuracy: 0.01)
-        XCTAssertEqual(early.duration.seconds, 3, accuracy: 0.01)
-        let late = LiveEffectsService.livePhotoRange(center: 9.5, available: ten)
-        XCTAssertEqual(late.end.seconds, 10, accuracy: 0.01)
-        let short = CMTimeRange(start: .zero, duration: CMTime(seconds: 2, preferredTimescale: 600))
-        XCTAssertEqual(LiveEffectsService.livePhotoRange(center: 1, available: short).duration.seconds, 2, accuracy: 0.01)
+    func testLivePhotoUsesTheWholeRange() async throws {
+        // A 2-second source must produce a 2-second Live Photo movie, not a 3-second-capped slice.
+        let source = try await VideoPipelineTests.makeTestMovie(frames: 60)
+        let twoSeconds = CMTimeRange(start: .zero, duration: CMTime(seconds: 2, preferredTimescale: 600))
+        let pair = try await LiveEffectsService.makeLivePhoto(
+            from: AVURLAsset(url: source), range: twoSeconds, keyTime: CMTime(seconds: 1, preferredTimescale: 600),
+            adjustments: PhotoAdjustmentState(), processor: .shared)
+        let duration = try await AVURLAsset(url: pair.video).load(.duration).seconds
+        XCTAssertEqual(duration, 2, accuracy: 0.1)
     }
 
     func testBounceMovieLength() async throws {
