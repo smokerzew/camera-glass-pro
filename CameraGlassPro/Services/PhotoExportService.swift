@@ -194,8 +194,9 @@ struct PhotoExportService: Sendable {
         filter.aspectRatio = 1
         guard let output = filter.outputImage else { return image }
         let target = CGRect(x: output.extent.minX, y: output.extent.minY,
-                            width: (extent.width * scale).rounded(.down), height: (extent.height * scale).rounded(.down))
-        return output.cropped(to: target).transformed(by: CGAffineTransform(translationX: -target.minX, y: -target.minY))
+                            width: (extent.width * scale).rounded(), height: (extent.height * scale).rounded())
+        // Clamped: Lanczos can leave the last row a fraction short of the rounded size.
+        return output.clampedToExtent().cropped(to: target).transformed(by: CGAffineTransform(translationX: -target.minX, y: -target.minY))
     }
 
     /// Crops with a top-left-origin normalized rect and moves the result to the origin.

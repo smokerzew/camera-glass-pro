@@ -24,7 +24,8 @@ extension ImageProcessingService {
         let turn = CGAffineTransform(translationX: center.x, y: center.y)
             .rotated(by: CGFloat(radians))
             .translatedBy(x: -center.x, y: -center.y)
-        let rotated = output.transformed(by: turn)
+        // Clamped so the antialiased rotated edge never leaves see-through pixels in the corners.
+        let rotated = output.clampedToExtent().transformed(by: turn)
         let scale = Self.straightenScale(width: extent.width, height: extent.height, degrees: degrees)
         let inner = CGRect(x: center.x - extent.width * scale / 2, y: center.y - extent.height * scale / 2,
                            width: extent.width * scale, height: extent.height * scale).integral

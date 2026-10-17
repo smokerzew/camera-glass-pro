@@ -236,7 +236,7 @@ final class ImageProcessingService: @unchecked Sendable {
     /// Display-only; never part of an export.
     func peakingOverlay(for input: CIImage) -> CIImage {
         let edges = CIFilter.edges()
-        edges.inputImage = input
+        edges.inputImage = input.clampedToExtent() // the photo border is not an in-focus edge
         edges.intensity = 6
         guard let edgeImage = edges.outputImage else { return CIImage.empty() }
 
