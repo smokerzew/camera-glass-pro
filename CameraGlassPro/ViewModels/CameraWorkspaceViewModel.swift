@@ -1179,6 +1179,7 @@ final class CameraWorkspaceViewModel {
                     state.colorSplash = false
                     state.background = .original
                     state.grain = 0 // tiles show the look itself, not grain
+                    state.filterStrength = 1
                     let output = processor.apply(state, to: small)
                     if let image = processor.context.createCGImage(output, from: small.extent) {
                         result[filter] = image
@@ -1194,6 +1195,28 @@ final class CameraWorkspaceViewModel {
     func cycleFilter() {
         recordUndoPoint(force: true)
         adjustments.filter = adjustments.filter.next
+        adjustmentsChanged()
+    }
+
+    func setFilterStrength(_ strength: Double) {
+        recordUndoPoint() // one drag = one undo step
+        adjustments.filterStrength = min(max(strength, 0), 1)
+        adjustmentsChanged()
+    }
+
+    func setMixer(_ band: ColorBand, _ channel: MixerChannel, to value: Double) {
+        recordUndoPoint()
+        adjustments.colorMixer[band, channel] = value
+        adjustmentsChanged()
+    }
+
+    func resetMixer(_ band: ColorBand? = nil) {
+        recordUndoPoint(force: true)
+        if let band {
+            for channel in MixerChannel.allCases { adjustments.colorMixer[band, channel] = 0 }
+        } else {
+            adjustments.colorMixer = ColorMixer()
+        }
         adjustmentsChanged()
     }
 

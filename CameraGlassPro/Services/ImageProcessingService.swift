@@ -8,6 +8,8 @@ final class ImageProcessingService: @unchecked Sendable {
 
     // CIContext is thread-safe; one instance avoids rebuilding GPU state per render.
     let context = CIContext(options: [.cacheIntermediates: false])
+    private let mixerLock = NSLock()
+    private var mixerCache: (mixer: ColorMixer, data: Data)?
 
     /// `subjectMask` lets callers reuse a precomputed Portrait mask (the photo preview);
     /// without one, Portrait finds the subject itself (exports, video frames).
@@ -73,13 +75,26 @@ final class ImageProcessingService: @unchecked Sendable {
             image = filter.outputImage ?? image
         }
 
+        if !a.colorMixer.isNeutral {
+            image = applyColorMixer(a.colorMixer, to: image)
+        }
+
         image = applyStyle(a, to: image)
+        let unfiltered = image
         image = applyLook(a.filter, to: image, extent: input.extent)
+        if a.filter != .none, a.filterStrength < 1 {
+            image = unfiltered.applyingFilter("CIDissolveTransition", parameters: [
+                kCIInputTargetImageKey: image, kCIInputTimeKey: max(0, a.filterStrength),
+            ])
+        }
 
         // Some filters sample beyond the edges; keep the original bounds, then crop/rotate/straighten.
         image = applyGeometry(a, to: image.cropped(to: input.extent))
         let extent = image.extent
 
+        if a.vignette != 0 {
+            image = vignette(image, amount: a.vignette, extent: extent)
+        }
         if a.grain > 0 {
             image = filmGrain(image, amount: a.grain, size: a.grainSize, extent: extent)
         }
@@ -164,6 +179,37 @@ final class ImageProcessingService: @unchecked Sendable {
                                          arguments: [display, octave(cell, offset: 0), octave(cell * 2.2, offset: 517), strength])
         else { return image }
         return grained.applyingFilter("CISRGBToneCurveToLinear").cropped(to: extent)
+    }
+
+    /// Darkens (+) or lightens (−) toward the corners with a soft radial falloff, framed on the
+    /// final (cropped) picture. In exposure stops, so colors keep their hue.
+    func vignette(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
+        guard amount != 0 else { return image }
+        let half = hypot(extent.width, extent.height) / 2
+        let mask = CIFilter.radialGradient()
+        mask.center = CGPoint(x: extent.midX, y: extent.midY)
+        mask.radius0 = Float(half * 0.3)
+        mask.radius1 = Float(half * 1.05)
+        mask.color0 = CIColor.white
+        mask.color1 = CIColor.black
+        let edge = image.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: -1.8 * min(max(amount, -1), 1)])
+        return image.applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: edge, kCIInputMaskImageKey: mask.outputImage ?? CIImage.empty(),
+        ]).cropped(to: extent)
+    }
+
+    /// Color Mixer through a 3D lookup table in sRGB (rebuilt only when the mixer changes).
+    func applyColorMixer(_ mixer: ColorMixer, to image: CIImage) -> CIImage {
+        mixerLock.lock()
+        if mixerCache?.mixer != mixer { mixerCache = (mixer, mixer.cubeData()) }
+        let data = mixerCache?.data ?? Data()
+        mixerLock.unlock()
+        let filter = CIFilter.colorCubeWithColorSpace()
+        filter.inputImage = image
+        filter.cubeDimension = Float(ColorMixer.cubeSize)
+        filter.cubeData = data
+        filter.colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+        return filter.outputImage ?? image
     }
 
     /// Metal Core Image kernel, compiled once at first use (no build-time -fcikernel setup needed).

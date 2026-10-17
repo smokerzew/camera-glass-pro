@@ -39,6 +39,8 @@ struct PhotoAdjustmentView: View {
                         }
                     }
                     .tint(.yellow)
+
+                    ColorMixerSection(vm: vm)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)

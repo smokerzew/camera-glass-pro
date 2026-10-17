@@ -44,6 +44,24 @@ struct FilterPickerView: View {
                 .onAppear { proxy.scrollTo(vm.adjustments.filter, anchor: .center) }
             }
 
+            HStack(spacing: 10) {
+                Text("STRENGTH")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.85))
+                Slider(value: Binding(get: { vm.adjustments.filterStrength }, set: { vm.setFilterStrength($0) }), in: 0...1)
+                    .tint(.yellow)
+                    .accessibilityLabel("Filter strength")
+                    .accessibilityValue("\(Int((vm.adjustments.filterStrength * 100).rounded())) percent")
+                Text("\(Int((vm.adjustments.filterStrength * 100).rounded()))")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(Color.yellow)
+                    .frame(width: 32, alignment: .trailing)
+            }
+            .padding(.horizontal, 6)
+            .opacity(vm.adjustments.filter == .none ? 0.4 : 1)
+            .disabled(vm.adjustments.filter == .none)
+
             // Grain is independent of the filter: 0 means no grain at all.
             HStack(spacing: 10) {
                 Text("GRAIN")

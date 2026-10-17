@@ -16,10 +16,16 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Film-like luminance grain.
     var grain: Double = 0
     var grainSize: GrainSize = .medium
+    /// Darkens (+) or lightens (−) the corners.
+    var vignette: Double = 0
+    /// Per-color hue, saturation and luminance.
+    var colorMixer = ColorMixer()
     /// "Night Look": lifts shadows and reduces noise. A real filter, not a capture mode.
     var nightLook = false
     /// Photo look applied after the adjustments (the panel's FILTER control).
     var filter: PhotoFilter = .none
+    /// How much of the filter is applied (0...1), blended with the unfiltered photo.
+    var filterStrength: Double = 1
     /// Photographic Style and its 2D pad position (Tone vertical, Color horizontal) and Palette strength.
     var style: PhotographicStyle = .standard
     var styleTone: Double = 0
@@ -77,8 +83,11 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         texture = try c.decodeIfPresent(Double.self, forKey: .texture) ?? 0
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
         grainSize = (try? c.decodeIfPresent(GrainSize.self, forKey: .grainSize)) ?? .medium
+        vignette = min(max(try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0, -1), 1)
+        colorMixer = (try? c.decodeIfPresent(ColorMixer.self, forKey: .colorMixer)) ?? ColorMixer()
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
         filter = (try? c.decodeIfPresent(PhotoFilter.self, forKey: .filter)) ?? .none
+        filterStrength = min(max(try c.decodeIfPresent(Double.self, forKey: .filterStrength) ?? 1, 0), 1)
         style = try c.decodeIfPresent(PhotographicStyle.self, forKey: .style) ?? .standard
         styleTone = min(max(try c.decodeIfPresent(Double.self, forKey: .styleTone) ?? 0, -1), 1)
         styleColor = min(max(try c.decodeIfPresent(Double.self, forKey: .styleColor) ?? 0, -1), 1)
@@ -136,7 +145,7 @@ enum GrainSize: String, CaseIterable, Codable, Sendable {
 }
 
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
-    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, grain
+    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, vignette, grain
 
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
@@ -151,6 +160,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .highlights: "circle.righthalf.filled.inverse"
         case .shadows: "circle.bottomhalf.filled"
         case .texture: "circle.hexagongrid"
+        case .vignette: "camera.aperture"
         case .grain: "circle.dotted"
         }
     }
@@ -165,6 +175,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .highlights: -1...0        // 0 = unchanged, -1 = strongest recovery
         case .shadows: -1...1
         case .texture: -1...1
+        case .vignette: -1...1        // + darker corners, − lighter
         case .grain: 0...1
         }
     }
@@ -186,6 +197,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .highlights: \.highlights
         case .shadows: \.shadows
         case .texture: \.texture
+        case .vignette: \.vignette
         case .grain: \.grain
         }
     }
