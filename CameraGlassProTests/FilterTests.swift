@@ -34,8 +34,11 @@ final class FilterCatalogTests: XCTestCase {
         processor.context.render(scaled, toBitmap: &pixels, rowBytes: width * 4,
                                  bounds: CGRect(x: 0, y: 0, width: width, height: height),
                                  format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
-        return stride(from: 0, to: pixels.count, by: 4).map {
-            0.2126 * Double(pixels[$0]) + 0.7152 * Double(pixels[$0 + 1]) + 0.0722 * Double(pixels[$0 + 2])
+        return stride(from: 0, to: pixels.count, by: 4).map { (i: Int) -> Double in
+            let r: Double = 0.2126 * Double(pixels[i])
+            let g: Double = 0.7152 * Double(pixels[i + 1])
+            let b: Double = 0.0722 * Double(pixels[i + 2])
+            return r + g + b
         }
     }
 
@@ -65,6 +68,12 @@ final class FilterCatalogTests: XCTestCase {
 
     // MARK: Film grain
 
+    private func standardDeviation(_ values: [Double]) -> Double {
+        let mean: Double = values.reduce(0, +) / Double(values.count)
+        let squares: [Double] = values.map { (v: Double) -> Double in (v - mean) * (v - mean) }
+        return (squares.reduce(0, +) / Double(values.count)).squareRoot()
+    }
+
     private func grainSpread(on gray: CGFloat, amount: Double) -> Double {
         let input = CIImage(color: CIColor(red: gray, green: gray, blue: gray)).cropped(to: CGRect(x: 0, y: 0, width: 400, height: 300))
         let output = processor.filmGrain(input, amount: amount, extent: input.extent)
@@ -72,8 +81,7 @@ final class FilterCatalogTests: XCTestCase {
         let crop = output.cropped(to: CGRect(x: 100, y: 100, width: 64, height: 48))
             .transformed(by: CGAffineTransform(translationX: -100, y: -100))
         let values = lumaPixels(crop, width: 64, height: 48)
-        let mean = values.reduce(0, +) / Double(values.count)
-        return (values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(values.count)).squareRoot()
+        return standardDeviation(values)
     }
 
     func testGrainKernelCompiles() {
@@ -108,9 +116,8 @@ final class FilterCatalogTests: XCTestCase {
         var pixels = [UInt8](repeating: 0, count: 64 * 48 * 4)
         processor.context.render(output, toBitmap: &pixels, rowBytes: 64 * 4, bounds: CGRect(x: 0, y: 0, width: 64, height: 48),
                                  format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
-        let redMinusGreen = stride(from: 0, to: pixels.count, by: 4).map { Double(pixels[$0]) - Double(pixels[$0 + 1]) }
-        let mean = redMinusGreen.reduce(0, +) / Double(redMinusGreen.count)
-        let spread = (redMinusGreen.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(redMinusGreen.count)).squareRoot()
+        let redMinusGreen: [Double] = stride(from: 0, to: pixels.count, by: 4).map { (i: Int) -> Double in Double(pixels[i]) - Double(pixels[i + 1]) }
+        let spread = standardDeviation(redMinusGreen)
         XCTAssertLessThan(spread, 1.5, "grain changes brightness only, never hue (no red/green speckle)")
         XCTAssertGreaterThan(Set(stride(from: 0, to: pixels.count, by: 4).map { pixels[$0 + 1] }).count, 4, "grain is there")
     }
@@ -122,9 +129,9 @@ final class FilterCatalogTests: XCTestCase {
             .cropped(to: CGRect(x: 400, y: 100, width: 128, height: 64))
             .transformed(by: CGAffineTransform(translationX: -400, y: -100))
         let values = lumaPixels(crop, width: 128, height: 64)
-        let mean = values.reduce(0, +) / Double(values.count)
-        let spread = (values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(values.count)).squareRoot()
-        let step = zip(values, values.dropFirst()).map { abs($0 - $1) }.reduce(0, +) / Double(values.count - 1)
+        let spread = standardDeviation(values)
+        let steps: [Double] = zip(values, values.dropFirst()).map { (a: Double, b: Double) -> Double in abs(a - b) }
+        let step: Double = steps.reduce(0, +) / Double(steps.count)
         return step / max(spread, 0.001)
     }
 
