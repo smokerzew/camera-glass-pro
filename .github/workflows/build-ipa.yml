@@ -27,6 +27,7 @@ jobs:
 
       - name: Unit tests (iOS Simulator)
         run: |
+          set -o pipefail # a failing test must fail the job even though output goes through tee
           SIM_ID=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           devices = json.load(sys.stdin)["devices"]

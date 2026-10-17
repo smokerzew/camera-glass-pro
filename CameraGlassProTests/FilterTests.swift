@@ -76,6 +76,10 @@ final class FilterCatalogTests: XCTestCase {
         return (values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(values.count)).squareRoot()
     }
 
+    func testGrainKernelCompiles() {
+        XCTAssertNotNil(ImageProcessingService.grainKernel, "Metal grain kernel failed to compile: grain would silently do nothing")
+    }
+
     func testZeroGrainIsExactlyClean() {
         let input = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: CGRect(x: 0, y: 0, width: 64, height: 64))
         XCTAssertTrue(processor.filmGrain(input, amount: 0, extent: input.extent) === input)

@@ -166,12 +166,21 @@ final class ImageProcessingService: @unchecked Sendable {
         return grained.applyingFilter("CISRGBToneCurveToLinear").cropped(to: extent)
     }
 
-    /// Metal kernel from FilmGrain.metal, compiled into the app's default.metallib.
-    private static let grainKernel: CIColorKernel? = {
-        guard let url = Bundle(for: ImageProcessingService.self).url(forResource: "default", withExtension: "metallib"),
-              let data = try? Data(contentsOf: url) else { return nil }
-        return try? CIColorKernel(functionName: "filmGrain", fromMetalLibraryData: data)
-    }()
+    /// Metal Core Image kernel, compiled once at first use (no build-time -fcikernel setup needed).
+    /// `s` is sRGB encoded; `fine`/`coarse` are blurred random noise whose RGB average has
+    /// std ≈ 0.068 around 0.5, so `n` has unit std.
+    static let grainKernel: CIColorKernel? = try? CIKernel.kernels(withMetalString: """
+        #include <CoreImage/CoreImage.h>
+        using namespace metal;
+
+        [[stitchable]] float4 filmGrain(coreimage::sample_t s, coreimage::sample_t fine,
+                                        coreimage::sample_t coarse, float strength) {
+            float n = ((dot(fine.rgb, float3(1.0 / 3.0)) - 0.5) + 0.6 * (dot(coarse.rgb, float3(1.0 / 3.0)) - 0.5)) * 12.6;
+            float y = clamp(dot(s.rgb, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+            float w = (0.35 + 2.6 * y * (1.0 - y)) * (1.0 - y * y * y * y);
+            return float4(clamp(s.rgb + strength * n * w, 0.0, 1.0), s.a);
+        }
+        """).first as? CIColorKernel
 
     /// One-tap Auto: picks exposure, contrast, highlights, shadows, saturation and warmth from the
     /// photo's own histogram and color cast. Returns `current` with only those values replaced.
