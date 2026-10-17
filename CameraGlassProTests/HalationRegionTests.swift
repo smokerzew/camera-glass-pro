@@ -23,7 +23,7 @@ final class HalationTests: XCTestCase {
     }
 
     func testHalationKernelCompiles() {
-        XCTAssertNotNil(ImageProcessingService.halationKernel)
+        XCTAssertNotNil(ImageProcessingService.halationKernels)
     }
 
     func testLightsGlowRedOrange() {

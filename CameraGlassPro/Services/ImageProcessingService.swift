@@ -189,20 +189,13 @@ final class ImageProcessingService: @unchecked Sendable {
     func halation(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
         guard amount > 0 else { return image }
         let k = CGFloat(min(amount, 1))
-        guard let kernel = Self.halationKernel,
-              let source = kernel.apply(extent: image.extent.isInfinite ? extent : image.extent, arguments: [image])
+        guard let kernels = Self.halationKernels,
+              let source = kernels.source.apply(extent: image.extent.isInfinite ? extent : image.extent, arguments: [image])
         else { return image }
-        let wide = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 90))
-        let tight = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 300))
-        let glow = wide.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: tight])
-            .applyingFilter("CIColorMatrix", parameters: [
-                "inputRVector": CIVector(x: 0.6 * k, y: 0, z: 0, w: 0),
-                "inputGVector": CIVector(x: 0, y: 0.6 * k, z: 0, w: 0),
-                "inputBVector": CIVector(x: 0, y: 0, z: 0.6 * k, w: 0),
-                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
-            ])
-            .cropped(to: extent)
-        return glow.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: image]).cropped(to: extent)
+        let wide = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 90)).cropped(to: extent)
+        let tight = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 300)).cropped(to: extent)
+        // Added in the kernel: Core Image's addition blend also adds alpha, which brightened whole images.
+        return kernels.add.apply(extent: extent, arguments: [image, wide, tight, Float(0.6 * k)])?.cropped(to: extent) ?? image
     }
 
     /// Darkens (+) or lightens (−) toward the corners with a soft radial falloff, framed on the
@@ -236,18 +229,28 @@ final class ImageProcessingService: @unchecked Sendable {
         return filter.outputImage ?? image
     }
 
-    /// Halation glow source: linear luminance above ~0.45 (about 70% on screen) ramps up to full at 0.8,
-    /// tinted red-orange. Everything darker gives exactly nothing.
-    static let halationKernel: CIColorKernel? = try? CIKernel.kernels(withMetalString: """
-        #include <CoreImage/CoreImage.h>
-        using namespace metal;
+    /// Halation kernels. `source`: linear luminance above ~0.45 (about 70% on screen) ramps up to full
+    /// at 0.8, tinted red-orange; darker pixels give exactly nothing. `add`: photo + blurred glow, alpha kept.
+    static let halationKernels: (source: CIColorKernel, add: CIColorKernel)? = {
+        let kernels = (try? CIKernel.kernels(withMetalString: """
+            #include <CoreImage/CoreImage.h>
+            using namespace metal;
 
-        [[stitchable]] float4 halationSource(coreimage::sample_t s) {
-            float y = dot(s.rgb, float3(0.2126, 0.7152, 0.0722));
-            float h = clamp((y - 0.45) / 0.35, 0.0, 1.0);
-            return float4(h, h * 0.28, h * 0.06, 1.0);
-        }
-        """).first as? CIColorKernel
+            [[stitchable]] float4 halationSource(coreimage::sample_t s) {
+                float y = dot(s.rgb, float3(0.2126, 0.7152, 0.0722));
+                float h = clamp((y - 0.45) / 0.35, 0.0, 1.0);
+                return float4(h, h * 0.28, h * 0.06, 1.0);
+            }
+
+            [[stitchable]] float4 halationAdd(coreimage::sample_t s, coreimage::sample_t wide,
+                                              coreimage::sample_t tight, float strength) {
+                return float4(s.rgb + (wide.rgb + tight.rgb) * strength, s.a);
+            }
+            """)) ?? []
+        guard let source = kernels.first(where: { $0.name == "halationSource" }) as? CIColorKernel,
+              let add = kernels.first(where: { $0.name == "halationAdd" }) as? CIColorKernel else { return nil }
+        return (source, add)
+    }()
 
     /// Metal Core Image kernel, compiled once at first use (no build-time -fcikernel setup needed).
     /// `s` is sRGB encoded; `fine`/`coarse` are blurred random noise whose RGB average has
