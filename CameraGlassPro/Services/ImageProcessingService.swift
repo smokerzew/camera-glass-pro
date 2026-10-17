@@ -189,18 +189,9 @@ final class ImageProcessingService: @unchecked Sendable {
     func halation(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
         guard amount > 0 else { return image }
         let k = CGFloat(min(amount, 1))
-        // Luminance above ~70% (in linear light) becomes the glow source, tinted red-orange.
-        let gain: CGFloat = 3.3
-        let source = image.applyingFilter("CIColorMatrix", parameters: [
-            "inputRVector": CIVector(x: 0.2126 * gain, y: 0.7152 * gain, z: 0.0722 * gain, w: 0),
-            "inputGVector": CIVector(x: 0.2126 * gain * 0.28, y: 0.7152 * gain * 0.28, z: 0.0722 * gain * 0.28, w: 0),
-            "inputBVector": CIVector(x: 0.2126 * gain * 0.06, y: 0.7152 * gain * 0.06, z: 0.0722 * gain * 0.06, w: 0),
-            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
-            "inputBiasVector": CIVector(x: -1.5, y: -1.5 * 0.28, z: -1.5 * 0.06, w: 0),
-        ]).applyingFilter("CIColorClamp", parameters: [
-            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1),
-            "inputMaxComponents": CIVector(x: 1, y: 0.28, z: 0.06, w: 1),
-        ])
+        guard let kernel = Self.halationKernel,
+              let source = kernel.apply(extent: image.extent.isInfinite ? extent : image.extent, arguments: [image])
+        else { return image }
         let wide = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 90))
         let tight = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 300))
         let glow = wide.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: tight])
@@ -244,6 +235,19 @@ final class ImageProcessingService: @unchecked Sendable {
         filter.colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         return filter.outputImage ?? image
     }
+
+    /// Halation glow source: linear luminance above ~0.45 (about 70% on screen) ramps up to full at 0.8,
+    /// tinted red-orange. Everything darker gives exactly nothing.
+    static let halationKernel: CIColorKernel? = try? CIKernel.kernels(withMetalString: """
+        #include <CoreImage/CoreImage.h>
+        using namespace metal;
+
+        [[stitchable]] float4 halationSource(coreimage::sample_t s) {
+            float y = dot(s.rgb, float3(0.2126, 0.7152, 0.0722));
+            float h = clamp((y - 0.45) / 0.35, 0.0, 1.0);
+            return float4(h, h * 0.28, h * 0.06, 1.0);
+        }
+        """).first as? CIColorKernel
 
     /// Metal Core Image kernel, compiled once at first use (no build-time -fcikernel setup needed).
     /// `s` is sRGB encoded; `fine`/`coarse` are blurred random noise whose RGB average has

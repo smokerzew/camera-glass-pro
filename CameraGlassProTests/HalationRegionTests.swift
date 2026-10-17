@@ -22,6 +22,10 @@ final class HalationTests: XCTestCase {
         return light.composited(over: black)
     }
 
+    func testHalationKernelCompiles() {
+        XCTAssertNotNil(ImageProcessingService.halationKernel)
+    }
+
     func testLightsGlowRedOrange() {
         var state = PhotoAdjustmentState()
         state.halation = 1
