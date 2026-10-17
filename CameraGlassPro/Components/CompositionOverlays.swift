@@ -38,6 +38,16 @@ struct CameraGridOverlay: View {
     }
 }
 
+/// Level guide fed straight from `MotionLevel`. Reading the tilt here (not in the parent) means
+/// only this small view redraws as the phone moves.
+struct LiveLevelGuide: View {
+    let motion: MotionLevel
+
+    var body: some View {
+        CameraLevelGuide(angle: motion.levelAngle, isUpright: motion.isUpright)
+    }
+}
+
 /// iOS-style level. The outer segments stay fixed to the screen; the middle segment shows the true horizon
 /// from the phone's tilt. Within ~1° everything turns yellow and joins into one line (with a light tap).
 struct CameraLevelGuide: View {

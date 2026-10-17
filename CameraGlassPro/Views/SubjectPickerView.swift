@@ -6,6 +6,7 @@ struct SubjectPickerView: View {
     @Bindable var vm: CameraWorkspaceViewModel
     @Environment(\.cameraReduceMotion) private var reduceMotion
     @State private var dragOffset: CGFloat = 0
+    @State private var region: PhotoRegion = .subject
 
     var body: some View {
         VStack(spacing: 14) {
@@ -62,6 +63,8 @@ struct SubjectPickerView: View {
                 }
             }
 
+            regionEdits
+
             Text("Works with people, pets and objects, using on-device subject detection. Combine with Portrait for depth blur and lighting.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.65))
@@ -85,6 +88,59 @@ struct SubjectPickerView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Subject")
         .accessibilityAction(.escape) { close() }
+    }
+
+    /// Brightness, saturation and warmth for just the subject or just the background.
+    private var regionEdits: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text("ADJUST")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.7))
+                ForEach(PhotoRegion.allCases) { item in
+                    let selected = region == item
+                    Button { region = item } label: {
+                        Text(item.label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(selected ? Color.yellow : .white)
+                            .frame(maxWidth: .infinity, minHeight: 30)
+                            .cameraGlass(selected ? .selected : .interactive, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Adjust \(item.label.lowercased())")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+                Button("Reset") { vm.resetRegionEdits() }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(hasRegionEdits ? Color.yellow : .white.opacity(0.4))
+                    .disabled(!hasRegionEdits)
+            }
+            ForEach(RegionEdit.Control.allCases) { control in
+                let value = vm.adjustments[region][keyPath: control.keyPath]
+                HStack(spacing: 10) {
+                    Text(control.label.uppercased())
+                        .font(.caption2.weight(.semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .frame(width: 84, alignment: .leading)
+                    Slider(value: Binding(get: { vm.adjustments[region][keyPath: control.keyPath] },
+                                          set: { vm.setRegionEdit(region, control, to: $0) }), in: -1...1)
+                        .tint(.yellow)
+                        .accessibilityLabel("\(region.label) \(control.label)")
+                        .accessibilityValue(String(Int((value * 100).rounded())))
+                    Text(value == 0 ? "0" : String(format: "%+d", Int((value * 100).rounded())))
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(value == 0 ? Color.white.opacity(0.6) : Color.yellow)
+                        .frame(width: 34, alignment: .trailing)
+                }
+            }
+        }
+        .padding(.horizontal, 6)
+    }
+
+    private var hasRegionEdits: Bool {
+        !vm.adjustments.subjectEdit.isNeutral || !vm.adjustments.backgroundEdit.isNeutral
     }
 
     private func close() {

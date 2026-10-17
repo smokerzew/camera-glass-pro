@@ -35,6 +35,8 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Guides | Rule-of-thirds grid, fine grid, opacity, level guide and center crosshair | Real overlays. The level follows the phone's sideways tilt (CoreMotion) and turns yellow within 1° of level. |
 | Adjustments | Exposure, brightness, contrast, saturation, warmth, highlights and shadows (Core Image). Per-control reset, Reset All, and hold-to-compare. Auto (magic wand) sets exposure, contrast, highlights, shadows, saturation and warmth from the photo's histogram and color cast, as one undo step you can fine-tune. | Real, non-destructive |
 | Vignette | Adjust slider: + darkens, − lightens the corners with a soft radial falloff (in exposure stops, so hues stay true). Framed on the final cropped picture, applied before grain. | Real |
+| Halation | Adjust slider: the red-orange glow real film gets around bright lights (CineStill style). Only highlights feed it, so dark areas stay clean. | Real |
+| Subject vs background | SUBJECT pop-up > ADJUST: brightness, saturation and warmth for just the subject or just the background, using the same on-device subject mask as Portrait. | Real |
 | Color Mixer | In Adjust: pick one of eight colors (red, orange, yellow, green, aqua, blue, purple, magenta) and shift its hue, saturation and luminance. Neighboring colors blend smoothly and grays are never touched. Runs as a 3D lookup table in Core Image. | Real |
 | Night Look | Shadow lift plus noise reduction | Real filter. It is not a capture mode. |
 | Flash | Off / Auto / On. "On" plays a screen flash when you use the center control. | Visual only |

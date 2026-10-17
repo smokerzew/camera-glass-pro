@@ -172,7 +172,7 @@ struct PhotoPreviewView: View {
     private var overlayLayer: some View {
         ZStack {
             CameraGridOverlay(style: vm.gridStyle, opacity: gridOpacity)
-            if vm.showLevel { CameraLevelGuide(angle: motion.levelAngle, isUpright: motion.isUpright).rotatesWithDevice() }
+            if vm.showLevel { LiveLevelGuide(motion: motion).rotatesWithDevice() }
             if showCenter { CenterGuide() }
         }
         .allowsHitTesting(false)

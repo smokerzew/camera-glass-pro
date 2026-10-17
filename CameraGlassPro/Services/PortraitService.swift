@@ -141,12 +141,34 @@ extension ImageProcessingService {
         if a.colorSplash {
             background = background.applyingFilter("CIPhotoEffectMono")
         }
+        subject = regionEdit(a.subjectEdit, to: subject)
+        background = regionEdit(a.backgroundEdit, to: background)
 
         let blend = CIFilter.blendWithMask()
         blend.inputImage = subject
         blend.backgroundImage = background
         blend.maskImage = mask
         return (blend.outputImage ?? image).cropped(to: extent)
+    }
+
+    /// Brightness, saturation and warmth for one side of the subject mask.
+    func regionEdit(_ edit: RegionEdit, to image: CIImage) -> CIImage {
+        guard !edit.isNeutral else { return image }
+        var output = image
+        if edit.exposure != 0 {
+            output = output.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: edit.exposure * 1.5])
+        }
+        if edit.saturation != 0 {
+            output = output.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 1 + edit.saturation])
+        }
+        if edit.warmth != 0 {
+            let filter = CIFilter.temperatureAndTint()
+            filter.inputImage = output
+            filter.neutral = CIVector(x: 6500, y: 0)
+            filter.targetNeutral = CIVector(x: 6500 - edit.warmth * 2500, y: 0) // same direction as global Warmth
+            output = filter.outputImage ?? output
+        }
+        return output
     }
 
     /// The swapped background at the image's size, or nil to keep the original.

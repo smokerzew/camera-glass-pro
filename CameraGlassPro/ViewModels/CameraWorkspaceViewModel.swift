@@ -178,6 +178,8 @@ final class CameraWorkspaceViewModel {
     private let recipe = AdjustmentBox()
     @ObservationIgnored private var importTask: Task<Void, Never>?
     @ObservationIgnored private var renderTask: Task<Void, Never>?
+    /// Set when the edit changed since the last preview render started.
+    @ObservationIgnored private var renderNeeded = false
     @ObservationIgnored private var countdownTask: Task<Void, Never>?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
     @ObservationIgnored private var depthTagTask: Task<Void, Never>?
@@ -1220,6 +1222,19 @@ final class CameraWorkspaceViewModel {
         adjustmentsChanged()
     }
 
+    func setRegionEdit(_ region: PhotoRegion, _ control: RegionEdit.Control, to value: Double) {
+        recordUndoPoint() // one drag = one undo step
+        adjustments[region][keyPath: control.keyPath] = value.isFinite ? min(max(value, -1), 1) : 0
+        adjustmentsChanged()
+    }
+
+    func resetRegionEdits() {
+        recordUndoPoint(force: true)
+        adjustments.subjectEdit = RegionEdit()
+        adjustments.backgroundEdit = RegionEdit()
+        adjustmentsChanged()
+    }
+
     func setGrainSize(_ size: GrainSize) {
         guard size != adjustments.grainSize else { return }
         recordUndoPoint(force: true)
@@ -1230,11 +1245,15 @@ final class CameraWorkspaceViewModel {
     /// Magic-wand Auto: sets the light and color sliders from the unedited photo or video frame.
     func autoEnhance() {
         guard let source = photo?.preview ?? video?.poster else { return }
-        let next = processor.autoEnhanced(adjustments, for: source)
-        guard next != adjustments else { return }
-        recordUndoPoint(force: true)
-        adjustments = next
-        adjustmentsChanged()
+        let processor = self.processor
+        let current = adjustments
+        Task { [weak self] in
+            let next = await Task.detached(priority: .userInitiated) { processor.autoEnhanced(current, for: source) }.value
+            guard let self, self.adjustments == current, next != current else { return } // edited meanwhile: keep that
+            self.recordUndoPoint(force: true)
+            self.adjustments = next
+            self.adjustmentsChanged()
+        }
     }
 
     func setNightLook(_ enabled: Bool) {
@@ -1412,50 +1431,63 @@ final class CameraWorkspaceViewModel {
         scheduleRender()
     }
 
-    /// Renders the downsampled photo preview off the main thread; newer requests cancel older ones,
-    /// so dragging a slider never queues up stale renders. (Videos render live in the compositor.)
+    /// Renders the downsampled photo preview off the main thread. One render runs at a time; edits made
+    /// meanwhile fold into one follow-up render of the newest settings, so slider drags never stack up
+    /// GPU work and the screen always ends on the latest edit. (Videos render live in the compositor.)
     private func scheduleRender() {
-        renderTask?.cancel()
         guard let source = photo?.preview else {
+            renderNeeded = false
             renderedPreview = nil
             return
         }
-        let recipe = adjustments
-        guard !recipe.isIdentity else {
+        guard !adjustments.isIdentity else {
+            renderNeeded = false
             renderedPreview = source
             refreshPhotoAnalysis()
             return
         }
-        let processor = self.processor
-        let cachedMask = previewSubjectSource === source ? previewSubjectMask : nil
-        let needsMask = recipe.needsSubject && cachedMask == nil
-        let backgroundPhoto = customBackground.map { CIImage(cgImage: $0) }
-        if needsMask { isFindingSubject = true }
+        renderNeeded = true
+        guard renderTask == nil else { return }
         renderTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(12)) // coalesce rapid slider ticks
-            guard !Task.isCancelled else { return }
-            var mask = cachedMask
-            if needsMask {
-                mask = await Task.detached(priority: .userInitiated) {
-                    SubjectMasker.mask(for: CIImage(cgImage: source))
-                }.value
-                guard !Task.isCancelled, let self, self.photo?.preview === source else { return }
-                self.previewSubjectMask = mask
-                self.previewSubjectSource = source
-                self.isFindingSubject = false
-                if mask == nil { self.showToast("No subject found") }
+            while let self, self.renderNeeded {
+                self.renderNeeded = false
+                await self.renderLatest()
             }
-            let finalMask = mask
-            let rendered = await Task.detached(priority: .userInitiated) {
-                processor.renderPreview(source, adjustments: recipe, subjectMask: finalMask, backgroundPhoto: backgroundPhoto)
+            self?.renderTask = nil
+        }
+    }
+
+    private func renderLatest() async {
+        guard let source = photo?.preview else { return }
+        let recipe = adjustments
+        guard !recipe.isIdentity else { return }
+        let processor = self.processor
+        let backgroundPhoto = customBackground.map { CIImage(cgImage: $0) }
+        // The subject mask is found once per photo (also when there is none, so it isn't searched again).
+        if recipe.needsSubject, previewSubjectSource !== source {
+            isFindingSubject = true
+            let found = await Task.detached(priority: .userInitiated) {
+                SubjectMasker.mask(for: CIImage(cgImage: source))
             }.value
-            guard !Task.isCancelled, let self, self.photo?.preview === source else { return }
-            if let rendered {
-                self.renderedPreview = rendered
-                self.refreshPhotoAnalysis()
-            } else {
-                self.alert = AppAlert(title: "Adjustment Failed", message: "The preview couldn't be rendered with these settings.")
-            }
+            guard photo?.preview === source else { return }
+            previewSubjectMask = found
+            previewSubjectSource = source
+            isFindingSubject = false
+            if found == nil { showToast("No subject found") }
+        }
+        let mask = previewSubjectSource === source ? previewSubjectMask : nil
+        // No subject in this photo: render without the subject edits instead of searching again every frame.
+        let renderRecipe = mask == nil ? recipe.withoutSubjectEdits : recipe
+        let rendered = await Task.detached(priority: .userInitiated) {
+            processor.renderPreview(source, adjustments: renderRecipe, subjectMask: mask, backgroundPhoto: backgroundPhoto)
+        }.value
+        // A reset to no edits while this rendered already showed the original: keep it.
+        guard photo?.preview === source, !adjustments.isIdentity else { return }
+        if let rendered {
+            renderedPreview = rendered
+            refreshPhotoAnalysis()
+        } else {
+            alert = AppAlert(title: "Adjustment Failed", message: "The preview couldn't be rendered with these settings.")
         }
     }
 

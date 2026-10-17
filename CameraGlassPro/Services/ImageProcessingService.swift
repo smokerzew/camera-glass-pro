@@ -82,6 +82,9 @@ final class ImageProcessingService: @unchecked Sendable {
         image = applyStyle(a, to: image)
         let unfiltered = image
         image = applyLook(a.filter, to: image, extent: input.extent)
+        if a.halation > 0 {
+            image = halation(image, amount: a.halation, extent: input.extent)
+        }
         if a.filter != .none, a.filterStrength < 1 {
             image = unfiltered.applyingFilter("CIDissolveTransition", parameters: [
                 kCIInputTargetImageKey: image, kCIInputTimeKey: max(0, a.filterStrength),
@@ -179,6 +182,36 @@ final class ImageProcessingService: @unchecked Sendable {
                                          arguments: [display, octave(cell, offset: 0), octave(cell * 2.2, offset: 517), strength])
         else { return image }
         return grained.applyingFilter("CISRGBToneCurveToLinear").cropped(to: extent)
+    }
+
+    /// Film halation: light from bright areas scatters back through the film base and glows
+    /// red-orange around them (CineStill-style). Only highlights feed the glow; dark areas are untouched.
+    func halation(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
+        guard amount > 0 else { return image }
+        let k = CGFloat(min(amount, 1))
+        // Luminance above ~70% (in linear light) becomes the glow source, tinted red-orange.
+        let gain: CGFloat = 3.3
+        let source = image.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: 0.2126 * gain, y: 0.7152 * gain, z: 0.0722 * gain, w: 0),
+            "inputGVector": CIVector(x: 0.2126 * gain * 0.28, y: 0.7152 * gain * 0.28, z: 0.0722 * gain * 0.28, w: 0),
+            "inputBVector": CIVector(x: 0.2126 * gain * 0.06, y: 0.7152 * gain * 0.06, z: 0.0722 * gain * 0.06, w: 0),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+            "inputBiasVector": CIVector(x: -1.5, y: -1.5 * 0.28, z: -1.5 * 0.06, w: 0),
+        ]).applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1),
+            "inputMaxComponents": CIVector(x: 1, y: 0.28, z: 0.06, w: 1),
+        ])
+        let wide = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 90))
+        let tight = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 300))
+        let glow = wide.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: tight])
+            .applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: 0.6 * k, y: 0, z: 0, w: 0),
+                "inputGVector": CIVector(x: 0, y: 0.6 * k, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: 0.6 * k, w: 0),
+                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+            ])
+            .cropped(to: extent)
+        return glow.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: image]).cropped(to: extent)
     }
 
     /// Darkens (+) or lightens (−) toward the corners with a soft radial falloff, framed on the

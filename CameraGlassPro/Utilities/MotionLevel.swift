@@ -44,11 +44,15 @@ final class MotionLevel {
     }
 
     private func update(gx: Double, gy: Double, gz: Double) {
-        isUpright = abs(gz) < 0.85
+        // Assign only on change: every write notifies observers, even with the same value.
+        let upright = abs(gz) < 0.85
+        if upright != isUpright { isUpright = upright }
         let raw = Self.roll(gx: gx, gy: gy)
-        angle += (raw - angle) * 0.25 // light smoothing so the line doesn't jitter
-        if isUpright {
-            iconRotation = Self.nextIconRotation(current: iconRotation, rollDegrees: raw * 180 / .pi)
+        let smoothed = angle + (raw - angle) * 0.25 // light smoothing so the line doesn't jitter
+        if abs(smoothed - angle) > 0.0005 { angle = smoothed } // ~0.03°, below what the guide can show
+        if upright {
+            let rotation = Self.nextIconRotation(current: iconRotation, rollDegrees: raw * 180 / .pi)
+            if rotation != iconRotation { iconRotation = rotation }
         }
     }
 

@@ -20,6 +20,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var vignette: Double = 0
     /// Per-color hue, saturation and luminance.
     var colorMixer = ColorMixer()
+    /// Film halation: red-orange glow bleeding around bright lights (0...1).
+    var halation: Double = 0
     /// "Night Look": lifts shadows and reduces noise. A real filter, not a capture mode.
     var nightLook = false
     /// Photo look applied after the adjustments (the panel's FILTER control).
@@ -39,6 +41,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var colorSplash = false
     /// What goes behind the subject.
     var background: BackgroundStyle = .original
+    /// Separate light and color for the subject and for the background (subject mask).
+    var subjectEdit = RegionEdit()
+    var backgroundEdit = RegionEdit()
 
     /// Crop (normalized, top-left origin, relative to the rotated/straightened photo), quarter turns
     /// clockwise, horizontal mirror and straighten angle in degrees. Photos only.
@@ -64,7 +69,25 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     }
 
     /// Any edit that needs the subject mask.
-    var needsSubject: Bool { portrait || colorSplash || background != .original }
+    var needsSubject: Bool {
+        portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
+    }
+
+    /// Same edit with everything that needs a subject switched off (what renders when none is found).
+    var withoutSubjectEdits: PhotoAdjustmentState {
+        var copy = self
+        copy.portrait = false
+        copy.colorSplash = false
+        copy.background = .original
+        copy.subjectEdit = RegionEdit()
+        copy.backgroundEdit = RegionEdit()
+        return copy
+    }
+
+    subscript(region: PhotoRegion) -> RegionEdit {
+        get { region == .subject ? subjectEdit : backgroundEdit }
+        set { if region == .subject { subjectEdit = newValue } else { backgroundEdit = newValue } }
+    }
 
     var isIdentity: Bool { self == PhotoAdjustmentState() }
 
@@ -85,6 +108,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         grainSize = (try? c.decodeIfPresent(GrainSize.self, forKey: .grainSize)) ?? .medium
         vignette = min(max(try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0, -1), 1)
         colorMixer = (try? c.decodeIfPresent(ColorMixer.self, forKey: .colorMixer)) ?? ColorMixer()
+        halation = min(max(try c.decodeIfPresent(Double.self, forKey: .halation) ?? 0, 0), 1)
+        subjectEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .subjectEdit)) ?? RegionEdit()
+        backgroundEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .backgroundEdit)) ?? RegionEdit()
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
         filter = (try? c.decodeIfPresent(PhotoFilter.self, forKey: .filter)) ?? .none
         filterStrength = min(max(try c.decodeIfPresent(Double.self, forKey: .filterStrength) ?? 1, 0), 1)
@@ -145,7 +171,7 @@ enum GrainSize: String, CaseIterable, Codable, Sendable {
 }
 
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
-    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, vignette, grain
+    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, vignette, halation, grain
 
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
@@ -161,6 +187,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .shadows: "circle.bottomhalf.filled"
         case .texture: "circle.hexagongrid"
         case .vignette: "camera.aperture"
+        case .halation: "sun.haze"
         case .grain: "circle.dotted"
         }
     }
@@ -176,6 +203,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .shadows: -1...1
         case .texture: -1...1
         case .vignette: -1...1        // + darker corners, − lighter
+        case .halation: 0...1
         case .grain: 0...1
         }
     }
@@ -198,6 +226,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .shadows: \.shadows
         case .texture: \.texture
         case .vignette: \.vignette
+        case .halation: \.halation
         case .grain: \.grain
         }
     }
