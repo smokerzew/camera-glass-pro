@@ -11,6 +11,12 @@ struct CameraWorkspaceView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var flashOpacity = 0.0
     @State private var motion = MotionLevel()
+    // Sizes used to keep the photo visible above an open edit panel or the Adjust sheet.
+    @State private var workspaceHeight: CGFloat = 0
+    @State private var previewHeight: CGFloat = 0
+    @State private var bottomBarHeight: CGFloat = 0
+    @State private var panelHeight: CGFloat = 0
+    @State private var adjustDetent: PresentationDetent = .height(380)
 
     @AppStorage(SettingsKey.reduceMotion) private var appReduceMotion = false
     @AppStorage(SettingsKey.highContrast) private var appHighContrast = false
@@ -46,7 +52,7 @@ struct CameraWorkspaceView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { vm.saveSessionState() }
             }
-            .sheet(isPresented: $vm.showAdjustments) { PhotoAdjustmentView(vm: vm) }
+            .sheet(isPresented: $vm.showAdjustments) { PhotoAdjustmentView(vm: vm, detent: $adjustDetent) }
             .sheet(isPresented: $vm.showExport) { PhotoExportView(vm: vm) }
             .sheet(isPresented: $vm.showTrim) { VideoTrimView(vm: vm) }
             .sheet(isPresented: $vm.showTextSheet) { LiveTextSheet(vm: vm) }
@@ -79,6 +85,8 @@ struct CameraWorkspaceView: View {
             VStack(spacing: 0) {
                 ZStack(alignment: .topLeading) {
                     PhotoPreviewView(vm: vm, motion: motion)
+                        .scaleEffect(previewScale, anchor: .top)
+                        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.1), value: previewScale)
                     VStack(spacing: 0) {
                         CameraStatusRow(vm: vm)
                         Spacer(minLength: 0)
@@ -113,45 +121,54 @@ struct CameraWorkspaceView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped() // keeps the zoom dial's dark disc inside the viewfinder
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { previewHeight = $0 }
 
                 CameraBottomBar(vm: vm)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomBarHeight = $0 }
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility1) // camera chrome has fixed geometry
 
-            if vm.showSubjectPicker {
-                SubjectPickerView(vm: vm)
-                    .padding(.bottom, 6)
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(1)
-            }
+            // Bottom pop-ups, grouped so their height is known (the photo shrinks to stay above them).
+            ZStack(alignment: .bottom) {
+                if vm.showSubjectPicker {
+                    SubjectPickerView(vm: vm)
+                        .padding(.bottom, 6)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(1)
+                }
 
-            if vm.showEffectsPicker {
-                EffectsPickerView(vm: vm)
-                    .padding(.bottom, 6)
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(1)
-            }
+                if vm.showEffectsPicker {
+                    EffectsPickerView(vm: vm)
+                        .padding(.bottom, 6)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(1)
+                }
 
-            if vm.showStylesPad {
-                StylesPadView(vm: vm)
-                    .padding(.bottom, 6)
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(1)
-            }
+                if vm.showStylesPad {
+                    StylesPadView(vm: vm)
+                        .padding(.bottom, 6)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(1)
+                }
 
-            if vm.showFilterPicker {
-                FilterPickerView(vm: vm)
-                    .padding(.bottom, 6)
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(1)
+                if vm.showFilterPicker {
+                    FilterPickerView(vm: vm)
+                        .padding(.bottom, 6)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(1)
+                }
+
+                if vm.isControlPanelOpen {
+                    CameraControlPanel(vm: vm)
+                        .padding(.bottom, 6)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(1)
+                }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { panelHeight = $0 }
+            .zIndex(1)
 
             if vm.isControlPanelOpen {
-                CameraControlPanel(vm: vm)
-                    .padding(.bottom, 6)
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(1)
-
                 // "Edit" sits top-left beside the Dynamic Island, as in the Camera app.
                 VStack {
                     HStack {
@@ -206,9 +223,23 @@ struct CameraWorkspaceView: View {
                     .zIndex(3)
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { workspaceHeight = $0 }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.isImporting)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: vm.countdown)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: vm.toast)
+    }
+
+    /// Height covered from the bottom of the screen by an open pop-up or the Adjust sheet.
+    private var coveredHeight: CGFloat {
+        if vm.showAdjustments { return adjustDetent == .medium ? workspaceHeight / 2 + 20 : 380 }
+        return panelHeight
+    }
+
+    /// While editing, the whole viewfinder shrinks (same framing) so the photo sits fully above the panel.
+    private var previewScale: CGFloat {
+        let overlap = coveredHeight - bottomBarHeight
+        guard overlap > 0, previewHeight > 0 else { return 1 }
+        return min(1, max(0.3, (previewHeight - overlap - 10) / previewHeight))
     }
 
     private func playFlash() {

@@ -3,6 +3,8 @@ import SwiftUI
 /// Non-destructive adjustments sheet. Partial-height detents keep the photo visible and interactive.
 struct PhotoAdjustmentView: View {
     @Bindable var vm: CameraWorkspaceViewModel
+    /// Shared with the workspace, which fits the photo into the space above the sheet.
+    @Binding var detent: PresentationDetent
     @Environment(\.dismiss) private var dismiss
     @State private var isNamingPreset = false
     @State private var presetName = ""
@@ -70,7 +72,7 @@ struct PhotoAdjustmentView: View {
                 Text("Saves the current adjustments so you can apply them to other photos and videos.")
             }
         }
-        .presentationDetents([.height(380), .medium, .large])
+        .presentationDetents([.height(380), .medium], selection: $detent) // never covers the whole photo
         .presentationBackgroundInteraction(.enabled(upThrough: .height(380)))
         .presentationDragIndicator(.visible)
         .modifier(GlassSheetBackground())
