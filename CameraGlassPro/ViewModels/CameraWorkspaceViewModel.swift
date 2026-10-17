@@ -77,6 +77,9 @@ final class CameraWorkspaceViewModel {
     // MARK: Photographic Styles pad
     var showStylesPad = false
 
+    // MARK: Crop editor
+    var showCropEditor = false
+
     // MARK: Subject (Color Splash, Background Swap)
     var showSubjectPicker = false
     var showBackgroundPhotoPicker = false
@@ -274,7 +277,10 @@ final class CameraWorkspaceViewModel {
     }
 
     /// Oriented size of whatever is shown, for framing math.
-    var mediaSize: CGSize? { photo?.previewSize ?? video?.displaySize }
+    var mediaSize: CGSize? {
+        if photo != nil, let image = displayedImage { return CGSize(width: image.width, height: image.height) }
+        return photo?.previewSize ?? video?.displaySize
+    }
 
     var hasEdits: Bool { !adjustments.isIdentity }
 
@@ -621,7 +627,7 @@ final class CameraWorkspaceViewModel {
         textTask?.cancel()
         guard liveTextEnabled, hasMedia else { recognizedText = []; return }
         isRecognizingText = true
-        let photoImage = photo?.preview
+        let photoImage = photo != nil ? displayedImage : nil
         let video = self.video
         let player = self.player
         if video != nil, isPlaying {
@@ -738,9 +744,9 @@ final class CameraWorkspaceViewModel {
 
     /// Current viewfinder framing in normalized image coordinates, used by "crop to framing" photo export.
     var normalizedFraming: CGRect? {
-        guard let photo else { return nil }
+        guard photo != nil, let mediaSize else { return nil }
         return FramingGeometry.normalizedVisibleRect(
-            image: photo.previewSize, ratio: previewRatio, zoom: zoom, fill: true, pan: pan)
+            image: mediaSize, ratio: previewRatio, zoom: zoom, fill: true, pan: pan)
     }
 
     // MARK: Depth
@@ -871,7 +877,7 @@ final class CameraWorkspaceViewModel {
     }
 
     private func meterExposure(at mediaPoint: CGPoint) {
-        let photoImage = photo?.preview
+        let photoImage = photo != nil ? displayedImage : nil
         let video = self.video
         let time = player?.currentTime() ?? .zero
         let processor = self.processor
@@ -894,6 +900,7 @@ final class CameraWorkspaceViewModel {
     // MARK: Photographic Styles
 
     func openStylesPad() {
+        showCropEditor = false
         showSubjectPicker = false
         isControlPanelOpen = false
         showFilterPicker = false
@@ -941,6 +948,7 @@ final class CameraWorkspaceViewModel {
     var canMakeEffects: Bool { effectSourceAsset != nil }
 
     func openEffectsPicker() {
+        showCropEditor = false
         showSubjectPicker = false
         isControlPanelOpen = false
         showFilterPicker = false
@@ -1033,9 +1041,61 @@ final class CameraWorkspaceViewModel {
         showToast(message)
     }
 
+    // MARK: Crop, rotate, flip, straighten
+
+    func openCropEditor() {
+        guard photo != nil else { return }
+        isControlPanelOpen = false
+        showFilterPicker = false
+        showStylesPad = false
+        showEffectsPicker = false
+        showSubjectPicker = false
+        showCropEditor = true
+    }
+
+    /// Commits the crop editor's result as one undoable edit.
+    func setGeometry(crop: CGRect, rotation: Int, flipped: Bool, straighten: Double) {
+        var next = adjustments
+        next.cropRect = crop
+        next.rotation = ((rotation % 4) + 4) % 4
+        next.flipped = flipped
+        next.straighten = min(max(straighten, -45), 45)
+        guard next != adjustments else { return }
+        recordUndoPoint(force: true)
+        adjustments = next
+        setPan(.zero)
+        adjustmentsChanged()
+    }
+
+    /// The photo with the current look and the given rotation/flip/straighten, uncropped (for the editor).
+    func geometryPreview(rotation: Int, flipped: Bool, straighten: Double) async -> CGImage? {
+        guard let source = photo?.preview else { return nil }
+        var recipe = adjustments
+        recipe.cropRect = PhotoAdjustmentState.fullCrop
+        recipe.rotation = rotation
+        recipe.flipped = flipped
+        recipe.straighten = straighten
+        recipe.grain = 0
+        let mask = previewSubjectSource === source ? previewSubjectMask : nil
+        let background = customBackground.map { CIImage(cgImage: $0) }
+        let processor = self.processor
+        return await Task.detached(priority: .userInitiated) {
+            processor.renderPreview(source, adjustments: recipe, subjectMask: mask, backgroundPhoto: background)
+        }.value
+    }
+
+    /// Vision's horizon angle for the photo, as a straighten value (nil if no horizon is found).
+    func autoStraightenValue() async -> Double? {
+        guard let source = photo?.preview else { return nil }
+        return await Task.detached(priority: .userInitiated) {
+            ImageProcessingService.horizonStraighten(for: source)
+        }.value
+    }
+
     // MARK: Subject: Color Splash and Background Swap
 
     func openSubjectPicker() {
+        showCropEditor = false
         isControlPanelOpen = false
         showFilterPicker = false
         showStylesPad = false
@@ -1092,6 +1152,7 @@ final class CameraWorkspaceViewModel {
 
     /// Opens the glass filter pop-up and renders a live preview tile for each filter.
     func openFilterPicker() {
+        showCropEditor = false
         showSubjectPicker = false
         isControlPanelOpen = false
         showStylesPad = false

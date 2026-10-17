@@ -68,6 +68,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Export size | Edited photos: Full, 12 MP, 4 MP or 1 MP (long edge, Lanczos, never enlarged). Edited videos: Full, 4K, 1080p or 720p. Originals always export byte-for-byte. | Real |
 | Live Photo sound | Switch in Effects: Live Photos made from videos keep the video's sound (interleaved AAC) or save silent. Remembered. | Real |
 | Subject | SUBJECT pop-up: Color Splash (subject in color, background black and white) and Background Swap (Original, Blur, Black, White, Gray, Sky, Sunset, or one of your photos), using on-device subject detection; combines with Portrait. Photos, video frames and exports. | Real |
+| Crop | CROP opens a full-screen editor: crop box with corner handles and thirds grid, straighten (+/-45 degrees, auto-zoom so no empty corners), rotate 90, flip, Auto (Vision horizon) and aspect presets (Freeform, Original, Square, 4:3, 3:4, 16:9, 9:16). One undo step; preview and export match. Photos only (videos keep their frame). | Real |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 

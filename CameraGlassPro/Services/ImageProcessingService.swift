@@ -76,12 +76,14 @@ final class ImageProcessingService: @unchecked Sendable {
         image = applyStyle(a, to: image)
         image = applyLook(a.filter, to: image, extent: input.extent)
 
-        if a.grain > 0 {
-            image = filmGrain(image, amount: a.grain, extent: input.extent)
-        }
+        // Some filters sample beyond the edges; keep the original bounds, then crop/rotate/straighten.
+        image = applyGeometry(a, to: image.cropped(to: input.extent))
+        let extent = image.extent
 
-        // Some filters sample beyond the edges; keep the original bounds.
-        return image.cropped(to: input.extent)
+        if a.grain > 0 {
+            image = filmGrain(image, amount: a.grain, extent: extent)
+        }
+        return image.cropped(to: extent)
     }
 
     /// Average sRGB luminance (0...1) of a square around `point` (normalized, top-left origin).

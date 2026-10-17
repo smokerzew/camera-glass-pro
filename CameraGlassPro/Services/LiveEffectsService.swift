@@ -77,7 +77,7 @@ enum LiveEffectsService {
         audioRange: CMTimeRange? = nil
     ) async throws {
         let recipe = AdjustmentBox()
-        recipe.value = adjustments
+        recipe.value = adjustments.withoutGeometry
         let audio = try await AudioPass(asset: asset, range: audioRange)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true

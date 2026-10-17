@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Non-destructive edit recipe. The original image bytes are never touched;
@@ -32,6 +33,29 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// What goes behind the subject.
     var background: BackgroundStyle = .original
 
+    /// Crop (normalized, top-left origin, relative to the rotated/straightened photo), quarter turns
+    /// clockwise, horizontal mirror and straighten angle in degrees. Photos only.
+    var cropRect: CGRect = PhotoAdjustmentState.fullCrop
+    var rotation = 0
+    var flipped = false
+    var straighten: Double = 0
+
+    static let fullCrop = CGRect(x: 0, y: 0, width: 1, height: 1)
+
+    var hasGeometry: Bool {
+        cropRect != Self.fullCrop || ((rotation % 4) + 4) % 4 != 0 || flipped || abs(straighten) > 0.01
+    }
+
+    /// Same edit without crop/rotate/flip/straighten (videos keep their frame size).
+    var withoutGeometry: PhotoAdjustmentState {
+        var copy = self
+        copy.cropRect = Self.fullCrop
+        copy.rotation = 0
+        copy.flipped = false
+        copy.straighten = 0
+        return copy
+    }
+
     /// Any edit that needs the subject mask.
     var needsSubject: Bool { portrait || colorSplash || background != .original }
 
@@ -62,6 +86,12 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         lighting = try c.decodeIfPresent(PortraitLighting.self, forKey: .lighting) ?? .natural
         colorSplash = try c.decodeIfPresent(Bool.self, forKey: .colorSplash) ?? false
         background = (try? c.decodeIfPresent(BackgroundStyle.self, forKey: .background)) ?? .original
+        let crop = (try? c.decodeIfPresent(CGRect.self, forKey: .cropRect)) ?? Self.fullCrop
+        cropRect = CGRect(x: 0, y: 0, width: 1, height: 1).contains(crop) && crop.width > 0.01 && crop.height > 0.01
+            ? crop : Self.fullCrop
+        rotation = ((try c.decodeIfPresent(Int.self, forKey: .rotation) ?? 0) % 4 + 4) % 4
+        flipped = try c.decodeIfPresent(Bool.self, forKey: .flipped) ?? false
+        straighten = min(max(try c.decodeIfPresent(Double.self, forKey: .straighten) ?? 0, -45), 45)
     }
 
     subscript(parameter: AdjustmentParameter) -> Double {

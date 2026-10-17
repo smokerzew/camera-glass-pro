@@ -50,6 +50,7 @@ struct CameraWorkspaceView: View {
             .sheet(isPresented: $vm.showExport) { PhotoExportView(vm: vm) }
             .sheet(isPresented: $vm.showTrim) { VideoTrimView(vm: vm) }
             .sheet(isPresented: $vm.showTextSheet) { LiveTextSheet(vm: vm) }
+            .fullScreenCover(isPresented: $vm.showCropEditor) { CropEditorView(vm: vm) }
             .appAlert(vm)
             .sensoryFeedback(.success, trigger: vm.importSuccessCount)
             .sensoryFeedback(.selection, trigger: vm.mode)
