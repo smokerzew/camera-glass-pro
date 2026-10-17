@@ -1197,6 +1197,23 @@ final class CameraWorkspaceViewModel {
         adjustmentsChanged()
     }
 
+    func setGrainSize(_ size: GrainSize) {
+        guard size != adjustments.grainSize else { return }
+        recordUndoPoint(force: true)
+        adjustments.grainSize = size
+        adjustmentsChanged()
+    }
+
+    /// Magic-wand Auto: sets the light and color sliders from the unedited photo or video frame.
+    func autoEnhance() {
+        guard let source = photo?.preview ?? video?.poster else { return }
+        let next = processor.autoEnhanced(adjustments, for: source)
+        guard next != adjustments else { return }
+        recordUndoPoint(force: true)
+        adjustments = next
+        adjustmentsChanged()
+    }
+
     func setNightLook(_ enabled: Bool) {
         recordUndoPoint(force: true)
         adjustments.nightLook = enabled

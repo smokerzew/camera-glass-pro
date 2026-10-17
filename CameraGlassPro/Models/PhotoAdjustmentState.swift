@@ -15,6 +15,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var texture: Double = 0
     /// Film-like luminance grain.
     var grain: Double = 0
+    var grainSize: GrainSize = .medium
     /// "Night Look": lifts shadows and reduces noise. A real filter, not a capture mode.
     var nightLook = false
     /// Photo look applied after the adjustments (the panel's FILTER control).
@@ -75,6 +76,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         shadows = try c.decodeIfPresent(Double.self, forKey: .shadows) ?? 0
         texture = try c.decodeIfPresent(Double.self, forKey: .texture) ?? 0
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
+        grainSize = (try? c.decodeIfPresent(GrainSize.self, forKey: .grainSize)) ?? .medium
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
         filter = (try? c.decodeIfPresent(PhotoFilter.self, forKey: .filter)) ?? .none
         style = try c.decodeIfPresent(PhotographicStyle.self, forKey: .style) ?? .standard
@@ -114,6 +116,22 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
             copy[parameter] = self[keyPath: parameter.keyPath]
         }
         return copy
+    }
+}
+
+/// Film grain size, as different film speeds: fine (slow film) to coarse (fast film).
+enum GrainSize: String, CaseIterable, Codable, Sendable {
+    case fine, medium, coarse
+
+    var label: String { rawValue.capitalized }
+
+    /// Grain cell = image width / divisor (medium ≈ 2 px on the 2400 px preview).
+    var cellDivisor: CGFloat {
+        switch self {
+        case .fine: 1600
+        case .medium: 1100
+        case .coarse: 650
+        }
     }
 }
 

@@ -33,7 +33,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Zoom | .5 / 1 / 2 / 5 presets; swipe the zoom row (or tap the active value) for the curved zoom dial (log scale, haptic ticks at presets); pinch; drag to pan when zoomed in; double-tap resets. | Real (preview crop; crop export follows the pan) |
 | Aspect | Original, 4:3, 16:9, 1:1. Fixed ratios follow the photo's orientation. | Real (preview framing) |
 | Guides | Rule-of-thirds grid, fine grid, opacity, level guide and center crosshair | Real overlays. The level follows the phone's sideways tilt (CoreMotion) and turns yellow within 1° of level. |
-| Adjustments | Exposure, brightness, contrast, saturation, warmth, highlights and shadows (Core Image). Per-control reset, Reset All, and hold-to-compare. | Real, non-destructive |
+| Adjustments | Exposure, brightness, contrast, saturation, warmth, highlights and shadows (Core Image). Per-control reset, Reset All, and hold-to-compare. Auto (magic wand) sets exposure, contrast, highlights, shadows, saturation and warmth from the photo's histogram and color cast, as one undo step you can fine-tune. | Real, non-destructive |
 | Night Look | Shadow lift plus noise reduction | Real filter. It is not a capture mode. |
 | Flash | Off / Auto / On. "On" plays a screen flash when you use the center control. | Visual only |
 | Live | Shows a LIVE badge | Preference only |
@@ -50,7 +50,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Save Video with UI | Export sheet › Save Video with UI: records the screen with ReplayKit while your video plays once (≤ 60 s; shutter stops early), then saves it to Photos. | Real |
 | Landscape | The layout stays portrait; icons, zoom labels and the level turn upright when you hold the phone sideways (CoreMotion, with hysteresis). | Real |
 | App icon | Standard, dark and tinted Home Screen variants. | — |
-| Styles 3 | Texture (local contrast) and film Grain in Adjust. Grain is monochrome film grain (two soft grain sizes, about 2 px on the preview) added to brightness only in display space, so it never tints colors; strongest in midtones, lighter in shadows, none in bright highlights; sized to the image so preview and export match; 0 = no grain. | Real |
+| Styles 3 | Texture (local contrast) and film Grain in Adjust. Grain is monochrome film grain (two soft grain sizes, about 2 px on the preview) added to brightness only in display space, so it never tints colors; strongest in midtones, lighter in shadows, none in bright highlights; sized to the image so preview and export match; Fine / Medium / Coarse grain size in the FILTER pop-up; rendered by a Metal Core Image kernel; 0 = no grain. | Real |
 | Highlight clipping | ZEBRAS control stripes near-white areas (display only). | Real |
 | Undo / presets | Undo/redo in Adjust (a slider drag is one step); save, apply and delete named styles. | Real |
 | SLO-MO / TIME-LAPSE | Imported videos play at 1/4 or 8x in these modes; the edited MOV exports at that speed. | Real |

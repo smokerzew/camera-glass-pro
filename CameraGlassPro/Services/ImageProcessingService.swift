@@ -81,7 +81,7 @@ final class ImageProcessingService: @unchecked Sendable {
         let extent = image.extent
 
         if a.grain > 0 {
-            image = filmGrain(image, amount: a.grain, extent: extent)
+            image = filmGrain(image, amount: a.grain, size: a.grainSize, extent: extent)
         }
         return image.cropped(to: extent)
     }
@@ -148,10 +148,10 @@ final class ImageProcessingService: @unchecked Sendable {
     /// in display (sRGB) space, so they never tint colors. Strength follows luminance like film:
     /// strongest in midtones, lighter in shadows, gone in bright highlights. Two grain sizes scaled
     /// to the image, so preview and export match. `amount` 0 returns the image untouched.
-    func filmGrain(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
+    func filmGrain(_ image: CIImage, amount: Double, size: GrainSize = .medium, extent: CGRect) -> CIImage {
         guard amount > 0, let random = CIFilter.randomGenerator().outputImage,
               let kernel = Self.grainKernel else { return image }
-        let cell = max(1, extent.width / 1100) // ~2 px grains on a 2400 px preview
+        let cell = max(1, extent.width / size.cellDivisor)
         func octave(_ scale: CGFloat, offset: CGFloat) -> CIImage {
             random.transformed(by: CGAffineTransform(translationX: offset, y: offset * 0.6))
                 .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
@@ -166,15 +166,62 @@ final class ImageProcessingService: @unchecked Sendable {
         return grained.applyingFilter("CISRGBToneCurveToLinear").cropped(to: extent)
     }
 
-    /// `fine`/`coarse`: blurred random noise; the RGB average has std ≈ 0.068, so `n` has unit std.
-    private static let grainKernel = CIColorKernel(source: """
-        kernel vec4 filmGrain(__sample s, __sample fine, __sample coarse, float strength) {
-            float n = ((dot(fine.rgb, vec3(1.0)) / 3.0 - 0.5) + 0.6 * (dot(coarse.rgb, vec3(1.0)) / 3.0 - 0.5)) * 12.6;
-            float y = clamp(dot(s.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
-            float w = (0.35 + 2.6 * y * (1.0 - y)) * (1.0 - y * y * y * y);
-            return vec4(clamp(s.rgb + strength * n * w, 0.0, 1.0), s.a);
+    /// Metal kernel from FilmGrain.metal, compiled into the app's default.metallib.
+    private static let grainKernel: CIColorKernel? = {
+        guard let url = Bundle(for: ImageProcessingService.self).url(forResource: "default", withExtension: "metallib"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? CIColorKernel(functionName: "filmGrain", fromMetalLibraryData: data)
+    }()
+
+    /// One-tap Auto: picks exposure, contrast, highlights, shadows, saturation and warmth from the
+    /// photo's own histogram and color cast. Returns `current` with only those values replaced.
+    func autoEnhanced(_ current: PhotoAdjustmentState, for image: CGImage) -> PhotoAdjustmentState {
+        let side = 96
+        let input = CIImage(cgImage: image)
+        let scaled = input.transformed(by: CGAffineTransform(scaleX: CGFloat(side) / input.extent.width,
+                                                             y: CGFloat(side) / input.extent.height))
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        context.render(scaled, toBitmap: &pixels, rowBytes: side * 4, bounds: CGRect(x: 0, y: 0, width: side, height: side),
+                       format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        return Self.autoEnhanced(current, rgba: pixels)
+    }
+
+    /// Pure analysis behind Auto, on sRGB RGBA8 pixels (testable without rendering).
+    static func autoEnhanced(_ current: PhotoAdjustmentState, rgba: [UInt8]) -> PhotoAdjustmentState {
+        var lumas: [Double] = []
+        var chroma = 0.0, cast = 0.0, castCount = 0.0
+        for i in stride(from: 0, to: rgba.count - 3, by: 4) {
+            let r = Double(rgba[i]) / 255, g = Double(rgba[i + 1]) / 255, b = Double(rgba[i + 2]) / 255
+            let y = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            lumas.append(y)
+            chroma += max(r, g, b) - min(r, g, b)
+            if y > 0.2, y < 0.85 { cast += b - r; castCount += 1 }
         }
-        """)
+        guard !lumas.isEmpty else { return current }
+        lumas.sort()
+        let count = Double(lumas.count)
+        let mean = lumas.reduce(0, +) / count
+        let low = lumas[Int(count * 0.01)], high = lumas[Int(count * 0.99)]
+        let clipped = Double(lumas.filter { $0 > 0.97 }.count) / count
+        let dark = Double(lumas.filter { $0 < 0.08 }.count) / count
+        func linear(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+        func rounded(_ v: Double) -> Double { (v * 100).rounded() / 100 }
+
+        var next = current
+        // Half-way towards a 0.45 sRGB mean; little brightening when highlights would clip.
+        var ev = 0.5 * log2(linear(0.45) / max(linear(mean), 0.0005))
+        if high > 0.95 { ev = min(ev, 0.3) }
+        next.exposure = rounded(min(max(ev, -0.8), 1))
+        next.highlights = rounded(clipped > 0.005 || ev > 0.2 ? -min(0.7, clipped * 10 + max(0, ev) * 0.3) : 0)
+        next.shadows = rounded(dark > 0.05 ? min(0.5, dark * 1.5) : 0)
+        let range = high - low
+        next.contrast = rounded(range < 0.75 ? 1 + min(0.25, (0.75 - range) * 0.5) : 1)
+        let meanChroma = chroma / count
+        next.saturation = rounded(meanChroma < 0.3 ? 1 + min(0.2, (0.3 - meanChroma) * 0.8) : 1)
+        let blueCast = castCount > 0 ? cast / castCount : 0
+        next.warmth = rounded(abs(blueCast) > 0.03 ? min(max(blueCast * 1.5, -0.3), 0.3) : 0) // blue cast → warmer
+        return next.clamped()
+    }
 
     /// Focus peaking: transparent image with the strongest edges painted red.
     /// Display-only; never part of an export.

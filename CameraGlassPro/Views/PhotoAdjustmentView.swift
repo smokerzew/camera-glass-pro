@@ -80,6 +80,16 @@ struct PhotoAdjustmentView: View {
     private var presetsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                Button { vm.autoEnhance() } label: {
+                    Label("Auto", systemImage: "wand.and.stars")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 34)
+                        .cameraGlass(.interactive, in: Capsule())
+                }
+                .disabled(!vm.hasMedia)
+                .accessibilityHint("Sets exposure, contrast, highlights, shadows, saturation and warmth for this photo")
+
                 Button {
                     presetName = ""
                     isNamingPreset = true

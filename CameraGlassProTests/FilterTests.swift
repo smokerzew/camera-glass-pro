@@ -111,6 +111,58 @@ final class FilterCatalogTests: XCTestCase {
         XCTAssertGreaterThan(Set(stride(from: 0, to: pixels.count, by: 4).map { pixels[$0 + 1] }).count, 4, "grain is there")
     }
 
+    /// Neighbor difference relative to overall spread: lower means bigger, smoother grains.
+    private func grainRoughness(_ size: GrainSize) -> Double {
+        let input = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: CGRect(x: 0, y: 0, width: 2400, height: 300))
+        let crop = processor.filmGrain(input, amount: 1, size: size, extent: input.extent)
+            .cropped(to: CGRect(x: 400, y: 100, width: 128, height: 64))
+            .transformed(by: CGAffineTransform(translationX: -400, y: -100))
+        let values = lumaPixels(crop, width: 128, height: 64)
+        let mean = values.reduce(0, +) / Double(values.count)
+        let spread = (values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(values.count)).squareRoot()
+        let step = zip(values, values.dropFirst()).map { abs($0 - $1) }.reduce(0, +) / Double(values.count - 1)
+        return step / max(spread, 0.001)
+    }
+
+    func testGrainSizeChangesGrainSize() {
+        XCTAssertGreaterThan(grainRoughness(.fine), grainRoughness(.medium))
+        XCTAssertGreaterThan(grainRoughness(.medium), grainRoughness(.coarse))
+    }
+
+    // MARK: Auto enhance
+
+    private func flat(_ r: UInt8, _ g: UInt8, _ b: UInt8, count: Int = 400) -> [UInt8] {
+        (0..<count).flatMap { _ in [r, g, b, 255] }
+    }
+
+    func testAutoBrightensDarkPhotos() {
+        let state = ImageProcessingService.autoEnhanced(PhotoAdjustmentState(), rgba: flat(40, 40, 40))
+        XCTAssertGreaterThan(state.exposure, 0.3)
+    }
+
+    func testAutoLeavesWellExposedNeutralPhotosAlmostAlone() {
+        var pixels: [UInt8] = []
+        for v in stride(from: 10, through: 245, by: 5) { pixels += flat(UInt8(v), UInt8(v), UInt8(v), count: 8) }
+        let state = ImageProcessingService.autoEnhanced(PhotoAdjustmentState(), rgba: pixels)
+        XCTAssertEqual(state.exposure, 0, accuracy: 0.3)
+        XCTAssertEqual(state.warmth, 0)
+        XCTAssertEqual(state.contrast, 1)
+    }
+
+    func testAutoWarmsBlueCastAndRecoversClippedHighlights() {
+        XCTAssertGreaterThan(ImageProcessingService.autoEnhanced(PhotoAdjustmentState(), rgba: flat(90, 120, 170)).warmth, 0)
+        XCTAssertLessThan(ImageProcessingService.autoEnhanced(PhotoAdjustmentState(), rgba: flat(250, 250, 250)).highlights, 0)
+    }
+
+    func testAutoKeepsFilterAndGrain() {
+        var current = PhotoAdjustmentState()
+        current.filter = .noir
+        current.grain = 0.4
+        let state = ImageProcessingService.autoEnhanced(current, rgba: flat(40, 40, 40))
+        XCTAssertEqual(state.filter, .noir)
+        XCTAssertEqual(state.grain, 0.4)
+    }
+
     private func averageRed(_ image: CIImage) throws -> Double {
         let filter = try XCTUnwrap(CIFilter(name: "CIAreaAverage", parameters: [
             kCIInputImageKey: image, kCIInputExtentKey: CIVector(cgRect: image.extent),
@@ -125,6 +177,18 @@ final class FilterCatalogTests: XCTestCase {
 
 @MainActor
 final class FilterPickerModelTests: XCTestCase {
+    func testGrainSizeIsUndoableAndSaved() throws {
+        let vm = CameraWorkspaceViewModel(defaults: UserDefaults(suiteName: "Filters-\(UUID().uuidString)") ?? .standard)
+        vm.setGrainSize(.coarse)
+        XCTAssertEqual(vm.adjustments.grainSize, .coarse)
+        let decoded = try JSONDecoder().decode(PhotoAdjustmentState.self, from: JSONEncoder().encode(vm.adjustments))
+        XCTAssertEqual(decoded.grainSize, .coarse)
+        vm.undo()
+        XCTAssertEqual(vm.adjustments.grainSize, .medium)
+        vm.autoEnhance() // no media: does nothing
+        XCTAssertFalse(vm.hasEdits)
+    }
+
     func testSetFilterIsUndoable() {
         let vm = CameraWorkspaceViewModel(defaults: UserDefaults(suiteName: "Filters-\(UUID().uuidString)") ?? .standard)
         vm.setFilter(.y2kGlow)

@@ -274,6 +274,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Camera Glass";
+				MTLLINKER_FLAGS = "-cikernel";
+				OTHER_METAL_COMPILER_FLAGS = "-fcikernel";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Camera Glass Pro adds photos to your library only when you choose to save an export or a screen capture.";
@@ -310,6 +312,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Camera Glass";
+				MTLLINKER_FLAGS = "-cikernel";
+				OTHER_METAL_COMPILER_FLAGS = "-fcikernel";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Camera Glass Pro adds photos to your library only when you choose to save an export or a screen capture.";

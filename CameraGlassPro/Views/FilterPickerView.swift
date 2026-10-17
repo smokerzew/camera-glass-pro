@@ -61,6 +61,29 @@ struct FilterPickerView: View {
             }
             .padding(.horizontal, 6)
 
+            HStack(spacing: 8) {
+                Text("SIZE")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.85))
+                ForEach(GrainSize.allCases, id: \.self) { size in
+                    let selected = vm.adjustments.grainSize == size
+                    Button { vm.setGrainSize(size) } label: {
+                        Text(size.label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(selected ? Color.yellow : .white)
+                            .frame(maxWidth: .infinity, minHeight: 30)
+                            .cameraGlass(selected ? .selected : .interactive, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(size.label) grain")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, 6)
+            .opacity(vm.adjustments.grain > 0 ? 1 : 0.4)
+            .disabled(vm.adjustments.grain == 0)
+
             HStack {
                 // Hold to see the untouched original.
                 Text("HOLD FOR ORIGINAL")
