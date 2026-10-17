@@ -182,13 +182,14 @@ enum VideoService {
         processor: ImageProcessingService,
         to url: URL,
         timeRange: CMTimeRange? = nil,
-        speed: Double = 1
+        speed: Double = 1,
+        preset: String = AVAssetExportPresetHighestQuality
     ) async throws {
         let asset = try await retimedAsset(video.asset, timeRange: timeRange, speed: speed)
         let recipe = AdjustmentBox()
         recipe.value = adjustments
         let composition = try await composition(for: asset, recipe: recipe, processor: processor)
-        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
+        guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
             throw PhotoExportError.renderFailed
         }
         session.videoComposition = composition

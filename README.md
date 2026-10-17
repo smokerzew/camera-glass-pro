@@ -65,6 +65,8 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Portrait | Real background blur: Vision finds the subject (people, pets, objects), the background blurs by f-number (f1.4-16 slider from the top-bar f readout), and Portrait Lighting applies (Natural, Studio, Contour, Stage, Stage Mono, High-Key) via the cube button. Works on photos, video frames (person segmentation) and exports. | Real |
 | Live Photos | Live Photos import with their motion: touch and hold the LIVE badge to play (LIVE on = plays once when opened). | Real |
 | Effects | EFFECTS pop-up: Loop, Bounce and Long Exposure from a video or Live Photo (with your edits; result opens as a new item), and Live Photo: turns the whole video (or its trimmed part) into a real Live Photo saved to the library, with the frame on screen as the photo. | Real |
+| Export size | Edited photos: Full, 12 MP, 4 MP or 1 MP (long edge, Lanczos, never enlarged). Edited videos: Full, 4K, 1080p or 720p. Originals always export byte-for-byte. | Real |
+| Live Photo sound | Switch in Effects: Live Photos made from videos keep the video's sound (interleaved AAC) or save silent. Remembered. | Real |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 

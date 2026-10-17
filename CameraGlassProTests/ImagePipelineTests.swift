@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreImage
 import UIKit
 import XCTest
@@ -186,5 +187,22 @@ final class DownsamplerTests: XCTestCase {
         XCTAssertThrowsError(try ImageDownsampler.makePreview(from: data, maxPixelSize: 100, maxSourcePixels: 1000)) {
             XCTAssertEqual($0 as? PhotoImportError, .tooLarge)
         }
+    }
+}
+
+final class ExportSizeTests: XCTestCase {
+    func testPhotoSizesScaleByLongEdgeAndNeverEnlarge() {
+        let big = CIImage(color: .red).cropped(to: CGRect(x: 0, y: 0, width: 4000, height: 3000))
+        let small = PhotoExportService.resized(big, longEdge: ExportSize.small.photoLongEdge)
+        XCTAssertEqual(small.extent, CGRect(x: 0, y: 0, width: 1152, height: 864))
+        XCTAssertTrue(PhotoExportService.resized(big, longEdge: nil) === big, "Full keeps the original")
+        let tiny = CIImage(color: .red).cropped(to: CGRect(x: 0, y: 0, width: 800, height: 600))
+        XCTAssertEqual(PhotoExportService.resized(tiny, longEdge: 2304).extent, tiny.extent, "never upscales")
+    }
+
+    func testLabels() {
+        XCTAssertEqual(ExportSize.large.photoLabel, "12 MP")
+        XCTAssertEqual(ExportSize.medium.videoLabel, "1080p")
+        XCTAssertEqual(ExportSize.full.videoPreset, AVAssetExportPresetHighestQuality)
     }
 }

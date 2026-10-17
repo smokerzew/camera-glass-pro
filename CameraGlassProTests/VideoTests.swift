@@ -4,7 +4,7 @@ import XCTest
 
 final class VideoPipelineTests: XCTestCase {
     /// Writes a short gray H.264 movie so the video path can be tested without fixtures.
-    static func makeTestMovie(frames: Int = 12, width: Int = 64, height: Int = 48) async throws -> URL {
+    static func makeTestMovie(frames: Int = 12, width: Int = 64, height: Int = 48, withAudio: Bool = false) async throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
@@ -18,6 +18,26 @@ final class VideoPipelineTests: XCTestCase {
             kCVPixelBufferHeightKey as String: height,
         ])
         writer.add(input)
+        // Optional mono 440 Hz tone, one 1470-sample chunk (1/30 s) per video frame, interleaved.
+        let sampleRate = 44_100
+        let chunk = sampleRate / 30
+        var audioInput: AVAssetWriterInput?
+        var audioFormat: CMAudioFormatDescription?
+        if withAudio {
+            let aac = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 1,
+                AVEncoderBitRateKey: 64_000,
+            ])
+            writer.add(aac)
+            audioInput = aac
+            var asbd = AudioStreamBasicDescription(
+                mSampleRate: Float64(sampleRate), mFormatID: kAudioFormatLinearPCM,
+                mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
+                mBytesPerPacket: 2, mFramesPerPacket: 1, mBytesPerFrame: 2, mChannelsPerFrame: 1,
+                mBitsPerChannel: 16, mReserved: 0)
+            CMAudioFormatDescriptionCreate(allocator: nil, asbd: &asbd, layoutSize: 0, layout: nil, magicCookieSize: 0,
+                                           magicCookie: nil, extensions: nil, formatDescriptionOut: &audioFormat)
+        }
         XCTAssertTrue(writer.startWriting())
         writer.startSession(atSourceTime: .zero)
         let pool = try XCTUnwrap(adaptor.pixelBufferPool)
@@ -33,7 +53,32 @@ final class VideoPipelineTests: XCTestCase {
             }
             CVPixelBufferUnlockBaseAddress(pixels, [])
             XCTAssertTrue(adaptor.append(pixels, withPresentationTime: CMTime(value: CMTimeValue(index), timescale: 30)))
+
+            if let audioInput, let audioFormat {
+                let samples: [Int16] = (0..<chunk).map {
+                    Int16(8000 * sin(2 * .pi * 440 * Double(index * chunk + $0) / Double(sampleRate)))
+                }
+                let bytes = samples.withUnsafeBytes { Data($0) }
+                var block: CMBlockBuffer?
+                CMBlockBufferCreateWithMemoryBlock(allocator: nil, memoryBlock: nil, blockLength: bytes.count,
+                                                   blockAllocator: nil, customBlockSource: nil, offsetToData: 0,
+                                                   dataLength: bytes.count, flags: 0, blockBufferOut: &block)
+                let blockBuffer = try XCTUnwrap(block)
+                bytes.withUnsafeBytes { raw in
+                    if let base = raw.baseAddress {
+                        CMBlockBufferReplaceDataBytes(with: base, blockBuffer: blockBuffer, offsetIntoDestination: 0, dataLength: bytes.count)
+                    }
+                }
+                var sample: CMSampleBuffer?
+                CMAudioSampleBufferCreateReadyWithPacketDescriptions(
+                    allocator: nil, dataBuffer: blockBuffer, formatDescription: audioFormat, sampleCount: chunk,
+                    presentationTimeStamp: CMTime(value: CMTimeValue(index * chunk), timescale: CMTimeScale(sampleRate)),
+                    packetDescriptions: nil, sampleBufferOut: &sample)
+                while !audioInput.isReadyForMoreMediaData { try await Task.sleep(for: .milliseconds(5)) }
+                audioInput.append(try XCTUnwrap(sample))
+            }
         }
+        audioInput?.markAsFinished()
         input.markAsFinished()
         await writer.finishWriting()
         XCTAssertEqual(writer.status, .completed, "test movie couldn't be written: \(String(describing: writer.error))")

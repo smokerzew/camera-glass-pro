@@ -73,10 +73,12 @@ enum LiveEffectsService {
     static func renderMovie(
         from asset: AVAsset, times: [CMTime], adjustments: PhotoAdjustmentState,
         processor: ImageProcessingService, to url: URL,
-        metadata: [AVMetadataItem] = [], stillImageTime: CMTime? = nil
+        metadata: [AVMetadataItem] = [], stillImageTime: CMTime? = nil,
+        audioRange: CMTimeRange? = nil
     ) async throws {
         let recipe = AdjustmentBox()
         recipe.value = adjustments
+        let audio = try await AudioPass(asset: asset, range: audioRange)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
@@ -109,12 +111,14 @@ enum LiveEffectsService {
                     kCVPixelBufferWidthKey as String: frame.width,
                     kCVPixelBufferHeightKey as String: frame.height,
                 ])
+                if let audioInput = audio?.input { created.add(audioInput) }
                 if stillImageTime != nil, let format = stillImageTimeFormat() {
                     let metadataInput = AVAssetWriterInput(mediaType: .metadata, outputSettings: nil, sourceFormatHint: format)
                     created.add(metadataInput)
                     stillAdaptor = AVAssetWriterInputMetadataAdaptor(assetWriterInput: metadataInput)
                 }
                 guard created.startWriting() else { throw EffectError.writeFailed }
+                audio?.start()
                 created.startSession(atSourceTime: .zero)
                 writer = created
                 input = videoInput
@@ -125,7 +129,10 @@ enum LiveEffectsService {
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
             guard let buffer else { throw EffectError.writeFailed }
             processor.context.render(CIImage(cgImage: frame), to: buffer)
-            adaptor.append(buffer, withPresentationTime: CMTime(value: index, timescale: fps))
+            let time = CMTime(value: index, timescale: fps)
+            // Interleave: feed audio up to just past this frame before appending it.
+            try await audio?.feed(upTo: CMTimeAdd(time, CMTime(value: 1, timescale: 2)))
+            adaptor.append(buffer, withPresentationTime: time)
             index += 1
         }
 
@@ -143,6 +150,7 @@ enum LiveEffectsService {
             stillAdaptor.assetWriterInput.markAsFinished()
         }
         input.markAsFinished()
+        try await audio?.finish()
         await writer.finishWriting()
         guard writer.status == .completed else { throw writer.error ?? EffectError.writeFailed }
     }
@@ -196,7 +204,8 @@ enum LiveEffectsService {
     /// Writes a Live Photo pair: a JPEG still (key frame) and a movie of `range`, linked by a shared
     /// content identifier and a still-image-time marker, as Photos expects.
     static func makeLivePhoto(from asset: AVAsset, range: CMTimeRange, keyTime: CMTime,
-                              adjustments: PhotoAdjustmentState, processor: ImageProcessingService) async throws -> (photo: URL, video: URL) {
+                              adjustments: PhotoAdjustmentState, processor: ImageProcessingService,
+                              includeAudio: Bool = true) async throws -> (photo: URL, video: URL) {
         let identifier = UUID().uuidString
         let photoURL = try newURL("jpg")
         let videoURL = try newURL("mov")
@@ -221,7 +230,8 @@ enum LiveEffectsService {
         identifierItem.dataType = kCMMetadataBaseDataType_UTF8 as String
         let keyOffset = CMTimeSubtract(keyTime, range.start)
         try await renderMovie(from: asset, times: frameTimes(in: range), adjustments: adjustments, processor: processor,
-                              to: videoURL, metadata: [identifierItem], stillImageTime: keyOffset)
+                              to: videoURL, metadata: [identifierItem], stillImageTime: keyOffset,
+                              audioRange: includeAudio ? range : nil)
         return (photoURL, videoURL)
     }
 
@@ -248,5 +258,89 @@ enum LiveEffectsService {
             allocator: kCFAllocatorDefault, metadataType: kCMMetadataFormatType_Boxed,
             metadataSpecifications: [spec] as CFArray, formatDescriptionOut: &description)
         return description
+    }
+}
+
+/// Copies the source's sound for `range` into a movie being written, interleaved with the video:
+/// decoded to PCM (mono or stereo), re-timed to start at zero, re-encoded as AAC.
+private final class AudioPass {
+    let input: AVAssetWriterInput
+    private let reader: AVAssetReader
+    private let output: AVAssetReaderTrackOutput
+    private let offset: CMTime
+    private var pending: CMSampleBuffer?
+    private var exhausted = false
+
+    /// Nil when there's no range or the source has no audio track.
+    init?(asset: AVAsset, range: CMTimeRange?) async throws {
+        guard let range, let track = try await asset.loadTracks(withMediaType: .audio).first else { return nil }
+        let formats = try await track.load(.formatDescriptions)
+        let description = formats.first.flatMap { CMAudioFormatDescriptionGetStreamBasicDescription($0)?.pointee }
+        let sampleRate = description.map { $0.mSampleRate > 0 ? $0.mSampleRate : 44100 } ?? 44100
+        let channels = min(max(Int(description?.mChannelsPerFrame ?? 2), 1), 2)
+
+        reader = try AVAssetReader(asset: asset)
+        reader.timeRange = range
+        output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: channels,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: false,
+        ])
+        guard reader.canAdd(output) else { return nil }
+        reader.add(output)
+        input = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: channels,
+            AVEncoderBitRateKey: channels == 1 ? 96_000 : 160_000,
+        ])
+        input.expectsMediaDataInRealTime = false
+        offset = range.start
+    }
+
+    func start() { reader.startReading() }
+
+    /// Appends source audio up to `time` (movie time).
+    func feed(upTo time: CMTime) async throws {
+        while !exhausted {
+            if pending == nil {
+                guard let next = output.copyNextSampleBuffer() else { exhausted = true; break }
+                pending = Self.shifted(next, by: offset)
+            }
+            guard let sample = pending else { continue }
+            if CMTimeCompare(CMSampleBufferGetPresentationTimeStamp(sample), time) > 0 { break }
+            while !input.isReadyForMoreMediaData { try await Task.sleep(for: .milliseconds(5)) }
+            input.append(sample)
+            pending = nil
+        }
+    }
+
+    func finish() async throws {
+        try await feed(upTo: .positiveInfinity)
+        input.markAsFinished()
+        reader.cancelReading()
+    }
+
+    /// Same samples, with timestamps moved earlier by `offset`.
+    private static func shifted(_ sample: CMSampleBuffer, by offset: CMTime) -> CMSampleBuffer? {
+        var count: CMItemCount = 0
+        CMSampleBufferGetSampleTimingInfoArray(sample, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count)
+        guard count > 0 else { return nil }
+        var timing = [CMSampleTimingInfo](repeating: CMSampleTimingInfo(), count: count)
+        CMSampleBufferGetSampleTimingInfoArray(sample, entryCount: count, arrayToFill: &timing, entriesNeededOut: &count)
+        for index in timing.indices {
+            timing[index].presentationTimeStamp = CMTimeSubtract(timing[index].presentationTimeStamp, offset)
+            if timing[index].decodeTimeStamp.isValid {
+                timing[index].decodeTimeStamp = CMTimeSubtract(timing[index].decodeTimeStamp, offset)
+            }
+        }
+        var result: CMSampleBuffer?
+        CMSampleBufferCreateCopyWithNewTiming(allocator: nil, sampleBuffer: sample, sampleTimingEntryCount: count,
+                                              sampleTimingArray: &timing, sampleBufferOut: &result)
+        return result
     }
 }

@@ -13,6 +13,8 @@ enum SettingsKey {
     static let keepAdjustmentsOnReplace = "settings.keepAdjustmentsOnReplace"
     static let exportContent = "settings.exportContent"
     static let exportFormat = "settings.exportFormat"
+    static let exportSize = "settings.exportSize"
+    static let livePhotoSound = "settings.livePhotoSound"
     static let topBarControls = "settings.topBarControls"
     static let reduceMotion = "settings.reduceMotion"
     static let highContrast = "settings.highContrast"

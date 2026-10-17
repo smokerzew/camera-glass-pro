@@ -8,11 +8,12 @@ struct PhotoExportView: View {
 
     @AppStorage(SettingsKey.exportContent) private var content = ExportContent.adjusted
     @AppStorage(SettingsKey.showCenter) private var showCenter = false
+    @AppStorage(SettingsKey.exportSize) private var size = ExportSize.full
     @State private var cropToFraming = false
     @State private var burnOverlays = false
 
     private var options: ExportOptions {
-        ExportOptions(content: content, format: vm.exportFormat, cropToFraming: cropToFraming, burnOverlays: burnOverlays)
+        ExportOptions(content: content, format: vm.exportFormat, size: size, cropToFraming: cropToFraming, burnOverlays: burnOverlays)
     }
 
     private var overlays: OverlayBurnIn {
@@ -31,8 +32,19 @@ struct PhotoExportView: View {
                     Text(footerText)
                 }
 
+                if content == .adjusted && isVideo {
+                    Section("Edited Copy") {
+                        Picker("Size", selection: $size) {
+                            ForEach(ExportSize.allCases) { Text($0.videoLabel).tag($0) }
+                        }
+                    }
+                }
+
                 if content == .adjusted && !isVideo {
                     Section("Edited Copy") {
+                        Picker("Size", selection: $size) {
+                            ForEach(ExportSize.allCases) { Text($0.photoLabel).tag($0) }
+                        }
                         Picker("Format", selection: Binding(get: { vm.exportFormat }, set: { vm.setExportFormat($0) })) {
                             ForEach(ExportFormat.allCases) { Text($0.label).tag($0) }
                         }

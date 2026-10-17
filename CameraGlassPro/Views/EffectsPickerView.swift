@@ -41,6 +41,17 @@ struct EffectsPickerView: View {
                         .frame(maxWidth: .infinity)
                     }
                 }
+                if vm.video != nil {
+                    // Live Photo sound: keep the video's audio or save it silent.
+                    Toggle(isOn: Binding(get: { vm.livePhotoSound }, set: { vm.setLivePhotoSound($0) })) {
+                        Label("Live Photo Sound", systemImage: vm.livePhotoSound ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .tint(.yellow)
+                    .padding(.horizontal, 6)
+                    .accessibilityHint("When on, the Live Photo keeps the video's sound")
+                }
                 Text(vm.video != nil
                      ? "Effects use the trimmed range and your edits. Loop, Bounce and Long Exposure open as a new item; Live Photo saves to your library."
                      : "Made from this Live Photo's motion, with your edits. The result opens as a new item.")

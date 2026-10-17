@@ -81,6 +81,8 @@ final class CameraWorkspaceViewModel {
     /// True while the Live Photo motion plays (touch and hold the LIVE badge).
     var isPlayingLive = false
     var showEffectsPicker = false
+    /// Whether Live Photos made from videos keep the video's sound (saved preference).
+    private(set) var livePhotoSound = true
     private(set) var isRenderingEffect = false
     private(set) var effectMessage = ""
 
@@ -211,6 +213,7 @@ final class CameraWorkspaceViewModel {
         exportFormat = ExportFormat(rawValue: defaults.string(forKey: SettingsKey.exportFormat) ?? "") ?? .jpeg
         topBarControls = CameraControl.decode(defaults.string(forKey: SettingsKey.topBarControls))
         presets = StylePreset.load(from: defaults)
+        livePhotoSound = defaults.object(forKey: SettingsKey.livePhotoSound) as? Bool ?? true
         resetFraming()
     }
 
@@ -959,6 +962,7 @@ final class CameraWorkspaceViewModel {
         let isVideo = video != nil
         let range = trimRange
         let keySeconds = player?.currentTime().seconds ?? 0
+        let withSound = livePhotoSound
         effectTask = Task { [weak self] in
             do {
                 let duration = try await asset.load(.duration)
@@ -984,7 +988,8 @@ final class CameraWorkspaceViewModel {
                     let key = CMTime(seconds: min(max(keySeconds, available.start.seconds), available.end.seconds - 0.05),
                                      preferredTimescale: 600)
                     let pair = try await LiveEffectsService.makeLivePhoto(
-                        from: asset, range: available, keyTime: key, adjustments: recipe, processor: processor)
+                        from: asset, range: available, keyTime: key, adjustments: recipe, processor: processor,
+                        includeAudio: withSound)
                     try Task.checkCancellation()
                     try await LiveEffectsService.saveLivePhotoToLibrary(photo: pair.photo, video: pair.video)
                     self?.showToast("Live Photo saved to Photos")
@@ -996,6 +1001,11 @@ final class CameraWorkspaceViewModel {
             }
             self?.isRenderingEffect = false
         }
+    }
+
+    func setLivePhotoSound(_ enabled: Bool) {
+        livePhotoSound = enabled
+        defaults.set(enabled, forKey: SettingsKey.livePhotoSound)
     }
 
     func cancelEffect() {
@@ -1300,6 +1310,7 @@ final class CameraWorkspaceViewModel {
         let isEdited = options.content == .adjusted
         let speed = Double(playbackRate)
         let trimRange = self.trimRange
+        let videoPreset = options.size.videoPreset
         let work: @Sendable () async throws -> URL
 
         if let video {
@@ -1309,7 +1320,7 @@ final class CameraWorkspaceViewModel {
                     let url = exporter.directory.appendingPathComponent(
                         PhotoExportService.fileName(content: .adjusted, fileExtension: "mov"))
                     try await VideoService.exportEdited(video, adjustments: adjustments, processor: processor, to: url,
-                                                       timeRange: trimRange, speed: speed)
+                                                       timeRange: trimRange, speed: speed, preset: videoPreset)
                     return url
                 }
                 let url = exporter.directory.appendingPathComponent(

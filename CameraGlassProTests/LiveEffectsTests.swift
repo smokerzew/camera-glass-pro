@@ -25,6 +25,27 @@ final class LiveEffectsTests: XCTestCase {
         XCTAssertEqual(duration, 2, accuracy: 0.1)
     }
 
+    func testLivePhotoSoundSwitch() async throws {
+        let source = try await VideoPipelineTests.makeTestMovie(frames: 30, withAudio: true)
+        let sourceAudio = try await AVURLAsset(url: source).loadTracks(withMediaType: .audio)
+        XCTAssertEqual(sourceAudio.count, 1, "test movie has a sound track")
+
+        let key = CMTime(seconds: 0.5, preferredTimescale: 600)
+        let withSound = try await LiveEffectsService.makeLivePhoto(
+            from: AVURLAsset(url: source), range: oneSecond, keyTime: key,
+            adjustments: PhotoAdjustmentState(), processor: .shared, includeAudio: true)
+        let silent = try await LiveEffectsService.makeLivePhoto(
+            from: AVURLAsset(url: source), range: oneSecond, keyTime: key,
+            adjustments: PhotoAdjustmentState(), processor: .shared, includeAudio: false)
+
+        let soundTracks = try await AVURLAsset(url: withSound.video).loadTracks(withMediaType: .audio)
+        let silentTracks = try await AVURLAsset(url: silent.video).loadTracks(withMediaType: .audio)
+        XCTAssertEqual(soundTracks.count, 1, "sound on keeps the audio")
+        XCTAssertEqual(silentTracks.count, 0, "sound off saves a silent Live Photo")
+        let duration = try await AVURLAsset(url: withSound.video).load(.duration).seconds
+        XCTAssertEqual(duration, 1, accuracy: 0.15)
+    }
+
     func testBounceMovieLength() async throws {
         let source = try await VideoPipelineTests.makeTestMovie(frames: 30)
         let asset = AVURLAsset(url: source)

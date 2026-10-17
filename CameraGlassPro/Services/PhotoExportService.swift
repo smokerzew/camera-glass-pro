@@ -1,3 +1,5 @@
+import CoreImage.CIFilterBuiltins
+import AVFoundation
 import CoreImage
 import Foundation
 import UniformTypeIdentifiers
@@ -28,9 +30,54 @@ enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Output size for edited exports. Photos are scaled by long edge (never enlarged); videos use a preset.
+enum ExportSize: String, CaseIterable, Identifiable, Sendable {
+    case full, large, medium, small
+
+    var id: String { rawValue }
+
+    var photoLabel: String {
+        switch self {
+        case .full: "Full"
+        case .large: "12 MP"
+        case .medium: "4 MP"
+        case .small: "1 MP"
+        }
+    }
+
+    var videoLabel: String {
+        switch self {
+        case .full: "Full"
+        case .large: "4K"
+        case .medium: "1080p"
+        case .small: "720p"
+        }
+    }
+
+    /// Longest side in pixels for photos (nil = keep the original size).
+    var photoLongEdge: CGFloat? {
+        switch self {
+        case .full: nil
+        case .large: 4032
+        case .medium: 2304
+        case .small: 1152
+        }
+    }
+
+    var videoPreset: String {
+        switch self {
+        case .full: AVAssetExportPresetHighestQuality
+        case .large: AVAssetExportPreset3840x2160
+        case .medium: AVAssetExportPreset1920x1080
+        case .small: AVAssetExportPreset1280x720
+        }
+    }
+}
+
 struct ExportOptions: Equatable, Sendable {
     var content: ExportContent = .adjusted
     var format: ExportFormat = .jpeg
+    var size: ExportSize = .full
     /// Destructively crops the edited copy to the current viewfinder framing.
     var cropToFraming = false
     /// Draws the visible composition guides into the edited copy.
@@ -130,7 +177,23 @@ struct PhotoExportService: Sendable {
             image = Self.crop(image, normalized: crop)
         }
         image = Self.burnOverlays(request.overlays, into: image)
+        image = Self.resized(image, longEdge: request.options.size.photoLongEdge)
         return try processor.encode(image, as: request.options.format)
+    }
+
+    /// Scales down (high-quality Lanczos) so the longest side is at most `longEdge`; never enlarges.
+    static func resized(_ image: CIImage, longEdge: CGFloat?) -> CIImage {
+        let extent = image.extent
+        guard let longEdge, max(extent.width, extent.height) > longEdge else { return image }
+        let scale = longEdge / max(extent.width, extent.height)
+        let filter = CIFilter.lanczosScaleTransform()
+        filter.inputImage = image
+        filter.scale = Float(scale)
+        filter.aspectRatio = 1
+        guard let output = filter.outputImage else { return image }
+        let target = CGRect(x: output.extent.minX, y: output.extent.minY,
+                            width: (extent.width * scale).rounded(.down), height: (extent.height * scale).rounded(.down))
+        return output.cropped(to: target).transformed(by: CGAffineTransform(translationX: -target.minX, y: -target.minY))
     }
 
     /// Crops with a top-left-origin normalized rect and moves the result to the origin.
