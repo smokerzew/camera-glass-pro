@@ -5,6 +5,7 @@ import Foundation
 enum PhotographicStyle: String, CaseIterable, Codable, Sendable, Identifiable {
     case standard, amber, gold, roseGold, neutral, coolRose, cool
     case vibrant, natural, luminous, dramatic, quiet, cozy, ethereal
+    case sunset, honey, peach, softPink, lavender, mint, ocean, emerald, punchy, faded
     case mutedBW, starkBW
 
     var id: String { rawValue }
@@ -15,6 +16,7 @@ enum PhotographicStyle: String, CaseIterable, Codable, Sendable, Identifiable {
         case .coolRose: "Cool Rose"
         case .mutedBW: "Muted B&W"
         case .starkBW: "Stark B&W"
+        case .softPink: "Soft Pink"
         default: rawValue.capitalized
         }
     }
@@ -35,6 +37,15 @@ enum PhotographicStyle: String, CaseIterable, Codable, Sendable, Identifiable {
         case .quiet: (0.01, 0.01, 0.01)
         case .cozy: (0.03, 0.01, -0.02)
         case .ethereal: (0.01, 0.0, 0.025)
+        case .sunset: (0.045, 0.01, -0.02)
+        case .honey: (0.035, 0.025, -0.04)
+        case .peach: (0.035, 0.012, 0.0)
+        case .softPink: (0.03, -0.008, 0.02)
+        case .lavender: (0.012, -0.008, 0.035)
+        case .mint: (-0.01, 0.025, 0.012)
+        case .ocean: (-0.025, 0.01, 0.035)
+        case .emerald: (-0.012, 0.03, 0.0)
+        case .punchy, .faded: (0, 0, 0)
         }
     }
 
@@ -49,6 +60,11 @@ enum PhotographicStyle: String, CaseIterable, Codable, Sendable, Identifiable {
         case .quiet: (-0.4, -0.45)
         case .cozy: (0.2, 0.15)
         case .ethereal: (-0.5, -0.2)
+        case .sunset, .honey: (0.15, 0.25)
+        case .peach, .softPink, .lavender, .mint: (-0.25, -0.05)
+        case .ocean, .emerald: (0.1, 0.2)
+        case .punchy: (0.45, 0.5)
+        case .faded: (-0.55, -0.35)
         case .mutedBW: (-0.3, 0)
         case .starkBW: (0.6, 0)
         }

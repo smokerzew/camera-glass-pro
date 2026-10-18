@@ -101,6 +101,7 @@ extension CameraWorkspaceViewModel {
             || adjustments.visionMode != .none || adjustments.pixelSort > 0 || adjustments.littlePlanet > 0
             || adjustments.depthMap > 0 || adjustments.blinds > 0 || adjustments.spotlight > 0 || adjustments.glow > 0
             || adjustments.sparkle > 0 || adjustments.vhs > 0 || adjustments.webcam > 0 || adjustments.halftone > 0 || adjustments.chroma > 0
+            || (adjustments.pop != .none && adjustments.popAmount > 0)
             || (adjustments.redactionTarget == .faces ? adjustments.faceRedaction != .none : !adjustments.redactionStrokes.isEmpty)
         case .depth: depthEffect
         case .nightMode: adjustments.nightLook
@@ -151,9 +152,9 @@ extension CameraWorkspaceViewModel {
         case .peaking: focusPeaking ? "On" : "Off"
         case .zebras: zebras ? "On" : "Off"
         case .trim: isTrimmed ? String(format: "%.1f s to %.1f s", trimStart, trimEnd) : "Full length"
-        case .frame: video != nil ? "Saves the frame on screen" : "Needs a video"
+        case .frame: video != nil ? "Pick a frame to save" : "Needs a video"
         case .liveText: liveTextEnabled ? "\(recognizedText.count) lines found" : "Off"
-        case .effects: canMakeEffects ? "Loop, Bounce, Long Exposure, Live Photo" : "Needs a video or Live Photo"
+        case .effects: canMakeEffects ? "Loop, Bounce, Reverse, Echo, GIF and more" : "Needs a video or Live Photo"
         case .crop: adjustments.hasGeometry ? "Edited" : "Original framing"
         case .subject: [adjustments.colorSplash ? "Color Splash" : nil,
                         adjustments.background != .original ? "Background \(adjustments.background.label.capitalized)" : nil]
@@ -182,9 +183,9 @@ extension CameraWorkspaceViewModel {
         case .peaking: "Highlights the sharpest edges in red"
         case .zebras: "Stripes the brightest areas that are close to clipping"
         case .trim: "Choose where the video starts and ends"
-        case .frame: "Saves the paused video frame as a full-quality photo with your edits"
+        case .frame: "Step to the exact frame, then save it as a photo with or without the camera UI"
         case .liveText: "Finds text you can copy or translate (pauses videos)"
-        case .effects: "Makes a Loop, Bounce or Long Exposure, or turns a video into a Live Photo"
+        case .effects: "Makes a Loop, Bounce, Reverse, Speed Ramp, Stop Motion, Echo, GIF or Long Exposure, or a Live Photo"
         case .subject: "Color Splash and Background Swap for people, pets and objects"
         case .crop: "Crop, rotate, flip and straighten the photo"
         case .format: "Cycles the export format: JPEG, HEIF, PNG"
@@ -224,7 +225,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: setFocusPeaking(!focusPeaking)
         case .zebras: setZebras(!zebras)
         case .trim: showTrim = true
-        case .frame: saveCurrentFrame()
+        case .frame: openFramePicker()
         case .liveText: setLiveText(!liveTextEnabled)
         case .effects: openEffectsPicker()
         case .subject: openSubjectPicker()

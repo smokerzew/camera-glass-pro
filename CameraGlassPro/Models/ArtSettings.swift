@@ -68,6 +68,57 @@ enum RetroEffect: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// FX > Pop effects, one at a time. `popOption` is the palette, segment count or pixel size where there is one.
+enum PopEffect: String, CaseIterable, Identifiable, Codable, Sendable {
+    case none, glitch, lightLeak, duotone, kaleidoscope, fisheye, pixelArt, anaglyph, crt, comic, glitter
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .none: "Off"
+        case .glitch: "Glitch"
+        case .lightLeak: "Light Leak"
+        case .duotone: "Duotone"
+        case .kaleidoscope: "Kaleido"
+        case .fisheye: "Fisheye"
+        case .pixelArt: "Pixel Art"
+        case .anaglyph: "3D"
+        case .crt: "CRT TV"
+        case .comic: "Comic"
+        case .glitter: "Glitter"
+        }
+    }
+
+    var note: String {
+        switch self {
+        case .none: ""
+        case .glitch: "Torn, shifted slices with split red and blue, like a broken digital signal."
+        case .lightLeak: "Warm orange and pink light bleeding in from the edges, like an old film camera."
+        case .duotone: "The photo in two colors: one for the shadows, one for the highlights."
+        case .kaleidoscope: "Mirrors the middle of the photo into a kaleidoscope pattern."
+        case .fisheye: "A bulging ultra-wide lens with dark round edges."
+        case .pixelArt: "Big pixels and few colors, like an 8-bit game."
+        case .anaglyph: "Red and cyan 3D, for red-blue glasses."
+        case .crt: "An old tube TV: scan lines, soft glow and curved dark corners."
+        case .comic: "Ink outlines and dots, like a printed comic book."
+        case .glitter: "Scattered sparkles over the photo."
+        }
+    }
+
+    /// The effect's extra setting, if it has one.
+    var optionTitle: String? {
+        switch self {
+        case .kaleidoscope: "Segments"
+        case .pixelArt: "Pixel Size"
+        default: nil
+        }
+    }
+
+    static let duotoneNames = ["Pink Blue", "Teal Orange", "Purple Gold", "Navy Red", "Green Pink"]
+    static func duotoneIndex(_ option: Double) -> Int { min(max(Int((option * 4).rounded()), 0), duotoneNames.count - 1) }
+    static func kaleidoscopeSegments(_ option: Double) -> Int { 3 + Int((min(max(option, 0), 1) * 9).rounded()) }
+}
+
 /// Pages inside FX > Art.
 enum ArtEffect: String, CaseIterable, Identifiable, Sendable {
     case hologram, vision, sort, orbit, melt, planet, depth

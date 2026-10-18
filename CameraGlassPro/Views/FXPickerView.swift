@@ -10,8 +10,9 @@ struct FXPickerView: View {
     @State private var art: ArtEffect = .hologram
     @State private var light: LightEffect = .blinds
     @State private var retro: RetroEffect = .vhs
+    @State private var popTab: PopEffect = .glitch
 
-    enum Page: String, CaseIterable { case blur, blend, ghost, art, light, retro, privacy }
+    enum Page: String, CaseIterable { case blur, blend, ghost, art, light, retro, pop, privacy }
 
     /// The Reset button clears only the page that's showing.
     private var resetArea: ResetArea {
@@ -22,6 +23,7 @@ struct FXPickerView: View {
         case .art: .fxArt
         case .light: .fxLight
         case .retro: .fxRetro
+        case .pop: .fxPop
         case .privacy: .fxPrivacy
         }
     }
@@ -64,6 +66,7 @@ struct FXPickerView: View {
                 case .art: artPage
                 case .light: lightPage
                 case .retro: retroPage
+                case .pop: popPage
                 case .privacy: privacyPage
                 }
             }
@@ -310,6 +313,39 @@ struct FXPickerView: View {
                 }
             }
         }
+    }
+
+    /// Pop effects, one at a time: moving a slider on a tab switches to that effect.
+    private var popPage: some View {
+        let a = vm.adjustments
+        let tabs = PopEffect.allCases.filter { $0 != .none }
+        return VStack(alignment: .leading, spacing: 12) {
+            GlassTabs(tabs: tabs, selection: $popTab) { $0.label }
+            PagedStack(pages: tabs, selection: popTab) { effect in
+                let on = a.pop == effect && a.popAmount > 0
+                VStack(alignment: .leading, spacing: 12) {
+                    GlassSliderRow(title: effect.label, value: a.pop == effect ? a.popAmount : 0) { vm.setPop(effect, amount: $0) }
+                    Group {
+                        if effect == .duotone {
+                            GlassTabs(tabs: Array(PopEffect.duotoneNames.indices),
+                                      selection: Binding(get: { PopEffect.duotoneIndex(vm.adjustments.popOption) },
+                                                         set: { vm.setEffect(\.popOption, to: Double($0) / 4) })) {
+                                PopEffect.duotoneNames[$0]
+                            }
+                        } else if let title = effect.optionTitle {
+                            GlassSliderRow(title: title, value: a.popOption,
+                                           display: { effect == .kaleidoscope ? "\(PopEffect.kaleidoscopeSegments($0))" : "\(Int(($0 * 100).rounded()))%" }) {
+                                vm.setEffect(\.popOption, to: min(max($0, 0), 1))
+                            }
+                        }
+                    }
+                    .opacity(on ? 1 : 0.4)
+                    .disabled(!on)
+                    note(effect.note + " One Pop effect at a time.")
+                }
+            }
+        }
+        .onAppear { if vm.adjustments.pop != .none { popTab = vm.adjustments.pop } }
     }
 
     private var privacyPage: some View {

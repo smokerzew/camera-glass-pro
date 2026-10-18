@@ -63,6 +63,7 @@ struct CameraWorkspaceView: View {
             .sheet(isPresented: $vm.showAdjustments) { PhotoAdjustmentView(vm: vm, detent: $adjustDetent) }
             .sheet(isPresented: $vm.showExport) { PhotoExportView(vm: vm) }
             .sheet(isPresented: $vm.showTrim) { VideoTrimView(vm: vm) }
+            .sheet(isPresented: $vm.showFramePicker) { FramePickerView(vm: vm) }
             .sheet(isPresented: $vm.showTextSheet) { LiveTextSheet(vm: vm) }
             .fullScreenCover(isPresented: $vm.showCropEditor) { CropEditorView(vm: vm) }
             .fullScreenCover(isPresented: $vm.showRedactionEditor) { RedactionEditorView(vm: vm) }

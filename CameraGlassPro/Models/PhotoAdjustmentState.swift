@@ -123,6 +123,10 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var halftoneBalance: Double = 0
     var halftoneColor = false
     var chroma: Double = 0
+    /// Pop FX: one effect, how strong, and its own setting (palette, segments or pixel size).
+    var pop: PopEffect = .none
+    var popAmount: Double = 0
+    var popOption: Double = 0.5
     /// Refine Subject strokes and Liquify pushes (photo coordinates before crop and rotation).
     var maskStrokes: [MaskStroke] = []
     var liquifyStrokes: [LiquifyStroke] = []
@@ -289,6 +293,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         halftoneBalance = min(max((try? c.decodeIfPresent(Double.self, forKey: .halftoneBalance)) ?? 0, -1), 1)
         halftoneColor = (try? c.decodeIfPresent(Bool.self, forKey: .halftoneColor)) ?? false
         chroma = unit(.chroma)
+        pop = (try? c.decodeIfPresent(PopEffect.self, forKey: .pop)) ?? .none
+        popAmount = unit(.popAmount)
+        popOption = unit(.popOption, 0.5)
         maskStrokes = Array(((try? c.decodeIfPresent([MaskStroke].self, forKey: .maskStrokes)) ?? []).prefix(MaskStroke.limit))
         liquifyStrokes = Array(((try? c.decodeIfPresent([LiquifyStroke].self, forKey: .liquifyStrokes)) ?? []).prefix(LiquifyStroke.limit))
         planetSpin = min(max((try? c.decodeIfPresent(Double.self, forKey: .planetSpin)) ?? 0, 0), 360)
@@ -504,6 +511,11 @@ enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case y2kGlow, flashPop, cyber, pastel
     case hd, clarity, hdr, crisp
     case digicam, ccd, retro
+    case concrete, subway, skateDay, rooftop, graffiti, cityGrey, sodiumLight, raincoat, streetNoir, candid
+    case neonPink, electricBlue, laserLime, clubPurple, arcade, miami, uvParty, hotRed, cyberCyan, afterHours
+    case cottonCandy, babyBlue, mintCream, lilac, peachFuzz, lemonade, cloudy, blush, seaGlass, dreamy
+    case terracotta, olive, sandstone, moss, clay, cedar, harvest, canyon, linen, coffee
+    case velvet, champagne, ivory, onyx, pearl, bordeaux, sapphire, goldLeaf, silk, magazine
 
     var label: String {
         if let recipe = LookRecipe.recipe(self) { return recipe.label }

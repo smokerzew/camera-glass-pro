@@ -3,7 +3,7 @@ import CoreImage.CIFilterBuiltins
 
 /// Filter groups shown as tabs in the filter picker.
 enum FilterCategory: String, CaseIterable, Identifiable {
-    case classic, film, creative, cinematic, portrait, nature, seasons, travel, blackWhite, vintage, moody, food, y2k, quality, digicam
+    case classic, film, creative, cinematic, portrait, nature, seasons, travel, blackWhite, vintage, moody, food, y2k, quality, digicam, street, neon, pastel, earth, lux
 
     var id: String { rawValue }
 
@@ -24,6 +24,11 @@ enum FilterCategory: String, CaseIterable, Identifiable {
         case .y2k: "Y2K"
         case .quality: "Quality"
         case .digicam: "DigiCam FX"
+        case .street: "Street"
+        case .neon: "Neon"
+        case .pastel: "Pastel"
+        case .earth: "Earth"
+        case .lux: "Lux"
         }
     }
 

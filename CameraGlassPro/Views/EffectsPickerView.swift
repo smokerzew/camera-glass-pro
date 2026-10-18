@@ -32,7 +32,7 @@ struct EffectsPickerView: View {
             .padding(.horizontal, 6)
 
             if vm.canMakeEffects {
-                HStack(alignment: .top, spacing: 6) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6, alignment: .top), count: 5), spacing: 12) {
                     ForEach(effects) { effect in
                         PanelControlButton(systemImage: effect.systemImage, title: effect.title,
                                            hint: hint(for: effect)) {
@@ -53,8 +53,8 @@ struct EffectsPickerView: View {
                     .accessibilityHint("When on, the Live Photo keeps the video's sound")
                 }
                 Text(vm.video != nil
-                     ? "Effects use the trimmed range and your edits. Loop, Bounce and Long Exposure open as a new item; Live Photo saves to your library."
-                     : "Made from this Live Photo's motion, with your edits. The result opens as a new item.")
+                     ? "Effects use the trimmed range and your edits. Movies and Long Exposure open as a new item; Live Photo and GIF save to your library."
+                     : "Made from this Live Photo's motion, with your edits. The result opens as a new item; GIF saves to your library.")
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
@@ -93,6 +93,11 @@ struct EffectsPickerView: View {
         case .loop: "Repeats the clip as a seamless loop"
         case .bounce: "Plays the clip forward and backward"
         case .longExposure: "Blends the frames into one photo, like a slow shutter"
+        case .reverse: "Plays the clip backward"
+        case .speedRamp: "Fast at the start and end, slow motion in the middle"
+        case .stopMotion: "Choppy, few pictures a second, like stop-motion animation"
+        case .echo: "Moving things leave fading trails"
+        case .gif: "Saves a looping GIF of up to 4 seconds to your library"
         }
     }
 

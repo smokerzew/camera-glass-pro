@@ -210,6 +210,9 @@ final class ImageProcessingService: @unchecked Sendable {
             image = halftone(image, amount: a.halftone, dot: a.halftoneDot, balance: a.halftoneBalance,
                              color: a.halftoneColor, extent: extent)
         }
+        if a.pop != .none, a.popAmount > 0 {
+            image = pop(image, effect: a.pop, amount: a.popAmount, option: a.popOption, extent: extent)
+        }
         if a.tiltShift > 0 {
             image = tiltShift(image, amount: a.tiltShift, position: a.tiltShiftPosition, extent: extent)
         }

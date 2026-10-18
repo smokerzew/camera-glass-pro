@@ -107,6 +107,8 @@ final class CameraWorkspaceViewModel {
     /// Saved versions of the edit, per photo or video.
     private(set) var versionStore: [UUID: [PhotoAdjustmentState]] = [:]
     var showRedactionEditor = false
+    /// Frame tool: pick the exact frame, then save it with or without the camera UI.
+    var showFramePicker = false
     /// Whether Live Photos made from videos keep the video's sound (saved preference).
     private(set) var livePhotoSound = true
     private(set) var isRenderingEffect = false
@@ -728,6 +730,22 @@ final class CameraWorkspaceViewModel {
         guard let player else { return }
         if isPlaying { player.pause(); isPlaying = false }
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        playbackTime = seconds
+    }
+
+    /// Moves `count` frames forward or back (paused), within the video.
+    func stepFrame(_ count: Int, fps: Double) {
+        guard let player else { return }
+        let target = player.currentTime().seconds + Double(count) / max(fps, 1)
+        scrub(to: min(max(target.isFinite ? target : 0, 0), max(videoDuration - 0.001, 0)))
+    }
+
+    /// The video's frame rate (30 if unknown).
+    func videoFrameRate() async -> Double {
+        guard let asset = video?.asset,
+              let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let rate = try? await track.load(.nominalFrameRate), rate > 0 else { return 30 }
+        return Double(rate)
     }
 
     private func loopToTrimStart() {
@@ -1014,11 +1032,11 @@ final class CameraWorkspaceViewModel {
                 let full = CMTimeRange(start: .zero, duration: duration)
                 let available = isVideo ? (range ?? full) : full
                 switch effect {
-                case .loop, .bounce:
+                case .loop, .bounce, .reverse, .speedRamp, .stopMotion, .echo:
                     let url = try LiveEffectsService.newURL("mov")
                     try await LiveEffectsService.renderMovie(
                         from: asset, times: LiveEffectsService.sequence(for: effect, in: available),
-                        adjustments: recipe, processor: processor, to: url)
+                        adjustments: recipe, processor: processor, to: url, echo: effect == .echo)
                     try Task.checkCancellation()
                     self?.showEffectResult(url, toast: "\(effect.title.capitalized) created")
                 case .longExposure:
@@ -1028,6 +1046,11 @@ final class CameraWorkspaceViewModel {
                     let url = try LiveEffectsService.newURL("jpg")
                     try data.write(to: url)
                     self?.showEffectResult(url, toast: "Long Exposure created")
+                case .gif:
+                    let data = try await LiveEffectsService.gif(from: asset, range: available, adjustments: recipe, processor: processor)
+                    try Task.checkCancellation()
+                    try await ScreenCapture.saveImageDataToPhotos(data)
+                    self?.showToast("GIF saved to Photos")
                 case .livePhoto:
                     // The whole video (or the trimmed part) becomes the motion; the frame on screen is the photo.
                     let key = CMTime(seconds: min(max(keySeconds, available.start.seconds), available.end.seconds - 0.05),
@@ -1482,6 +1505,18 @@ final class CameraWorkspaceViewModel {
     }
 
     /// Saves the video frame on screen as a full-resolution photo with the current edits.
+    func openFramePicker() {
+        guard video != nil else { return }
+        isControlPanelOpen = false
+        if isPlaying { togglePlayback() }
+        showFramePicker = true
+    }
+
+    func saveChosenFrame(withUI: Bool) {
+        showFramePicker = false
+        if withUI { saveScreenWithUI() } else { saveCurrentFrame() }
+    }
+
     func saveCurrentFrame() {
         guard let video, let player else { return }
         if isPlaying { togglePlayback() }
@@ -1513,6 +1548,14 @@ final class CameraWorkspaceViewModel {
     }
 
     /// On/off switches (pixel sort direction and subject-only, etc.), one undo step each.
+    /// Pop FX are one at a time: a slider on another Pop tab switches to that effect.
+    func setPop(_ effect: PopEffect, amount: Double) {
+        recordUndoPoint()
+        adjustments.pop = effect
+        adjustments.popAmount = amount.isFinite ? min(max(amount, 0), 1) : 0
+        adjustmentsChanged()
+    }
+
     func setFlag(_ path: WritableKeyPath<PhotoAdjustmentState, Bool>, to value: Bool) {
         guard adjustments[keyPath: path] != value else { return }
         recordUndoPoint(force: true)

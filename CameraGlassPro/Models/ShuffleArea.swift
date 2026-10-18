@@ -5,7 +5,7 @@ import Foundation
 extension PhotoAdjustmentState {
     static func canShuffle(_ area: ResetArea) -> Bool {
         switch area {
-        case .light, .color, .detail, .effects, .filter, .fxBlur, .fxBlend, .fxGhost, .fxArt, .fxLight, .fxRetro, .subjectCreate: true
+        case .light, .color, .detail, .effects, .filter, .fxBlur, .fxBlend, .fxGhost, .fxArt, .fxLight, .fxRetro, .fxPop, .subjectCreate: true
         case .local, .adjust, .fxPrivacy, .subjectStyle: false
         }
     }
@@ -118,6 +118,10 @@ extension PhotoAdjustmentState {
                 next.halftoneColor = coin()
             case .chroma: next.chroma = random(0.3...0.9)
             }
+        case .fxPop:
+            next.pop = PopEffect.allCases.filter { $0 != .none && $0 != pop }.randomElement(using: &rng) ?? .glitch
+            next.popAmount = random(0.6...1)
+            next.popOption = random(0...1)
         case .subjectCreate:
             next.dispersion = random(0.4...1)
             next.dispersionSize = random(0.2...0.8)

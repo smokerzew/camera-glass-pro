@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 /// Live Photo-style effects made from a video or a Live Photo's motion: Loop, Bounce and
 /// Long Exposure (as in Photos), plus turning a video into a real Live Photo.
 enum LiveEffect: String, CaseIterable, Identifiable {
-    case livePhoto, loop, bounce, longExposure
+    case livePhoto, loop, bounce, longExposure, reverse, speedRamp, stopMotion, echo, gif
 
     var id: String { rawValue }
 
@@ -18,6 +18,11 @@ enum LiveEffect: String, CaseIterable, Identifiable {
         case .loop: "LOOP"
         case .bounce: "BOUNCE"
         case .longExposure: "LONG EXPOSURE"
+        case .reverse: "REVERSE"
+        case .speedRamp: "SPEED RAMP"
+        case .stopMotion: "STOP MOTION"
+        case .echo: "ECHO"
+        case .gif: "GIF"
         }
     }
 
@@ -27,6 +32,11 @@ enum LiveEffect: String, CaseIterable, Identifiable {
         case .loop: "repeat"
         case .bounce: "arrow.left.arrow.right"
         case .longExposure: "camera.aperture"
+        case .reverse: "backward.fill"
+        case .speedRamp: "speedometer"
+        case .stopMotion: "film.stack"
+        case .echo: "rectangle.stack"
+        case .gif: "square.stack.3d.up"
         }
     }
 }
@@ -65,28 +75,80 @@ enum LiveEffectsService {
         case .bounce:
             let backward = Array(forward.reversed().dropFirst().dropLast())
             return (forward + backward) + (forward + backward)
-        case .livePhoto, .longExposure: return forward
+        case .reverse: return Array(forward.reversed())
+        case .speedRamp: return speedRamp(in: range)
+        // Each picture held for 4 frames: about 7.5 pictures a second, like stop motion.
+        case .stopMotion: return forward.indices.map { forward[$0 - $0 % 4] }
+        case .livePhoto, .longExposure, .echo, .gif: return forward
         }
     }
 
-    /// Reads frames (with the current adjustments applied) and writes them as an H.264 movie.
-    static func renderMovie(
-        from asset: AVAsset, times: [CMTime], adjustments: PhotoAdjustmentState,
-        processor: ImageProcessingService, to url: URL,
-        metadata: [AVMetadataItem] = [], stillImageTime: CMTime? = nil,
-        audioRange: CMTimeRange? = nil
-    ) async throws {
+    /// Fast at the start and end, slow motion in the middle. Source times sampled at `fps`.
+    static func speedRamp(in range: CMTimeRange) -> [CMTime] {
+        let length = range.duration.seconds
+        guard length > 0 else { return [] }
+        var t = 0.0
+        var times: [CMTime] = []
+        while t < length, times.count < 5000 {
+            times.append(CMTimeAdd(range.start, CMTime(seconds: t, preferredTimescale: 600)))
+            let distanceFromMiddle = abs(t / length - 0.5) * 2 // 0 in the middle, 1 at the ends
+            t += (0.3 + 1.7 * distanceFromMiddle) / Double(fps)
+        }
+        return times
+    }
+
+    /// Frame reader with the edits applied (as video frames get them).
+    private static func editedFrames(of asset: AVAsset, adjustments: PhotoAdjustmentState, processor: ImageProcessingService,
+                                     maxSize: CGFloat) async -> AVAssetImageGenerator {
         let recipe = AdjustmentBox()
         recipe.value = adjustments.withoutGeometry
-        let audio = try await AudioPass(asset: asset, range: audioRange)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
-        generator.maximumSize = CGSize(width: 1920, height: 1920)
+        generator.maximumSize = CGSize(width: maxSize, height: maxSize)
         if !adjustments.isIdentity {
             generator.videoComposition = try? await VideoService.composition(for: asset, recipe: recipe, processor: processor)
         }
+        return generator
+    }
+
+    /// GIF: up to 4 seconds at 12 pictures a second, 480 px, looping forever.
+    static func gif(from asset: AVAsset, range: CMTimeRange, adjustments: PhotoAdjustmentState,
+                    processor: ImageProcessingService) async throws -> Data {
+        let all = frameTimes(in: CMTimeRange(start: range.start, duration: CMTimeMinimum(range.duration, CMTime(seconds: 4, preferredTimescale: 600))))
+        let times = stride(from: 0, to: all.count, by: Int(fps) / 12).map { all[$0] }
+        let generator = await editedFrames(of: asset, adjustments: adjustments, processor: processor, maxSize: 480)
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.gif.identifier as CFString, times.count, nil)
+        else { throw EffectError.writeFailed }
+        CGImageDestinationSetProperties(destination, [
+            kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0],
+        ] as CFDictionary)
+        var count = 0
+        for await result in generator.images(for: times) {
+            guard let frame = try? result.image else { continue }
+            CGImageDestinationAddImage(destination, frame, [
+                kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 1.0 / 12],
+            ] as CFDictionary)
+            count += 1
+        }
+        guard count > 0 else { throw EffectError.noFrames }
+        guard CGImageDestinationFinalize(destination) else { throw EffectError.writeFailed }
+        return data as Data
+    }
+
+    /// Reads frames (with the current adjustments applied) and writes them as an H.264 movie.
+    /// `echo` leaves fading motion trails: each frame is blended over the trail of the ones before.
+    static func renderMovie(
+        from asset: AVAsset, times: [CMTime], adjustments: PhotoAdjustmentState,
+        processor: ImageProcessingService, to url: URL,
+        metadata: [AVMetadataItem] = [], stillImageTime: CMTime? = nil,
+        audioRange: CMTimeRange? = nil, echo: Bool = false
+    ) async throws {
+        let audio = try await AudioPass(asset: asset, range: audioRange)
+        let generator = await editedFrames(of: asset, adjustments: adjustments, processor: processor, maxSize: 1920)
+        var trail: CIImage?
 
         var writer: AVAssetWriter?
         var input: AVAssetWriterInput?
@@ -128,7 +190,15 @@ enum LiveEffectsService {
             var buffer: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
             guard let buffer else { throw EffectError.writeFailed }
-            processor.context.render(CIImage(cgImage: frame), to: buffer)
+            var picture = CIImage(cgImage: frame)
+            if echo, let trail {
+                picture = trail.applyingFilter("CIDissolveTransition", parameters: [
+                    kCIInputTargetImageKey: picture, kCIInputTimeKey: 0.35,
+                ]).cropped(to: picture.extent)
+            }
+            processor.context.render(picture, to: buffer)
+            // The trail reads the rendered buffer, so it never grows into a long filter chain.
+            if echo { trail = CIImage(cvPixelBuffer: buffer) }
             let time = CMTime(value: index, timescale: fps)
             // Interleave: feed audio up to just past this frame before appending it.
             try await audio?.feed(upTo: CMTimeAdd(time, CMTime(value: 1, timescale: 2)))
