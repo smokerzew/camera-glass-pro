@@ -45,8 +45,10 @@ enum Registration {
 
     /// Gray values (0...1) of `image` scaled into a w × h top-left-origin grid.
     private static func gray(_ image: CIImage, extent e: CGRect, scale: CGFloat, w: Int, h: Int, context: CIContext) -> [Float] {
-        let small = image.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY)
-            .concatenating(CGAffineTransform(scaleX: scale, y: scale)))
+        // A real resampling filter: a bare scale transform can be pushed into the image's own filters by
+        // Core Image, so two crops of one scene came out sampled differently.
+        let small = image.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY))
+            .applyingFilter("CILanczosScaleTransform", parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
         var pixels = [UInt8](repeating: 0, count: w * h * 4)
         context.render(small, toBitmap: &pixels, rowBytes: w * 4, bounds: CGRect(x: 0, y: 0, width: w, height: h),
                        format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
