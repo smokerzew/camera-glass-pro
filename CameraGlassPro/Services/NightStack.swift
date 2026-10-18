@@ -12,8 +12,9 @@ enum NightStacker {
         guard frames.indices.contains(reference) else { return frames.first ?? CIImage.empty() }
         let ref = frames[reference]
         let e = ref.extent
-        guard let accumulator = CIImageAccumulator(extent: e, format: .RGBAh) else { return ref }
-        accumulator.setImage(ref)
+        // A plain chain of dissolves (at most 16 deep). An accumulator stores in its own color space, which
+        // shifted the brightness of the result.
+        var average = ref
         var count = 1
         for (index, frame) in frames.enumerated() where index != reference {
             // Frames that moved too far (a pan) can't be lined up well enough; skip them.
@@ -24,13 +25,12 @@ enum NightStacker {
                 .cropped(to: e)
             count += 1
             // Running mean: mix in 1/n of the new frame (a linear dissolve, so alpha stays 1).
-            let mixed = accumulator.image().applyingFilter("CIDissolveTransition", parameters: [
+            average = average.applyingFilter("CIDissolveTransition", parameters: [
                 kCIInputTargetImageKey: deghosted(aligned, reference: ref, extent: e),
                 kCIInputTimeKey: 1 / Double(count),
             ]).cropped(to: e)
-            accumulator.setImage(mixed)
         }
-        let averaged = accumulator.image().cropped(to: e)
+        let averaged = average.cropped(to: e)
         // The averaged frame is clean enough to lift the shadows without lifting noise.
         return averaged.applyingFilter("CIHighlightShadowAdjust", parameters: [
             "inputShadowAmount": count > 1 ? 0.35 : 0.15, "inputHighlightAmount": 1,

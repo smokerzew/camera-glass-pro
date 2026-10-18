@@ -168,6 +168,22 @@ final class Pack5Tests: XCTestCase {
         XCTAssertLessThan(error(stacked, against: lifted), single * 0.6, "averaging 12 frames removes most of the noise")
     }
 
+    func testStackOfIdenticalCleanFramesIsTheLiftedScene() {
+        let lifted = scene.applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": 0.35, "inputHighlightAmount": 1])
+            .cropped(to: scene.extent)
+        let stacked = NightStacker.stack([scene, scene, scene], reference: 1, context: processor.context)
+        XCTAssertLessThan(error(stacked, against: lifted), 3, "nothing to average: only the shadow lift changes it")
+        XCTAssertLessThan(error(NightStacker.deghosted(noisy(1), reference: noisy(2), extent: scene.extent), against: noisy(1)), 3,
+                          "grain alone never counts as movement")
+    }
+
+    func testRegistrationFindsAPanoramaSizedShift() throws {
+        let shift = try XCTUnwrap(Registration.translation(of: window(200), to: window(0), maxShift: CGSize(width: 0.95, height: 0.15),
+                                                           context: processor.context))
+        XCTAssertEqual(shift.x, 200, accuracy: 4)
+        XCTAssertEqual(shift.y, 0, accuracy: 4)
+    }
+
     func testDeghostKeepsTheReferenceWhereThingsMoved() {
         let e = scene.extent
         let moved = CIImage(color: .white).cropped(to: CGRect(x: 100, y: 100, width: 60, height: 60)).composited(over: scene)
