@@ -200,6 +200,68 @@ struct LiquifyEditorView: View {
     }
 }
 
+/// Remove: paint over something small; it's filled in from its surroundings after each stroke.
+struct RemoveEditorView: View {
+    @Bindable var vm: CameraWorkspaceViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var brush = 0.05
+    @State private var photo: CGImage?
+    @State private var history = StrokeHistory<MaskStroke>()
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 0) {
+                EditorTopBar(title: "REMOVE", canUndo: !history.past.isEmpty, canRedo: !history.future.isEmpty,
+                             undo: undo, redo: redo, done: { dismiss() })
+                BrushCanvas(image: photo, brush: brush) { points in
+                    change(to: vm.adjustments.removeStrokes + [MaskStroke(add: true, width: brush, points: points)])
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                VStack(spacing: 14) {
+                    GlassSliderRow(title: "Brush", value: brush, range: 0.01...0.2,
+                                   display: { "\(Int(($0 * 100).rounded()))" }) { brush = $0 }
+                    Text("Paint over a small object, spot or wire, covering all of it. Works best on sky, walls, grass and skin.")
+                        .font(.footnote).foregroundStyle(.white.opacity(0.65))
+                    Button("Clear All", role: .destructive) { change(to: []) }
+                        .font(.subheadline.weight(.semibold))
+                        .disabled(vm.adjustments.removeStrokes.isEmpty)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+            }
+        }
+        .environment(\.colorScheme, .dark)
+        .statusBarHidden()
+        .task { photo = await vm.editorPreview() }
+    }
+
+    private func change(to strokes: [MaskStroke]) {
+        history.record(vm.adjustments.removeStrokes)
+        vm.setRemoveStrokes(strokes)
+        refresh()
+    }
+
+    private func undo() {
+        guard let previous = history.past.popLast() else { return }
+        history.future.append(vm.adjustments.removeStrokes)
+        vm.setRemoveStrokes(previous)
+        refresh()
+    }
+
+    private func redo() {
+        guard let next = history.future.popLast() else { return }
+        history.past.append(vm.adjustments.removeStrokes)
+        vm.setRemoveStrokes(next)
+        refresh()
+    }
+
+    private func refresh() {
+        Task { photo = await vm.editorPreview() }
+    }
+}
+
 /// Undo, title, redo and Done for the brush editors.
 private struct EditorTopBar: View {
     let title: String

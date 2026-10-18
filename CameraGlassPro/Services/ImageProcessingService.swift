@@ -17,10 +17,13 @@ final class ImageProcessingService: @unchecked Sendable {
     /// `subjectMask` lets callers reuse a precomputed Portrait mask (the photo preview);
     /// without one, Portrait finds the subject itself (exports, video frames).
     /// `faces` lets live video reuse face boxes found for a nearby frame (nil = find them here).
-    func apply(_ adjustments: PhotoAdjustmentState, to input: CIImage, subjectMask: CIImage? = nil,
+    func apply(_ adjustments: PhotoAdjustmentState, to original: CIImage, subjectMask: CIImage? = nil,
                fastMask: Bool = false, backgroundPhoto: CIImage? = nil, faces: [CGRect]? = nil) -> CIImage {
         let a = adjustments.clamped()
-        guard !a.isIdentity else { return input }
+        guard !a.isIdentity else { return original }
+        // Removed objects are gone before anything else looks at the photo (subject, sky, faces).
+        let input = a.removeStrokes.isEmpty ? original
+            : removeObjects(original, strokes: a.removeStrokes, extent: original.extent)
         var image = input
 
         var mask = a.needsSubject ? (subjectMask ?? SubjectMasker.mask(for: input, fast: fastMask)) : nil

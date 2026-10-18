@@ -153,3 +153,9 @@ using namespace metal;
     float4 cb = b.sample(b.transform(p + (1.0 - t) * f));
     return mix(ca, cb, t);
 }
+
+// Remove brush: the smooth fill plus the fine detail (texture) of a matching nearby patch, inside the mask.
+[[stitchable]] float4 addDetail(coreimage::sample_t base, coreimage::sample_t patch, coreimage::sample_t patchBlur,
+                                coreimage::sample_t mask) {
+    return float4(base.rgb + (patch.rgb - patchBlur.rgb) * mask.r, base.a);
+}

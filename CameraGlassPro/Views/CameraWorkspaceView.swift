@@ -69,6 +69,7 @@ struct CameraWorkspaceView: View {
             .fullScreenCover(isPresented: $vm.showRedactionEditor) { RedactionEditorView(vm: vm) }
             .fullScreenCover(isPresented: $vm.showMaskEditor) { MaskRefineEditorView(vm: vm) }
             .fullScreenCover(isPresented: $vm.showLiquifyEditor) { LiquifyEditorView(vm: vm) }
+            .fullScreenCover(isPresented: $vm.showRemoveEditor) { RemoveEditorView(vm: vm) }
             .appAlert(vm)
             .sensoryFeedback(.success, trigger: vm.importSuccessCount)
             .sensoryFeedback(.selection, trigger: vm.mode)

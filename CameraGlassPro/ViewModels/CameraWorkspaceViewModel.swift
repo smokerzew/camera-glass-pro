@@ -104,6 +104,7 @@ final class CameraWorkspaceViewModel {
     /// Brush editors: Refine Subject and Liquify.
     var showMaskEditor = false
     var showLiquifyEditor = false
+    var showRemoveEditor = false
     /// Saved versions of the edit, per photo or video.
     private(set) var versionStore: [UUID: [PhotoAdjustmentState]] = [:]
     var showRedactionEditor = false
@@ -1682,6 +1683,14 @@ final class CameraWorkspaceViewModel {
         guard limited != adjustments.liquifyStrokes else { return }
         recordUndoPoint(force: true)
         adjustments.liquifyStrokes = limited
+        adjustmentsChanged()
+    }
+
+    func setRemoveStrokes(_ strokes: [MaskStroke]) {
+        let limited = Array(strokes.prefix(MaskStroke.limit))
+        guard limited != adjustments.removeStrokes else { return }
+        recordUndoPoint(force: true)
+        adjustments.removeStrokes = limited
         adjustmentsChanged()
     }
 

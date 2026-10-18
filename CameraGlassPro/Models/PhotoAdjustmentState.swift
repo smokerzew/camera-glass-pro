@@ -135,6 +135,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Refine Subject strokes and Liquify pushes (photo coordinates before crop and rotation).
     var maskStrokes: [MaskStroke] = []
     var liquifyStrokes: [LiquifyStroke] = []
+    /// Remove brush strokes (same coordinates; `add` is unused): painted areas are filled from around them.
+    var removeStrokes: [MaskStroke] = []
 
     var orbitClones: Int { orbitCount >= 1.5 ? Int(orbitCount.rounded()) : 0 }
     var redactionStrokes: [RedactionStroke] = []
@@ -218,7 +220,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
 
     /// Effects that work pixel by pixel or per subject: live video previews them at a lighter size.
     var isHeavy: Bool {
-        needsSubject || dispersion > 0 || melt > 0 || pixelSort > 0 || littlePlanet > 0 || !liquifyStrokes.isEmpty
+        needsSubject || dispersion > 0 || melt > 0 || pixelSort > 0 || littlePlanet > 0 || !liquifyStrokes.isEmpty || !removeStrokes.isEmpty
             || skinSmoothing > 0 || skyReplace != .none || faceRedaction != .none || !redactionStrokes.isEmpty || halation > 0 || noiseReduction > 0
     }
 
@@ -307,6 +309,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         popOption = unit(.popOption, 0.5)
         maskStrokes = Array(((try? c.decodeIfPresent([MaskStroke].self, forKey: .maskStrokes)) ?? []).prefix(MaskStroke.limit))
         liquifyStrokes = Array(((try? c.decodeIfPresent([LiquifyStroke].self, forKey: .liquifyStrokes)) ?? []).prefix(LiquifyStroke.limit))
+        removeStrokes = Array(((try? c.decodeIfPresent([MaskStroke].self, forKey: .removeStrokes)) ?? []).prefix(MaskStroke.limit))
         planetSpin = min(max((try? c.decodeIfPresent(Double.self, forKey: .planetSpin)) ?? 0, 0), 360)
         dispersionAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dispersionAngle)) ?? 0, 0), 360)
         faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none

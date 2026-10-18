@@ -311,6 +311,65 @@ final class Pack5Tests: XCTestCase {
         XCTAssertTrue(LiveEffect.allCases.contains(.smoothSlowMo))
     }
 
+    // MARK: Remove brush
+
+    /// One dot stroke at (x, y) normalized top-left, `width` of the short side.
+    private func dot(_ x: CGFloat, _ y: CGFloat, width: Double) -> MaskStroke {
+        MaskStroke(add: true, width: width, points: [CGPoint(x: x, y: y)])
+    }
+
+    func testRemoveFillsASpotOnAPlainWall() {
+        // Mid-gray wall with a black spot in the middle (CI: bottom-left origin).
+        let wall = solid(0.55, 0.5, 0.45, 300, 200)
+        let spot = solid(0.02, 0.02, 0.02, 30, 30).transformed(by: CGAffineTransform(translationX: 135, y: 85))
+        let photo = spot.composited(over: wall).cropped(to: wall.extent)
+        var state = PhotoAdjustmentState()
+        state.removeStrokes = [dot(0.5, 0.5, width: 0.25)]
+        let output = processor.apply(state, to: photo)
+        XCTAssertEqual(output.extent, photo.extent)
+        let center = pixel(output, 150, 100), wallColor = pixel(wall, 150, 100)
+        XCTAssertEqual(center.r, wallColor.r, accuracy: 8, "the spot is gone, filled with the wall's color")
+        XCTAssertEqual(center.b, wallColor.b, accuracy: 8)
+        XCTAssertEqual(pixel(output, 20, 20).g, pixel(photo, 20, 20).g, accuracy: 1, "away from the stroke nothing changes")
+    }
+
+    func testRemoveKeepsTextureOnStripes() {
+        // Vertical stripes with a gray blob: the fill should carry stripes, not a flat smear.
+        let stripes = (CIFilter(name: "CIStripesGenerator", parameters: [
+            "inputColor0": CIColor(red: 0.8, green: 0.8, blue: 0.8), "inputColor1": CIColor(red: 0.2, green: 0.2, blue: 0.2),
+            "inputWidth": 6, "inputSharpness": 0.5,
+        ])?.outputImage ?? CIImage(color: .gray)).cropped(to: CGRect(x: 0, y: 0, width: 256, height: 256))
+        let blob = solid(0.5, 0.5, 0.5, 30, 30).transformed(by: CGAffineTransform(translationX: 113, y: 113))
+        let photo = blob.composited(over: stripes).cropped(to: stripes.extent)
+        var state = PhotoAdjustmentState()
+        state.removeStrokes = [dot(0.5, 0.5, width: 0.16)]
+        let output = processor.apply(state, to: photo)
+        var values: [Double] = []
+        for x in stride(from: CGFloat(118), to: 140, by: 1) { values.append(pixel(output, x, 128).g) }
+        let spread = (values.max() ?? 0) - (values.min() ?? 0)
+        XCTAssertGreaterThan(spread, 60, "stripes continue through the filled area")
+    }
+
+    func testBestOffsetPicksAnUnpaintedMatchingArea() throws {
+        let w = 64, h = 64
+        var photo = [UInt8](repeating: 100, count: w * h), hole = [UInt8](repeating: 0, count: w * h)
+        for y in 28..<36 { for x in 28..<36 { hole[y * w + x] = 255; photo[y * w + x] = 0 } }
+        let offset = try XCTUnwrap(ImageProcessingService.bestOffset(photo: photo, hole: hole, allHoles: hole, width: w, height: h))
+        XCTAssertNotEqual(offset.x == 0 && offset.y == 0, true)
+        XCTAssertNil(ImageProcessingService.bestOffset(photo: photo, hole: [UInt8](repeating: 0, count: w * h),
+                                                       allHoles: hole, width: w, height: h))
+    }
+
+    func testRemoveIsAPhotoControlAndDecodes() throws {
+        XCTAssertEqual(CameraControl.remove.group, .edit)
+        let decoded = try JSONDecoder().decode(PhotoAdjustmentState.self, from: Data(#"{"removeStrokes":"junk"}"#.utf8))
+        XCTAssertTrue(decoded.removeStrokes.isEmpty)
+        var state = PhotoAdjustmentState()
+        state.removeStrokes = [dot(0.5, 0.5, width: 0.1)]
+        XCTAssertTrue(state.isHeavy)
+        XCTAssertEqual(try JSONDecoder().decode(PhotoAdjustmentState.self, from: JSONEncoder().encode(state)), state)
+    }
+
     func testNightIsAnEffect() {
         XCTAssertTrue(LiveEffect.allCases.contains(.night))
         XCTAssertEqual(LiveEffect.night.title, "NIGHT")

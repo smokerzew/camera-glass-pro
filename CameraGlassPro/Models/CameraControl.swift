@@ -2,7 +2,7 @@ import Foundation
 
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
-    case flash, live, aspect, timer, exposure, styles, filter, adjust, fx, liquify, crop, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, frame, format
+    case flash, live, aspect, timer, exposure, styles, filter, adjust, fx, liquify, remove, crop, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, frame, format
 
     var id: String { rawValue }
 
@@ -17,7 +17,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
     /// Controls that act on the imported photo or video and are disabled until there is one.
     var requiresMedia: Bool {
         switch self {
-        case .exposure, .styles, .filter, .adjust, .fx, .liquify, .crop, .depth, .subject, .nightMode, .scopes, .peaking, .zebras, .liveText, .effects, .trim, .frame: true
+        case .exposure, .styles, .filter, .adjust, .fx, .liquify, .remove, .crop, .depth, .subject, .nightMode, .scopes, .peaking, .zebras, .liveText, .effects, .trim, .frame: true
         default: false
         }
     }
@@ -26,7 +26,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
     var group: PanelGroup {
         switch self {
         case .flash, .live, .aspect, .timer, .exposure, .nightMode, .format: .camera
-        case .adjust, .styles, .filter, .fx, .liquify, .crop, .depth, .subject, .effects: .edit
+        case .adjust, .styles, .filter, .fx, .liquify, .remove, .crop, .depth, .subject, .effects: .edit
         case .grid, .level, .scopes, .peaking, .zebras, .liveText, .trim, .frame: .tools
         }
     }
@@ -51,7 +51,7 @@ extension CameraWorkspaceViewModel {
     func isAvailable(_ control: CameraControl) -> Bool {
         if control == .trim || control == .frame { return video != nil }
         if control == .effects { return canMakeEffects }
-        if control == .crop || control == .liquify { return photo != nil }
+        if control == .crop || control == .liquify || control == .remove { return photo != nil }
         return !control.requiresMedia || hasMedia
     }
 
@@ -67,6 +67,7 @@ extension CameraWorkspaceViewModel {
         case .adjust: "slider.horizontal.3"
         case .fx: "wand.and.stars"
         case .liquify: "hand.draw"
+        case .remove: "eraser"
         case .depth: "f.cursive"
         case .nightMode: adjustments.nightLook ? "moon.fill" : "moon"
         case .grid: "squareshape.split.3x3"
@@ -95,6 +96,7 @@ extension CameraWorkspaceViewModel {
         case .filter: adjustments.filter != .none
         case .adjust: false
         case .liquify: !adjustments.liquifyStrokes.isEmpty
+        case .remove: !adjustments.removeStrokes.isEmpty
         case .fx: adjustments.speedBlur > 0 || adjustments.tiltShift > 0 || adjustments.doubleExposure > 0
             || adjustments.ghostOpacity > 0 || adjustments.lookMatch != nil
             || adjustments.hologram > 0 || adjustments.melt > 0 || adjustments.orbitClones > 0
@@ -143,6 +145,7 @@ extension CameraWorkspaceViewModel {
         case .filter: adjustments.filter.label
         case .adjust: hasEdits ? "Edited" : "No edits"
         case .liquify: adjustments.liquifyStrokes.isEmpty ? "Off" : "\(adjustments.liquifyStrokes.count) pushes"
+        case .remove: adjustments.removeStrokes.isEmpty ? "Off" : "\(adjustments.removeStrokes.count) areas removed"
         case .fx: isActive(.fx) ? "On" : "Off"
         case .depth: depthEffect ? String(format: "On, f %.1f, %@", adjustments.aperture, adjustments.lighting.label.capitalized) : "Off"
         case .nightMode: adjustments.nightLook ? "On" : "Off"
@@ -175,6 +178,7 @@ extension CameraWorkspaceViewModel {
         case .filter: "Opens the filter picker: 174 filters in 20 tabs"
         case .adjust: "Opens Adjust: light, color, detail, effects, local filters and AI"
         case .liquify: "Push and reshape parts of the photo with your finger"
+        case .remove: "Paint over a small object or blemish to fill it in from its surroundings"
         case .fx: "Blur, Blend, Ghost, Art, Light, Retro, Pop and Privacy effects"
         case .depth: "Blurs the background behind the subject; tap the f-number to change depth"
         case .nightMode: "Live Photos: stacks the motion frames into a clean night shot. Others: lifts shadows and reduces noise"
@@ -216,6 +220,9 @@ extension CameraWorkspaceViewModel {
         case .liquify:
             isControlPanelOpen = false
             showLiquifyEditor = true
+        case .remove:
+            isControlPanelOpen = false
+            showRemoveEditor = true
         case .depth:
             // From the top bar, the f-number readout opens the aperture slider (as in the Camera app).
             if fromTopBar && depthEffect { isApertureDialVisible.toggle() } else { setDepth(!depthEffect) }
