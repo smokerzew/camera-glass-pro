@@ -40,7 +40,7 @@ struct FXPickerView: View {
             GlassTabs(tabs: Page.allCases, selection: $page) { $0.rawValue.capitalized }
                 .padding(.horizontal, 6)
 
-            Group {
+            PagedStack(pages: Page.allCases, selection: page) { page in
                 switch page {
                 case .blur: blurPage
                 case .blend: blendPage

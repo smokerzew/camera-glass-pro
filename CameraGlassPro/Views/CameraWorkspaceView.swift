@@ -129,6 +129,18 @@ struct CameraWorkspaceView: View {
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility1) // camera chrome has fixed geometry
 
+            // While a pop-up is open, a tap anywhere outside it closes it (as in the Camera app) instead of
+            // reaching the shutter or other controls underneath.
+            if vm.isPopUpOpen {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) { vm.closePopUps() }
+                    }
+                    .accessibilityHidden(true)
+                    .zIndex(0.5)
+            }
+
             // Bottom pop-ups, grouped so their height is known (the photo shrinks to stay above them).
             ZStack(alignment: .bottom) {
                 if vm.showSubjectPicker {

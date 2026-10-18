@@ -2,17 +2,24 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 
 extension ImageProcessingService {
-    /// Dispersion: one side of the subject breaks into square particles that drift away to the right.
-    /// `amount` sets how much breaks off and how far it flies; `size` sets the particle size.
-    func dispersion(_ image: CIImage, mask: CIImage, amount: Double, size: Double, extent e: CGRect) -> CIImage {
+    /// Dispersion: the side of the subject facing `degrees` (0 right, 90 up) breaks into square particles
+    /// that drift that way. `amount` sets how much breaks off and how far it flies; `size` the particle size.
+    func dispersion(_ image: CIImage, mask: CIImage, amount: Double, size: Double, degrees: Double = 0,
+                    extent e: CGRect) -> CIImage {
         guard amount > 0, let box = maskBounds(mask, extent: e) else { return image }
         let k = CGFloat(min(amount, 1))
         let cell = max(2, e.width * (0.004 + 0.022 * CGFloat(min(max(size, 0), 1))))
 
-        // Where the subject breaks up: from part-way across it to its right edge (wider with more strength).
+        // Drift direction (Core Image y points up, like the slider's 90° = up).
+        let radians = CGFloat(degrees) * .pi / 180
+        let dir = CGPoint(x: cos(radians), y: sin(radians))
+        let side = CGPoint(x: -dir.y, y: dir.x)
+        // Where the subject breaks up: from part-way across it to its edge facing `dir` (wider with more strength).
+        let reach = abs(dir.x) * box.width / 2 + abs(dir.y) * box.height / 2
+        let center = CGPoint(x: box.midX, y: box.midY)
         let zoneGradient = CIFilter.linearGradient()
-        zoneGradient.point0 = CGPoint(x: box.minX + box.width * (0.8 - 0.55 * k), y: box.midY)
-        zoneGradient.point1 = CGPoint(x: box.maxX, y: box.midY)
+        zoneGradient.point0 = CGPoint(x: center.x + dir.x * reach * (0.6 - 1.1 * k), y: center.y + dir.y * reach * (0.6 - 1.1 * k))
+        zoneGradient.point1 = CGPoint(x: center.x + dir.x * reach, y: center.y + dir.y * reach)
         zoneGradient.color0 = .black
         zoneGradient.color1 = .white
         guard let zone = zoneGradient.outputImage?.cropped(to: e) else { return image }
@@ -61,11 +68,12 @@ extension ImageProcessingService {
         let plate = blend(fill, over: image, mask: grown)
         var output = blend(image, over: plate, mask: kept)
 
-        // The broken-off pieces fly to the right (and a little up), thinning out and fading as they go.
+        // The broken-off pieces fly along `dir` (curving slightly), thinning out and fading as they go.
         let step = cell * (2 + 14 * k)
         for (index, fade) in [(1, 0.95), (2, 0.7), (3, 0.45), (4, 0.25)] {
             let i = CGFloat(index)
-            let move = CGAffineTransform(translationX: step * i, y: step * i * 0.25)
+            let move = CGAffineTransform(translationX: (dir.x + side.x * 0.25) * step * i,
+                                         y: (dir.y + side.y * 0.25) * step * i)
             let scatter = multiply(removed, particles(seed: 37 * i, threshold: 0.2 + 0.12 * i))
             let pieces = scatter.transformed(by: move).cropped(to: e)
                 .applyingFilter("CIColorMatrix", parameters: [

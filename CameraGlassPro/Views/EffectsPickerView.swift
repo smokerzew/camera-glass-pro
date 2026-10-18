@@ -72,11 +72,12 @@ struct EffectsPickerView: View {
         .frame(maxWidth: 520)
         .cameraGlass(.regular, in: RoundedRectangle(cornerRadius: 34, style: .continuous))
         .offset(y: max(0, dragOffset))
-        .gesture(
+        // Only from the grabber area, so taps and scrolling inside the card are never taken as a drag.
+        .simultaneousGesture(
             DragGesture()
-                .onChanged { dragOffset = $0.translation.height }
+                .onChanged { if $0.startLocation.y < 44 { dragOffset = $0.translation.height } }
                 .onEnded { value in
-                    if value.translation.height > 80 { close() }
+                    if value.startLocation.y < 44, value.translation.height > 80 { close() }
                     withAnimation(reduceMotion ? nil : .spring(duration: 0.3)) { dragOffset = 0 }
                 }
         )

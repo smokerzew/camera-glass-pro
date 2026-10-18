@@ -38,10 +38,12 @@ struct SubjectPickerView: View {
             GlassTabs(tabs: Page.allCases, selection: $page) { $0.rawValue.capitalized }
                 .padding(.horizontal, 6)
 
-            switch page {
-            case .style: stylePage
-            case .adjust: regionEdits
-            case .create: createPage
+            PagedStack(pages: Page.allCases, selection: page) { page in
+                switch page {
+                case .style: stylePage
+                case .adjust: regionEdits
+                case .create: createPage
+                }
             }
         }
         .padding(.horizontal, 14)
@@ -123,8 +125,14 @@ struct SubjectPickerView: View {
             }
             .opacity(vm.adjustments.dispersion > 0 ? 1 : 0.4)
             .disabled(vm.adjustments.dispersion == 0)
+            GlassSliderRow(title: "Direction", value: vm.adjustments.dispersionAngle, range: 0...360,
+                           display: { "\(Int($0.rounded()))°" }) {
+                vm.setEffect(\.dispersionAngle, to: min(max($0, 0), 360))
+            }
+            .opacity(vm.adjustments.dispersion > 0 ? 1 : 0.4)
+            .disabled(vm.adjustments.dispersion == 0)
             Text("Sticker saves a see-through PNG to Photos and copies it for Messages. 3D Video opens as a new item you can save. "
-                 + "Dispersion breaks the right side of the subject into drifting particles.")
+                 + "Dispersion breaks the subject into particles that drift the way Direction points (0° is right, 90° is up).")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.65))
                 .multilineTextAlignment(.center)

@@ -1379,6 +1379,20 @@ final class CameraWorkspaceViewModel {
         adjustmentsChanged()
     }
 
+    /// A glass pop-up or the controls panel is open over the main controls.
+    var isPopUpOpen: Bool {
+        showSubjectPicker || showEffectsPicker || showStylesPad || showFilterPicker || isControlPanelOpen || showFXPicker
+    }
+
+    func closePopUps() {
+        showSubjectPicker = false
+        showEffectsPicker = false
+        showStylesPad = false
+        showFilterPicker = false
+        isControlPanelOpen = false
+        showFXPicker = false
+    }
+
     // MARK: FX
 
     func openFXPicker() {

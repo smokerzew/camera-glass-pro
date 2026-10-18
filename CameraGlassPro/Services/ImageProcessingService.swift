@@ -24,7 +24,7 @@ final class ImageProcessingService: @unchecked Sendable {
             image = composeSubject(a, to: image, mask: mask, backgroundPhoto: backgroundPhoto)
             if a.dispersion > 0 {
                 image = dispersion(image, mask: mask.cropped(to: input.extent), amount: a.dispersion,
-                                   size: a.dispersionSize, extent: input.extent)
+                                   size: a.dispersionSize, degrees: a.dispersionAngle, extent: input.extent)
             }
         }
         if a.doubleExposure > 0, let second = backgroundPhoto {

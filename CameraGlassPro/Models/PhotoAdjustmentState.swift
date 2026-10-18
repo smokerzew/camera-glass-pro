@@ -66,6 +66,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Dispersion: the subject breaks into particles (strength 0...1, particle size 0...1).
     var dispersion: Double = 0
     var dispersionSize: Double = 0.4
+    /// Which way the particles drift, in degrees: 0 right, 90 up, 180 left, 270 down.
+    var dispersionAngle: Double = 0
     var redactionStrokes: [RedactionStroke] = []
     /// Graduated and radial filters, applied on the final framing.
     var localAdjustments: [LocalAdjustment] = []
@@ -173,6 +175,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         redactionStrength = unit(.redactionStrength, 0.5)
         dispersion = unit(.dispersion)
         dispersionSize = unit(.dispersionSize, 0.4)
+        dispersionAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dispersionAngle)) ?? 0, 0), 360)
         faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none
         redactionStrokes = Array(((try? c.decodeIfPresent([RedactionStroke].self, forKey: .redactionStrokes)) ?? [])
             .prefix(RedactionStroke.limit))

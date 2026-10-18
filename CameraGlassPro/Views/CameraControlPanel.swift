@@ -42,12 +42,13 @@ struct CameraControlPanel: View {
         .frame(maxWidth: 520)
         .cameraGlass(.regular, in: RoundedRectangle(cornerRadius: 38, style: .continuous))
         .offset(y: max(0, dragOffset))
-        .gesture(
+        // Only from the grabber area, so taps and scrolling inside the card are never taken as a drag.
+        .simultaneousGesture(
             DragGesture()
-                .onChanged { dragOffset = $0.translation.height }
+                .onChanged { if $0.startLocation.y < 44 { dragOffset = $0.translation.height } }
                 .onEnded { value in
                     withAnimation(reduceMotion ? nil : .spring(duration: 0.35)) {
-                        if value.translation.height > 80 { vm.isControlPanelOpen = false }
+                        if value.startLocation.y < 44, value.translation.height > 80 { vm.isControlPanelOpen = false }
                         dragOffset = 0
                     }
                 }

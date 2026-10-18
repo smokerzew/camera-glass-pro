@@ -176,3 +176,39 @@ final class FXTests: XCTestCase {
         }
     }
 }
+
+@MainActor
+final class PopUpTests: XCTestCase {
+    func testClosePopUpsClosesEverything() {
+        let vm = CameraWorkspaceViewModel(defaults: UserDefaults(suiteName: "PopUp-\(UUID().uuidString)") ?? .standard)
+        XCTAssertFalse(vm.isPopUpOpen)
+        vm.openFXPicker()
+        XCTAssertTrue(vm.isPopUpOpen)
+        vm.closePopUps()
+        XCTAssertFalse(vm.isPopUpOpen)
+    }
+}
+
+final class DispersionDirectionTests: XCTestCase {
+    func testParticlesFollowTheDirection() {
+        let processor = ImageProcessingService.shared
+        let extent = CGRect(x: 0, y: 0, width: 300, height: 300)
+        let subjectRect = CGRect(x: 110, y: 110, width: 80, height: 80)
+        let photo = CIImage(color: CIColor(red: 0.9, green: 0.1, blue: 0.1)).cropped(to: subjectRect)
+            .composited(over: CIImage(color: CIColor(red: 0.3, green: 0.3, blue: 0.3)).cropped(to: extent))
+        let mask = CIImage(color: .white).cropped(to: subjectRect).composited(over: CIImage(color: .black).cropped(to: extent))
+        func redness(_ image: CIImage, _ rect: CGRect) -> Int {
+            let averaged = image.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: rect)])
+            var pixel = [UInt8](repeating: 0, count: 4)
+            processor.context.render(averaged, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                     format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            return Int(pixel[0]) - Int(pixel[1])
+        }
+        let left = CGRect(x: 10, y: 110, width: 90, height: 80)
+        let right = CGRect(x: 200, y: 110, width: 90, height: 80)
+        let toLeft = processor.dispersion(photo, mask: mask, amount: 1, size: 0.5, degrees: 180, extent: extent)
+        XCTAssertGreaterThan(redness(toLeft, left), redness(toLeft, right) + 8, "180° drifts left")
+        let toRight = processor.dispersion(photo, mask: mask, amount: 1, size: 0.5, degrees: 0, extent: extent)
+        XCTAssertGreaterThan(redness(toRight, right), redness(toRight, left) + 8, "0° drifts right")
+    }
+}

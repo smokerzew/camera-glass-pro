@@ -83,6 +83,8 @@ struct CameraGlassModifier<S: InsettableShape>: ViewModifier {
 extension View {
     func cameraGlass<S: InsettableShape>(_ style: GlassStyle = .regular, in shape: S) -> some View {
         modifier(CameraGlassModifier(style: style, shape: shape))
+            // The whole glass shape takes taps, not just the label's text (glass alone isn't hit-tested).
+            .contentShape(shape)
     }
 }
 
