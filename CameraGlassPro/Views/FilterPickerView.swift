@@ -64,6 +64,19 @@ struct FilterPickerView: View {
             .opacity(vm.adjustments.filter == .none ? 0.4 : 1)
             .disabled(vm.adjustments.filter == .none)
 
+            // Where the filter applies (subject and background use on-device subject detection).
+            HStack(spacing: 8) {
+                Text("APPLY TO")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.85))
+                GlassTabs(tabs: FilterTarget.allCases, selection: Binding(get: { vm.adjustments.filterTarget },
+                                                                        set: { vm.setFilterTarget($0) })) { $0.label }
+            }
+            .padding(.horizontal, 6)
+            .opacity(vm.adjustments.filter == .none ? 0.4 : 1)
+            .disabled(vm.adjustments.filter == .none)
+
             // Grain is independent of the filter: 0 means no grain at all.
             HStack(spacing: 10) {
                 Text("GRAIN")

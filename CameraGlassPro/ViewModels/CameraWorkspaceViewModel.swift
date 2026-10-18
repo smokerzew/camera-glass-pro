@@ -1505,6 +1505,13 @@ final class CameraWorkspaceViewModel {
         adjustmentsChanged()
     }
 
+    func setFilterTarget(_ target: FilterTarget) {
+        guard target != adjustments.filterTarget else { return }
+        recordUndoPoint(force: true)
+        adjustments.filterTarget = target
+        adjustmentsChanged()
+    }
+
     func setVisionMode(_ mode: VisionMode) {
         guard mode != adjustments.visionMode else { return }
         recordUndoPoint(force: true)

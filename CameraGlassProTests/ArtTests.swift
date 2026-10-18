@@ -130,8 +130,47 @@ final class ArtTests: XCTestCase {
             let shuffled = state.shuffling(.fxArt, using: &rng)!
             XCTAssertEqual(shuffled.exposure, 0.3, "only Art changes")
             let effectsOn = [shuffled.hologram > 0, shuffled.visionMode != .none, shuffled.pixelSort > 0,
-                             shuffled.orbitClones > 0, shuffled.melt > 0].filter { $0 }.count
+                             shuffled.orbitClones > 0, shuffled.melt > 0, shuffled.littlePlanet > 0].filter { $0 }.count
             XCTAssertEqual(effectsOn, 1, "one art effect at a time")
         }
+    }
+
+    func testLittlePlanetPutsTheGroundInTheMiddle() {
+        // Red ground (bottom), blue sky (top).
+        let ground = CIImage(color: CIColor(red: 0.9, green: 0.1, blue: 0.1)).cropped(to: CGRect(x: 0, y: 0, width: 300, height: 100))
+        let input = ground.composited(over: CIImage(color: CIColor(red: 0.1, green: 0.2, blue: 0.9)).cropped(to: extent))
+        var state = PhotoAdjustmentState()
+        state.littlePlanet = 0.7
+        let output = processor.apply(state, to: input)
+        XCTAssertEqual(output.extent, extent)
+        let center = average(output, CGRect(x: 140, y: 140, width: 20, height: 20))
+        let corner = average(output, CGRect(x: 0, y: 280, width: 20, height: 20))
+        XCTAssertGreaterThan(center[0], center[2] + 60, "ground in the middle")
+        XCTAssertGreaterThan(corner[2], corner[0] + 60, "sky around it")
+    }
+
+    func testFilterOnSubjectOrBackgroundOnly() {
+        var state = PhotoAdjustmentState()
+        state.filter = .mono
+        state.filterTarget = .subject
+        XCTAssertTrue(state.needsSubject)
+        let colorful = CIImage(color: CIColor(red: 0.2, green: 0.6, blue: 0.9)).cropped(to: extent)
+        let scene = CIImage(color: CIColor(red: 0.9, green: 0.2, blue: 0.1)).cropped(to: subjectRect).composited(over: colorful)
+        let subjectSpot = CGRect(x: 130, y: 130, width: 40, height: 60)
+        let backgroundSpot = CGRect(x: 10, y: 10, width: 40, height: 40)
+        let onSubject = processor.apply(state, to: scene, subjectMask: mask)
+        XCTAssertLessThan(abs(average(onSubject, subjectSpot)[0] - average(onSubject, subjectSpot)[2]), 12, "subject is black and white")
+        XCTAssertGreaterThan(average(onSubject, backgroundSpot)[2], average(onSubject, backgroundSpot)[0] + 60, "background keeps its color")
+        state.filterTarget = .background
+        let onBackground = processor.apply(state, to: scene, subjectMask: mask)
+        XCTAssertGreaterThan(average(onBackground, subjectSpot)[0], average(onBackground, subjectSpot)[2] + 60, "subject keeps its color")
+        XCTAssertLessThan(abs(average(onBackground, backgroundSpot)[0] - average(onBackground, backgroundSpot)[2]), 12)
+        XCTAssertEqual(state.withoutSubjectEdits.filterTarget, .all)
+    }
+
+    func testNewTabsHaveTheirLooks() {
+        XCTAssertEqual(FilterCategory.creative.filters.count, 8)
+        XCTAssertEqual(FilterCategory.seasons.filters.count, 4)
+        XCTAssertEqual(PhotoFilter.aerochrome.label, "Aerochrome")
     }
 }

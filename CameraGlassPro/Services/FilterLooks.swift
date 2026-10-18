@@ -3,7 +3,7 @@ import CoreImage.CIFilterBuiltins
 
 /// Filter groups shown as tabs in the filter picker.
 enum FilterCategory: String, CaseIterable, Identifiable {
-    case classic, film, cinematic, portrait, nature, blackWhite, vintage, moody, food, y2k, quality, digicam
+    case classic, film, creative, cinematic, portrait, nature, seasons, blackWhite, vintage, moody, food, y2k, quality, digicam
 
     var id: String { rawValue }
 
@@ -11,6 +11,8 @@ enum FilterCategory: String, CaseIterable, Identifiable {
         switch self {
         case .classic: "Classic"
         case .film: "Film"
+        case .creative: "Creative"
+        case .seasons: "Seasons"
         case .cinematic: "Cinematic"
         case .portrait: "Portrait"
         case .nature: "Nature"
@@ -158,6 +160,13 @@ extension ImageProcessingService {
         var x = image
         if r.exposure != 0 { x = exposure(x, r.exposure) }
         if r.temperature != 0 { x = temperature(x, shift: r.temperature) }
+        if let m = r.mix, m.count == 3 {
+            x = x.applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: m[0].0, y: m[0].1, z: m[0].2, w: 0),
+                "inputGVector": CIVector(x: m[1].0, y: m[1].1, z: m[1].2, w: 0),
+                "inputBVector": CIVector(x: m[2].0, y: m[2].1, z: m[2].2, w: 0),
+            ])
+        }
         if let w = r.mono {
             let weights = CIVector(x: w.0, y: w.1, z: w.2, w: 0)
             x = x.applyingFilter("CIColorMatrix", parameters: [

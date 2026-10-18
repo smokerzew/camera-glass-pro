@@ -176,6 +176,64 @@ extension ImageProcessingService {
         return CIImage(cgImage: sorted).transformed(by: toWork.inverted()).cropped(to: e)
     }
 
+    // MARK: Little planet
+
+    /// Wraps the picture into a tiny round planet (stereographic projection): the bottom of the photo
+    /// becomes the ground at the center and the top becomes the sky around it. The photo is mirrored
+    /// side to side so the wrap has no seam. `amount` (0...1) sets the planet size, `spin` turns it.
+    func littlePlanet(_ image: CIImage, amount: Double, spin: Double, extent e: CGRect) -> CIImage {
+        guard amount > 0, e.width >= 8, e.height >= 8 else { return image }
+        let scale = min(1, 1400 / max(e.width, e.height))
+        let w = Int((e.width * scale).rounded()), h = Int((e.height * scale).rounded())
+        let work = CGRect(x: 0, y: 0, width: w, height: h)
+        let toWork = CGAffineTransform(translationX: -e.minX, y: -e.minY).concatenating(CGAffineTransform(scaleX: scale, y: scale))
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        var source = [UInt32](repeating: 0, count: w * h)
+        source.withUnsafeMutableBytes { raw in
+            context.render(image.cropped(to: e).transformed(by: toWork), toBitmap: raw.baseAddress!, rowBytes: w * 4,
+                           bounds: work, format: .RGBA8, colorSpace: space)
+        }
+        @inline(__always) func channel(_ p: UInt32, _ shift: UInt32) -> Double { Double((p >> shift) & 0xFF) }
+        func sample(_ x: Double, _ y: Double) -> UInt32 { // bilinear, top-left origin
+            let x0 = min(w - 2, max(0, Int(x))), y0 = min(h - 2, max(0, Int(y)))
+            let fx = min(1, max(0, x - Double(x0))), fy = min(1, max(0, y - Double(y0)))
+            let p00 = source[y0 * w + x0], p10 = source[y0 * w + x0 + 1]
+            let p01 = source[(y0 + 1) * w + x0], p11 = source[(y0 + 1) * w + x0 + 1]
+            var out: UInt32 = 0
+            for shift: UInt32 in [0, 8, 16, 24] {
+                let top = channel(p00, shift) * (1 - fx) + channel(p10, shift) * fx
+                let bottom = channel(p01, shift) * (1 - fx) + channel(p11, shift) * fx
+                out |= UInt32((top * (1 - fy) + bottom * fy).rounded()) << shift
+            }
+            return out
+        }
+        let k = min(amount, 1)
+        let zoom = 2.2 - 1.6 * k // smaller = bigger planet
+        let turn = spin * .pi / 180
+        let cx = Double(w) / 2, cy = Double(h) / 2, radius = Double(min(w, h)) / 2
+        var output = [UInt32](repeating: 0, count: w * h)
+        for y in 0..<h {
+            for x in 0..<w {
+                let dx = Double(x) - cx, dy = cy - Double(y)
+                let rho = (dx * dx + dy * dy).squareRoot() / radius
+                var u = (atan2(dy, dx) + turn) / (2 * .pi)
+                u -= u.rounded(.down) // 0..<1 around the planet
+                // Mirrored strip: 0 -> right edge -> 0, so both ends of the wrap match.
+                let sx = (u < 0.5 ? u * 2 : (1 - u) * 2) * Double(w - 1)
+                let t = 2 / Double.pi * atan(rho * zoom)
+                let sy = (1 - t) * Double(h - 1)
+                output[y * w + x] = sample(sx, sy)
+            }
+        }
+        let data = output.withUnsafeBytes { Data($0) }
+        guard let provider = CGDataProvider(data: data as CFData),
+              let planet = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4, space: space,
+                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                                   provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+        else { return image }
+        return CIImage(cgImage: planet).transformed(by: toWork.inverted()).cropped(to: e)
+    }
+
     // MARK: Orbit clones
 
     /// Smaller copies of the subject arranged in a circle around it, behind the real subject.

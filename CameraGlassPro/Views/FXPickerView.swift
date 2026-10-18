@@ -212,6 +212,13 @@ struct FXPickerView: View {
                     case .melt:
                         GlassSliderRow(title: "Melt", value: a.melt) { vm.setEffect(\.melt, to: min(max($0, 0), 1)) }
                         note("The subject sags and drips downward like melting wax.")
+                    case .planet:
+                        GlassSliderRow(title: "Planet", value: a.littlePlanet) { vm.setEffect(\.littlePlanet, to: min(max($0, 0), 1)) }
+                        GlassSliderRow(title: "Spin", value: a.planetSpin, range: 0...360,
+                                       display: { "\(Int($0.rounded()))°" }) { vm.setEffect(\.planetSpin, to: min(max($0, 0), 360)) }
+                            .opacity(a.littlePlanet > 0 ? 1 : 0.4)
+                            .disabled(a.littlePlanet == 0)
+                        note("Wraps the photo into a tiny planet: the ground in the middle, the sky around it. Best with wide, level shots.")
                     }
                 }
             }

@@ -86,6 +86,9 @@ extension PhotoAdjustmentState {
                 next.orbitSize = random(0.25...0.7)
                 next.orbitDistance = random(0.2...0.8)
             case .melt: next.melt = random(0.4...1)
+            case .planet:
+                next.littlePlanet = random(0.3...1)
+                next.planetSpin = random(0...360)
             }
         case .subjectCreate:
             next.dispersion = random(0.4...1)

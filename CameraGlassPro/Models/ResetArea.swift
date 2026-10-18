@@ -66,6 +66,7 @@ extension PhotoAdjustmentState {
         case .filter:
             next.filter = d.filter
             next.filterStrength = d.filterStrength
+            next.filterTarget = d.filterTarget
             next.grain = d.grain
             next.grainSize = d.grainSize
         case .fxBlur:
@@ -98,6 +99,8 @@ extension PhotoAdjustmentState {
             next.pixelSort = d.pixelSort
             next.pixelSortVertical = d.pixelSortVertical
             next.pixelSortSubjectOnly = d.pixelSortSubjectOnly
+            next.littlePlanet = d.littlePlanet
+            next.planetSpin = d.planetSpin
         case .subjectStyle:
             next.colorSplash = d.colorSplash
             next.background = d.background

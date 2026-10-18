@@ -134,11 +134,23 @@ final class ImageProcessingService: @unchecked Sendable {
                 kCIInputTargetImageKey: image, kCIInputTimeKey: max(0, a.filterStrength),
             ])
         }
+        if a.filter != .none, a.filterTarget != .all, let mask {
+            // Only the subject, or only the background, gets the filter.
+            let soft = mask.cropped(to: input.extent).clampedToExtent()
+                .applyingGaussianBlur(sigma: Double(max(1, input.extent.width / 600))).cropped(to: input.extent)
+            let filtered = image
+            image = (a.filterTarget == .subject ? filtered : unfiltered).applyingFilter("CIBlendWithMask", parameters: [
+                kCIInputBackgroundImageKey: a.filterTarget == .subject ? unfiltered : filtered, kCIInputMaskImageKey: soft,
+            ]).cropped(to: input.extent)
+        }
 
         // Some filters sample beyond the edges; keep the original bounds, then crop/rotate/straighten.
         image = applyGeometry(a, to: image.cropped(to: input.extent))
         let extent = image.extent
 
+        if a.littlePlanet > 0 {
+            image = littlePlanet(image, amount: a.littlePlanet, spin: a.planetSpin, extent: extent)
+        }
         if a.sharpen > 0 {
             image = sharpen(image, amount: a.sharpen, extent: extent)
         }

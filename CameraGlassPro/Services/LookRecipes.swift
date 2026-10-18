@@ -10,6 +10,8 @@ struct LookRecipe {
     var temperature: CGFloat = 0
     /// Black and white with these channel weights (e.g. a red filter darkens blue skies).
     var mono: (CGFloat, CGFloat, CGFloat)?
+    /// Channel mixing in linear light: rows are the new red, green and blue (e.g. infrared film swaps).
+    var mix: [(CGFloat, CGFloat, CGFloat)]?
     /// Five-point tone curve (x, y in 0...1).
     var curve: [(CGFloat, CGFloat)]
     var saturation: Double = 1
@@ -22,7 +24,7 @@ struct LookRecipe {
     var clarity: Double = 0
 
     init(_ label: String, _ category: FilterCategory, exposure: Double = 0, temperature: CGFloat = 0,
-         mono: (CGFloat, CGFloat, CGFloat)? = nil, curve: [(CGFloat, CGFloat)], saturation: Double = 1,
+         mono: (CGFloat, CGFloat, CGFloat)? = nil, mix: [(CGFloat, CGFloat, CGFloat)]? = nil, curve: [(CGFloat, CGFloat)], saturation: Double = 1,
          vibrance: Double = 0, shadows: (CGFloat, CGFloat, CGFloat) = (0, 0, 0),
          highlights: (CGFloat, CGFloat, CGFloat) = (0, 0, 0), glow: Double = 0, clarity: Double = 0) {
         self.label = label
@@ -30,6 +32,7 @@ struct LookRecipe {
         self.exposure = exposure
         self.temperature = temperature
         self.mono = mono
+        self.mix = mix
         self.curve = curve
         self.saturation = saturation
         self.vibrance = vibrance
@@ -120,6 +123,18 @@ struct LookRecipe {
         case .nightFlash: LookRecipe("Night Flash", .digicam, exposure: 0.2, temperature: -250.0, curve: [(0.0, 0.0), (0.25, 0.19), (0.5, 0.5), (0.75, 0.82), (1.0, 1.0)], saturation: 1.08, glow: 0.15)
         case .coolCCD: LookRecipe("Cool CCD", .digicam, temperature: -450.0, curve: [(0.0, 0.02), (0.25, 0.262), (0.5, 0.51), (0.75, 0.76), (1.0, 0.97)], saturation: 1.05, shadows: (-0.004, 0.004, 0.01))
         case .y2006: LookRecipe("2006", .digicam, temperature: 150.0, curve: [(0.0, 0.0), (0.25, 0.215), (0.5, 0.5), (0.75, 0.795), (1.0, 1.0)], saturation: 1.15, highlights: (0.01, 0.008, 0.0), glow: 0.1)
+        case .aerochrome: LookRecipe("Aerochrome", .creative, mix: [(0.6, 0.6, 0.0), (0.45, 0.25, 0.05), (0.05, 0.05, 0.9)], curve: [(0.0, 0.0), (0.25, 0.215), (0.5, 0.5), (0.75, 0.795), (1.0, 1.0)], saturation: 1.1)
+        case .crossProcess: LookRecipe("Cross Process", .creative, curve: [(0.0, 0.0), (0.25, 0.19), (0.5, 0.5), (0.75, 0.82), (1.0, 1.0)], saturation: 1.25, shadows: (-0.008, 0.0, 0.02), highlights: (0.01, 0.02, -0.02))
+        case .technicolor: LookRecipe("Technicolor", .creative, temperature: 100.0, mix: [(1.0, 0.0, 0.0), (0.0, 0.75, 0.25), (0.0, 0.3, 0.7)], curve: [(0.0, 0.0), (0.25, 0.215), (0.5, 0.5), (0.75, 0.795), (1.0, 1.0)], saturation: 1.15)
+        case .vaporwave: LookRecipe("Vaporwave", .creative, curve: [(0.0, 0.03), (0.25, 0.268), (0.5, 0.51), (0.75, 0.76), (1.0, 0.97)], saturation: 1.2, shadows: (0.02, -0.006, 0.035), highlights: (-0.012, 0.018, 0.02))
+        case .synthwave: LookRecipe("Synthwave", .creative, exposure: -0.1, curve: [(0.0, 0.0), (0.25, 0.19), (0.5, 0.5), (0.75, 0.82), (1.0, 1.0)], saturation: 1.2, shadows: (0.018, -0.008, 0.04), highlights: (0.035, 0.008, 0.005), glow: 0.2)
+        case .animePastel: LookRecipe("Anime Pastel", .creative, exposure: 0.15, curve: [(0.0, 0.05), (0.25, 0.3), (0.5, 0.56), (0.75, 0.8), (1.0, 0.98)], saturation: 1.12, vibrance: 0.2, highlights: (0.004, 0.004, 0.012), glow: 0.15)
+        case .expiredFilm: LookRecipe("Expired Film", .creative, temperature: 200.0, curve: [(0.0, 0.06), (0.25, 0.286), (0.5, 0.51), (0.75, 0.76), (1.0, 0.93)], saturation: 0.85, shadows: (0.004, 0.012, -0.004), highlights: (0.016, 0.004, 0.01))
+        case .underwaterFix: LookRecipe("Underwater Fix", .creative, temperature: 400.0, mix: [(1.25, 0.15, 0.05), (0.0, 0.95, 0.0), (0.0, 0.0, 0.88)], curve: [(0.0, 0.01), (0.25, 0.235), (0.5, 0.5), (0.75, 0.775), (1.0, 0.99)], saturation: 1.1, clarity: 0.2)
+        case .springLight: LookRecipe("Spring Light", .seasons, exposure: 0.1, curve: [(0.0, 0.03), (0.25, 0.268), (0.5, 0.51), (0.75, 0.76), (1.0, 0.98)], saturation: 1.08, vibrance: 0.25, shadows: (-0.002, 0.006, 0.002), highlights: (0.008, 0.002, 0.008))
+        case .summerHeat: LookRecipe("Summer Heat", .seasons, temperature: 450.0, curve: [(0.0, 0.0), (0.25, 0.215), (0.5, 0.5), (0.75, 0.795), (1.0, 1.0)], saturation: 1.15, vibrance: 0.2, highlights: (0.016, 0.01, -0.008))
+        case .winterFrost: LookRecipe("Winter Frost", .seasons, exposure: 0.1, temperature: -500.0, curve: [(0.0, 0.03), (0.25, 0.268), (0.5, 0.51), (0.75, 0.76), (1.0, 0.98)], saturation: 0.85, shadows: (-0.006, 0.002, 0.016), highlights: (0.0, 0.004, 0.01))
+        case .goldenHour: LookRecipe("Golden Hour Boost", .seasons, temperature: 900.0, curve: [(0.0, 0.01), (0.25, 0.235), (0.5, 0.5), (0.75, 0.775), (1.0, 0.99)], saturation: 1.1, highlights: (0.03, 0.018, -0.014), glow: 0.22)
         default: nil
         }
     }

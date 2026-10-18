@@ -30,9 +30,17 @@ enum VisionMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Where a filter applies.
+enum FilterTarget: String, Codable, CaseIterable, Identifiable, Sendable {
+    case all, subject, background
+
+    var id: String { rawValue }
+    var label: String { self == .all ? "Everything" : rawValue.capitalized }
+}
+
 /// Pages inside FX > Art.
 enum ArtEffect: String, CaseIterable, Identifiable, Sendable {
-    case hologram, vision, sort, orbit, melt
+    case hologram, vision, sort, orbit, melt, planet
 
     var id: String { rawValue }
     var label: String {
@@ -42,6 +50,7 @@ enum ArtEffect: String, CaseIterable, Identifiable, Sendable {
         case .sort: "Sort"
         case .orbit: "Orbit"
         case .melt: "Melt"
+        case .planet: "Planet"
         }
     }
 }

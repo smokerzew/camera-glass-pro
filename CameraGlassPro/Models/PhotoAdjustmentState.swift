@@ -33,6 +33,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var filter: PhotoFilter = .none
     /// How much of the filter is applied (0...1), blended with the unfiltered photo.
     var filterStrength: Double = 1
+    /// Where the filter applies: everywhere, only the subject, or only the background.
+    var filterTarget: FilterTarget = .all
     /// Photographic Style and its 2D pad position (Tone vertical, Color horizontal) and Palette strength.
     var style: PhotographicStyle = .standard
     var styleTone: Double = 0
@@ -92,6 +94,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var pixelSort: Double = 0
     var pixelSortVertical = false
     var pixelSortSubjectOnly = false
+    /// Little Planet: 0 = off, higher = bigger planet; spin turns it (degrees).
+    var littlePlanet: Double = 0
+    var planetSpin: Double = 0
 
     var orbitClones: Int { orbitCount >= 1.5 ? Int(orbitCount.rounded()) : 0 }
     var redactionStrokes: [RedactionStroke] = []
@@ -132,6 +137,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
             || speedBlur > 0 || doubleExposure > 0 || dispersion > 0 || ghostOpacity > 0 // the subject goes back on top of the ghost
             || hologram > 0 || melt > 0 || orbitClones > 0 || (pixelSort > 0 && pixelSortSubjectOnly)
+            || (filter != .none && filterTarget != .all)
     }
 
     /// Same edit with everything that needs a subject switched off (what renders when none is found).
@@ -148,6 +154,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         copy.hologram = 0
         copy.melt = 0
         copy.orbitCount = 0
+        copy.filterTarget = .all // no subject found: the filter covers everything
         if copy.pixelSortSubjectOnly { copy.pixelSort = 0 }
         return copy
     }
@@ -225,6 +232,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         pixelSort = unit(.pixelSort)
         pixelSortVertical = (try? c.decodeIfPresent(Bool.self, forKey: .pixelSortVertical)) ?? false
         pixelSortSubjectOnly = (try? c.decodeIfPresent(Bool.self, forKey: .pixelSortSubjectOnly)) ?? false
+        littlePlanet = unit(.littlePlanet)
+        planetSpin = min(max((try? c.decodeIfPresent(Double.self, forKey: .planetSpin)) ?? 0, 0), 360)
         dispersionAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dispersionAngle)) ?? 0, 0), 360)
         faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none
         redactionStrokes = Array(((try? c.decodeIfPresent([RedactionStroke].self, forKey: .redactionStrokes)) ?? [])
@@ -237,6 +246,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
         filter = (try? c.decodeIfPresent(PhotoFilter.self, forKey: .filter)) ?? .none
         filterStrength = min(max(try c.decodeIfPresent(Double.self, forKey: .filterStrength) ?? 1, 0), 1)
+        filterTarget = (try? c.decodeIfPresent(FilterTarget.self, forKey: .filterTarget)) ?? .all
         style = try c.decodeIfPresent(PhotographicStyle.self, forKey: .style) ?? .standard
         styleTone = min(max(try c.decodeIfPresent(Double.self, forKey: .styleTone) ?? 0, -1), 1)
         styleColor = min(max(try c.decodeIfPresent(Double.self, forKey: .styleColor) ?? 0, -1), 1)
@@ -417,6 +427,8 @@ enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case disposable, bloomPop, frosted, cyberPink
     case cleanPro, vividHDR
     case pointShoot, nightFlash, coolCCD, y2006
+    case aerochrome, crossProcess, technicolor, vaporwave, synthwave, animePastel, expiredFilm, underwaterFix
+    case springLight, summerHeat, winterFrost, goldenHour
     case y2kGlow, flashPop, cyber, pastel
     case hd, clarity, hdr, crisp
     case digicam, ccd, retro
