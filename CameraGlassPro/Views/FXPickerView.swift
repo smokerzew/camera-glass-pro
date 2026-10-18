@@ -8,8 +8,10 @@ struct FXPickerView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var page: Page = .blur
     @State private var art: ArtEffect = .hologram
+    @State private var light: LightEffect = .blinds
+    @State private var retro: RetroEffect = .vhs
 
-    enum Page: String, CaseIterable { case blur, blend, ghost, art, privacy }
+    enum Page: String, CaseIterable { case blur, blend, ghost, art, light, retro, privacy }
 
     /// The Reset button clears only the page that's showing.
     private var resetArea: ResetArea {
@@ -18,6 +20,8 @@ struct FXPickerView: View {
         case .blend: .fxBlend
         case .ghost: .fxGhost
         case .art: .fxArt
+        case .light: .fxLight
+        case .retro: .fxRetro
         case .privacy: .fxPrivacy
         }
     }
@@ -58,6 +62,8 @@ struct FXPickerView: View {
                 case .blend: blendPage
                 case .ghost: ghostPage
                 case .art: artPage
+                case .light: lightPage
+                case .retro: retroPage
                 case .privacy: privacyPage
                 }
             }
@@ -219,6 +225,84 @@ struct FXPickerView: View {
                             .opacity(a.littlePlanet > 0 ? 1 : 0.4)
                             .disabled(a.littlePlanet == 0)
                         note("Wraps the photo into a tiny planet: the ground in the middle, the sky around it. Best with wide, level shots.")
+                    case .depth:
+                        GlassSliderRow(title: "Depth Map", value: a.depthMap) { vm.setEffect(\.depthMap, to: min(max($0, 0), 1)) }
+                        GlassTabs(tabs: [false, true], selection: Binding(get: { vm.adjustments.depthHeat },
+                                                                         set: { vm.setFlag(\.depthHeat, to: $0) })) { $0 ? "Heat" : "Gray" }
+                            .opacity(a.depthMap > 0 ? 1 : 0.4)
+                            .disabled(a.depthMap == 0)
+                        note("An estimated depth view (near is bright): the subject closest, the far scene darkest. It is a stylized estimate, not measured depth.")
+                    }
+                }
+            }
+        }
+    }
+
+    /// Window blinds, spotlight, Orton glow and sparkle, one at a time.
+    private var lightPage: some View {
+        let a = vm.adjustments
+        return VStack(alignment: .leading, spacing: 12) {
+            GlassTabs(tabs: LightEffect.allCases, selection: $light) { $0.label }
+            PagedStack(pages: LightEffect.allCases, selection: light) { effect in
+                VStack(alignment: .leading, spacing: 12) {
+                    switch effect {
+                    case .blinds:
+                        GlassSliderRow(title: "Blinds", value: a.blinds) { vm.setEffect(\.blinds, to: min(max($0, 0), 1)) }
+                        Group {
+                            GlassSliderRow(title: "Angle", value: a.blindsAngle, range: 0...180,
+                                           display: { "\(Int($0.rounded()))°" }) { vm.setEffect(\.blindsAngle, to: min(max($0, 0), 180)) }
+                            GlassSliderRow(title: "Slat Size", value: a.blindsSize) { vm.setEffect(\.blindsSize, to: min(max($0, 0), 1)) }
+                        }
+                        .opacity(a.blinds > 0 ? 1 : 0.4)
+                        .disabled(a.blinds == 0)
+                    case .spot:
+                        GlassSliderRow(title: "Spotlight", value: a.spotlight) { vm.setEffect(\.spotlight, to: min(max($0, 0), 1)) }
+                        GlassSliderRow(title: "Size", value: a.spotlightSize) { vm.setEffect(\.spotlightSize, to: min(max($0, 0), 1)) }
+                            .opacity(a.spotlight > 0 ? 1 : 0.4)
+                            .disabled(a.spotlight == 0)
+                        note("A pool of light on the subject; everything else falls into shadow.")
+                    case .glow:
+                        GlassSliderRow(title: "Glow", value: a.glow) { vm.setEffect(\.glow, to: min(max($0, 0), 1)) }
+                        note("Orton glow: a luminous, dreamy softness over a sharp photo.")
+                    case .sparkle:
+                        GlassSliderRow(title: "Sparkle", value: a.sparkle) { vm.setEffect(\.sparkle, to: min(max($0, 0), 1)) }
+                        note("Star glints on the brightest highlights, like a Y2K glam or star filter.")
+                    }
+                }
+            }
+        }
+    }
+
+    /// VHS, halftone and chroma, one at a time.
+    private var retroPage: some View {
+        let a = vm.adjustments
+        return VStack(alignment: .leading, spacing: 12) {
+            GlassTabs(tabs: RetroEffect.allCases, selection: $retro) { $0.label }
+            PagedStack(pages: RetroEffect.allCases, selection: retro) { effect in
+                VStack(alignment: .leading, spacing: 12) {
+                    switch effect {
+                    case .vhs:
+                        GlassSliderRow(title: "VHS", value: a.vhs) { vm.setEffect(\.vhs, to: min(max($0, 0), 1)) }
+                        note("Tape color bleed, scan lines, a soft picture and tape noise.")
+                    case .halftone:
+                        GlassSliderRow(title: "Halftone", value: a.halftone) { vm.setEffect(\.halftone, to: min(max($0, 0), 1)) }
+                        Group {
+                            GlassSliderRow(title: "Dot Size", value: a.halftoneDot) { vm.setEffect(\.halftoneDot, to: min(max($0, 0), 1)) }
+                            // How much black ink versus white paper shows.
+                            GlassSliderRow(title: "Black ↔ White", value: a.halftoneBalance, range: -1...1,
+                                           display: { $0 == 0 ? "0" : String(format: "%+d", Int(($0 * 100).rounded())) }) {
+                                vm.setEffect(\.halftoneBalance, to: min(max($0, -1), 1))
+                            }
+                            GlassTabs(tabs: [false, true], selection: Binding(get: { vm.adjustments.halftoneColor },
+                                                                             set: { vm.setFlag(\.halftoneColor, to: $0) })) {
+                                $0 ? "Color" : "Black & White"
+                            }
+                        }
+                        .opacity(a.halftone > 0 ? 1 : 0.4)
+                        .disabled(a.halftone == 0)
+                    case .chroma:
+                        GlassSliderRow(title: "Chroma", value: a.chroma) { vm.setEffect(\.chroma, to: min(max($0, 0), 1)) }
+                        note("Red and blue drift apart toward the edges, like a 2000s digicam lens.")
                     }
                 }
             }

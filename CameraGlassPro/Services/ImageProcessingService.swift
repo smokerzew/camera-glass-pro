@@ -19,7 +19,10 @@ final class ImageProcessingService: @unchecked Sendable {
         guard !a.isIdentity else { return input }
         var image = input
 
-        let mask = a.needsSubject ? (subjectMask ?? SubjectMasker.mask(for: input, fast: fastMask)) : nil
+        var mask = a.needsSubject ? (subjectMask ?? SubjectMasker.mask(for: input, fast: fastMask)) : nil
+        if a.needsSubject, !a.maskStrokes.isEmpty {
+            mask = refineMask(mask, strokes: a.maskStrokes, extent: input.extent)
+        }
         if let mask {
             image = composeSubject(a, to: image, mask: mask, backgroundPhoto: backgroundPhoto)
             if a.dispersion > 0 {
@@ -76,13 +79,29 @@ final class ImageProcessingService: @unchecked Sendable {
             image = filter.outputImage ?? image
         }
 
-        if a.warmth != 0 {
+        if a.vibrance != 0 {
+            image = image.applyingFilter("CIVibrance", parameters: ["inputAmount": a.vibrance])
+        }
+
+        if a.whites != 0 || a.blacks != 0 {
+            // White and black points: + whites brightens the top end, - pulls it down; + blacks lifts, - crushes.
+            let f = CIFilter.toneCurve()
+            f.inputImage = image
+            f.point0 = a.blacks < 0 ? CGPoint(x: -0.15 * a.blacks, y: 0) : CGPoint(x: 0, y: 0.12 * a.blacks)
+            f.point1 = CGPoint(x: 0.25, y: 0.25 + (a.blacks > 0 ? 0.04 * a.blacks : 0))
+            f.point2 = CGPoint(x: 0.5, y: 0.5)
+            f.point3 = CGPoint(x: 0.75, y: 0.75 + (a.whites > 0 ? 0.1 * a.whites : 0))
+            f.point4 = CGPoint(x: 1, y: a.whites < 0 ? 1 + 0.2 * a.whites : 1)
+            image = f.outputImage ?? image
+        }
+
+        if a.warmth != 0 || a.tint != 0 {
             // A target neutral below the source neutral renders warmer; above renders cooler
             // (sign verified by ImageProcessingTests.testWarmthDirection on CI).
             let filter = CIFilter.temperatureAndTint()
             filter.inputImage = image
             filter.neutral = CIVector(x: 6500, y: 0)
-            filter.targetNeutral = CIVector(x: 6500 - a.warmth * 2500, y: 0)
+            filter.targetNeutral = CIVector(x: 6500 - a.warmth * 2500, y: -a.tint * 120)
             image = filter.outputImage ?? image
         }
 
@@ -93,6 +112,10 @@ final class ImageProcessingService: @unchecked Sendable {
             filter.highlightAmount = Float(1 + a.highlights)
             filter.shadowAmount = Float(shadowAmount)
             image = filter.outputImage ?? image
+        }
+
+        if a.dehaze != 0 {
+            image = dehaze(image, amount: a.dehaze, extent: input.extent)
         }
 
         if a.nightLook {
@@ -145,6 +168,9 @@ final class ImageProcessingService: @unchecked Sendable {
         }
 
         // Some filters sample beyond the edges; keep the original bounds, then crop/rotate/straighten.
+        if !a.liquifyStrokes.isEmpty {
+            image = liquify(image.cropped(to: input.extent), strokes: a.liquifyStrokes, extent: input.extent)
+        }
         image = applyGeometry(a, to: image.cropped(to: input.extent))
         let extent = image.extent
 
@@ -160,6 +186,24 @@ final class ImageProcessingService: @unchecked Sendable {
             if !a.pixelSortSubjectOnly || sortMask != nil {
                 image = pixelSort(image, amount: a.pixelSort, vertical: a.pixelSortVertical, mask: sortMask, extent: extent)
             }
+        }
+        // The subject mask lines up with the final framing only without crop/rotate.
+        let framedMask = a.hasGeometry ? nil : mask?.cropped(to: extent)
+        if a.glow > 0 { image = ortonGlow(image, amount: a.glow, extent: extent) }
+        if a.sparkle > 0 { image = sparkle(image, amount: a.sparkle, extent: extent) }
+        if a.chroma > 0 { image = chroma(image, amount: a.chroma, extent: extent) }
+        if a.blinds > 0 {
+            image = windowBlinds(image, amount: a.blinds, angle: a.blindsAngle, size: a.blindsSize, extent: extent)
+        }
+        if a.spotlight > 0 {
+            let box = framedMask.flatMap { maskBounds($0, extent: extent) } ?? extent
+            image = spotlight(image, amount: a.spotlight, size: a.spotlightSize, center: CGPoint(x: box.midX, y: box.midY), extent: extent)
+        }
+        if a.depthMap > 0 { image = depthMap(image, mask: framedMask, amount: a.depthMap, heat: a.depthHeat, extent: extent) }
+        if a.vhs > 0 { image = vhs(image, amount: a.vhs, extent: extent) }
+        if a.halftone > 0 {
+            image = halftone(image, amount: a.halftone, dot: a.halftoneDot, balance: a.halftoneBalance,
+                             color: a.halftoneColor, extent: extent)
         }
         if a.tiltShift > 0 {
             image = tiltShift(image, amount: a.tiltShift, position: a.tiltShiftPosition, extent: extent)
@@ -178,6 +222,25 @@ final class ImageProcessingService: @unchecked Sendable {
             image = filmGrain(image, amount: a.grain, size: a.grainSize, extent: extent)
         }
         return image.cropped(to: extent)
+    }
+
+    /// Dehaze: + restores contrast and color lost to haze (wide local contrast, a little saturation);
+    /// - adds a soft atmospheric haze.
+    func dehaze(_ image: CIImage, amount: Double, extent e: CGRect) -> CIImage {
+        let k = min(max(amount, -1), 1)
+        if k > 0 {
+            let filter = CIFilter.unsharpMask()
+            filter.inputImage = image
+            filter.radius = Float(max(4, e.width / 25))
+            filter.intensity = Float(0.55 * k)
+            return (filter.outputImage ?? image).applyingFilter("CIColorControls", parameters: [
+                kCIInputSaturationKey: 1 + 0.18 * k, kCIInputContrastKey: 1 + 0.06 * k,
+            ]).cropped(to: e)
+        }
+        let haze = CIImage(color: CIColor(red: 0.62, green: 0.66, blue: 0.72)).cropped(to: e)
+        return image.applyingFilter("CIDissolveTransition", parameters: [
+            kCIInputTargetImageKey: haze, kCIInputTimeKey: 0.35 * -k,
+        ]).cropped(to: e)
     }
 
     /// Average sRGB luminance (0...1) of a square around `point` (normalized, top-left origin).

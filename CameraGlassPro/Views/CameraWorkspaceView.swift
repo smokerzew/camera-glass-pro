@@ -66,6 +66,8 @@ struct CameraWorkspaceView: View {
             .sheet(isPresented: $vm.showTextSheet) { LiveTextSheet(vm: vm) }
             .fullScreenCover(isPresented: $vm.showCropEditor) { CropEditorView(vm: vm) }
             .fullScreenCover(isPresented: $vm.showRedactionEditor) { RedactionEditorView(vm: vm) }
+            .fullScreenCover(isPresented: $vm.showMaskEditor) { MaskRefineEditorView(vm: vm) }
+            .fullScreenCover(isPresented: $vm.showLiquifyEditor) { LiquifyEditorView(vm: vm) }
             .appAlert(vm)
             .sensoryFeedback(.success, trigger: vm.importSuccessCount)
             .sensoryFeedback(.selection, trigger: vm.mode)

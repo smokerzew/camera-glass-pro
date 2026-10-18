@@ -7,7 +7,7 @@ enum ResetArea: String, CaseIterable, Sendable {
     /// Filter pop-up: filter, strength and grain.
     case filter
     /// FX pages.
-    case fxBlur, fxBlend, fxPrivacy, fxGhost, fxArt
+    case fxBlur, fxBlend, fxPrivacy, fxGhost, fxArt, fxLight, fxRetro
     /// SUBJECT pages (the Adjust page has its own reset for subject / background / sky edits).
     case subjectStyle, subjectCreate
 
@@ -20,7 +20,7 @@ enum ResetArea: String, CaseIterable, Sendable {
         case .local: "Reset Filters"
         case .adjust: "Reset Adjust"
         case .filter: "Reset Filter"
-        case .fxBlur, .fxBlend, .fxPrivacy, .fxGhost, .fxArt, .subjectStyle, .subjectCreate: "Reset"
+        case .fxBlur, .fxBlend, .fxPrivacy, .fxGhost, .fxArt, .fxLight, .fxRetro, .subjectStyle, .subjectCreate: "Reset"
         }
     }
 
@@ -101,6 +101,23 @@ extension PhotoAdjustmentState {
             next.pixelSortSubjectOnly = d.pixelSortSubjectOnly
             next.littlePlanet = d.littlePlanet
             next.planetSpin = d.planetSpin
+            next.depthMap = d.depthMap
+            next.depthHeat = d.depthHeat
+        case .fxLight:
+            next.blinds = d.blinds
+            next.blindsAngle = d.blindsAngle
+            next.blindsSize = d.blindsSize
+            next.spotlight = d.spotlight
+            next.spotlightSize = d.spotlightSize
+            next.glow = d.glow
+            next.sparkle = d.sparkle
+        case .fxRetro:
+            next.vhs = d.vhs
+            next.halftone = d.halftone
+            next.halftoneDot = d.halftoneDot
+            next.halftoneBalance = d.halftoneBalance
+            next.halftoneColor = d.halftoneColor
+            next.chroma = d.chroma
         case .subjectStyle:
             next.colorSplash = d.colorSplash
             next.background = d.background

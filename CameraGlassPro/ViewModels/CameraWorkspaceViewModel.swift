@@ -101,6 +101,11 @@ final class CameraWorkspaceViewModel {
     var showFXPicker = false
     /// Picker for Match Look's reference photo.
     var showMatchPhotoPicker = false
+    /// Brush editors: Refine Subject and Liquify.
+    var showMaskEditor = false
+    var showLiquifyEditor = false
+    /// Saved versions of the edit, per photo or video.
+    private(set) var versionStore: [UUID: [PhotoAdjustmentState]] = [:]
     var showRedactionEditor = false
     /// Whether Live Photos made from videos keep the video's sound (saved preference).
     private(set) var livePhotoSound = true
@@ -1237,6 +1242,10 @@ final class CameraWorkspaceViewModel {
         case .fuji400h: texture = (0.25, .fine, 0)
         case .cinestill: texture = (0.35, .medium, 0.55)
         case .trix: texture = (0.5, .coarse, 0)
+        case .vision3: texture = (0.25, .medium, 0.3)
+        case .agfaVista: texture = (0.2, .fine, 0)
+        case .delta3200: texture = (0.6, .coarse, 0)
+        case .polaroid600: texture = (0.15, .fine, 0)
         default: texture = nil
         }
         guard let texture else { return state }
@@ -1503,6 +1512,75 @@ final class CameraWorkspaceViewModel {
         recordUndoPoint(force: true)
         adjustments[keyPath: path] = value
         adjustmentsChanged()
+    }
+
+    // MARK: Refine Subject, Liquify, Versions
+
+    func setMaskStrokes(_ strokes: [MaskStroke]) {
+        let limited = Array(strokes.prefix(MaskStroke.limit))
+        guard limited != adjustments.maskStrokes else { return }
+        recordUndoPoint(force: true)
+        adjustments.maskStrokes = limited
+        adjustmentsChanged()
+    }
+
+    func setLiquifyStrokes(_ strokes: [LiquifyStroke]) {
+        let limited = Array(strokes.prefix(LiquifyStroke.limit))
+        guard limited != adjustments.liquifyStrokes else { return }
+        recordUndoPoint(force: true)
+        adjustments.liquifyStrokes = limited
+        adjustmentsChanged()
+    }
+
+    /// The photo with the current edit but without crop or rotation (the brush editors' canvas).
+    func editorPreview() async -> CGImage? {
+        await geometryPreview(rotation: 0, flipped: false, straighten: 0)
+    }
+
+    /// The subject (detected, then refined by the brush) as a translucent red overlay for Refine Subject.
+    func subjectOverlay() async -> CGImage? {
+        guard let source = photo?.preview else { return nil }
+        let processor = self.processor
+        let known = previewSubjectSource === source
+        let cached = known ? previewSubjectMask : nil
+        let strokes = adjustments.maskStrokes
+        let detected = known ? cached : await Task.detached(priority: .userInitiated) {
+            SubjectMasker.mask(for: CIImage(cgImage: source))
+        }.value
+        if !known, photo?.preview === source {
+            previewSubjectMask = detected
+            previewSubjectSource = source
+        }
+        return await Task.detached(priority: .userInitiated) { () -> CGImage? in
+            let e = CIImage(cgImage: source).extent
+            let mask = processor.refineMask(detected, strokes: strokes, extent: e) ?? CIImage(color: .black).cropped(to: e)
+            let tint = CIImage(color: CIColor(red: 1, green: 0.2, blue: 0.25, alpha: 0.5)).cropped(to: e)
+            let overlay = tint.applyingFilter("CIBlendWithMask", parameters: [
+                kCIInputBackgroundImageKey: CIImage(color: .clear).cropped(to: e), kCIInputMaskImageKey: mask,
+            ])
+            return processor.context.createCGImage(overlay, from: e)
+        }.value
+    }
+
+    var versions: [PhotoAdjustmentState] { currentEntryID.flatMap { versionStore[$0] } ?? [] }
+
+    func saveVersion() {
+        guard let id = currentEntryID else { return }
+        versionStore[id, default: []].append(adjustments)
+        showToast("Saved as Version \(versionStore[id]?.count ?? 1)")
+    }
+
+    func applyVersion(at index: Int) {
+        let all = versions
+        guard all.indices.contains(index), all[index] != adjustments else { return }
+        recordUndoPoint(force: true)
+        adjustments = all[index]
+        adjustmentsChanged()
+    }
+
+    func deleteVersion(at index: Int) {
+        guard let id = currentEntryID, versionStore[id]?.indices.contains(index) == true else { return }
+        versionStore[id]?.remove(at: index)
     }
 
     func setFilterTarget(_ target: FilterTarget) {
@@ -1922,10 +2000,13 @@ final class CameraWorkspaceViewModel {
             if found == nil { showToast("No subject found") }
         }
         let mask = previewSubjectSource === source ? previewSubjectMask : nil
-        // No subject in this photo: render without the subject edits instead of searching again every frame.
-        let renderRecipe = mask == nil ? recipe.withoutSubjectEdits : recipe
+        // No subject in this photo: render without the subject edits instead of searching again every frame,
+        // unless Refine Subject strokes define one (then start from an empty mask).
+        let painted = !recipe.maskStrokes.isEmpty
+        let renderRecipe = mask == nil && !painted ? recipe.withoutSubjectEdits : recipe
+        let renderMask = mask ?? (painted ? CIImage(color: .black) : nil)
         let rendered = await Task.detached(priority: .userInitiated) {
-            processor.renderPreview(source, adjustments: renderRecipe, subjectMask: mask, backgroundPhoto: backgroundPhoto)
+            processor.renderPreview(source, adjustments: renderRecipe, subjectMask: renderMask, backgroundPhoto: backgroundPhoto)
         }.value
         // A reset to no edits while this rendered already showed the original: keep it.
         guard photo?.preview === source, !adjustments.isIdentity else { return }

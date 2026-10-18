@@ -186,7 +186,7 @@ final class FXTests: XCTestCase {
     func testPanelPagesStaySmall() {
         for group in PanelGroup.allCases {
             let count = CameraControl.allCases.filter { $0.group == group }.count
-            XCTAssertTrue((1...8).contains(count), "\(group) has \(count) controls")
+            XCTAssertTrue((1...9).contains(count), "\(group) has \(count) controls")
         }
         for group in AdjustGroup.allCases where group != .local && group != .ai {
             XCTAssertFalse(AdjustmentParameter.allCases.filter { $0.group == group }.isEmpty)

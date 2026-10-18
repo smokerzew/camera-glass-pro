@@ -79,6 +79,30 @@ struct PhotoAdjustmentView: View {
                     .disabled(!vm.hasEdits)
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    // Versions: keep several edits of this photo and switch between them.
+                    Menu {
+                        Button("Save as New Version", systemImage: "plus") { vm.saveVersion() }
+                            .disabled(!vm.hasEdits)
+                        ForEach(Array(vm.versions.enumerated()), id: \.offset) { index, version in
+                            Button { vm.applyVersion(at: index) } label: {
+                                if version == vm.adjustments {
+                                    Label("Version \(index + 1)", systemImage: "checkmark")
+                                } else {
+                                    Text("Version \(index + 1)")
+                                }
+                            }
+                        }
+                        if !vm.versions.isEmpty {
+                            Menu("Delete a Version") {
+                                ForEach(Array(vm.versions.indices), id: \.self) { index in
+                                    Button("Version \(index + 1)", role: .destructive) { vm.deleteVersion(at: index) }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "square.stack.3d.up")
+                    }
+                    .accessibilityLabel("Versions")
                     Button { vm.undo() } label: { Image(systemName: "arrow.uturn.backward") }
                         .disabled(!vm.canUndo)
                         .accessibilityLabel("Undo")

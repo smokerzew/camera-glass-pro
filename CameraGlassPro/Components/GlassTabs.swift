@@ -7,6 +7,15 @@ struct GlassTabs<Tab: Hashable>: View {
     let title: (Tab) -> String
 
     var body: some View {
+        // Many tabs scroll sideways instead of squeezing.
+        if tabs.count > 5 {
+            ScrollView(.horizontal, showsIndicators: false) { row(minWidth: 70) }
+        } else {
+            row(minWidth: nil)
+        }
+    }
+
+    private func row(minWidth: CGFloat?) -> some View {
         HStack(spacing: 6) {
             ForEach(tabs, id: \.self) { tab in
                 let selected = tab == selection
@@ -17,7 +26,8 @@ struct GlassTabs<Tab: Hashable>: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .foregroundStyle(selected ? Color.yellow : .white.opacity(0.85))
-                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .padding(.horizontal, minWidth == nil ? 0 : 10)
+                        .frame(minWidth: minWidth, maxWidth: minWidth == nil ? .infinity : nil, minHeight: 32)
                         .cameraGlass(selected ? .selected : .interactive, in: Capsule())
                 }
                 .buttonStyle(.plain)

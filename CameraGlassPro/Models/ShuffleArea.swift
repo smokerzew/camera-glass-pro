@@ -5,7 +5,7 @@ import Foundation
 extension PhotoAdjustmentState {
     static func canShuffle(_ area: ResetArea) -> Bool {
         switch area {
-        case .light, .color, .detail, .effects, .filter, .fxBlur, .fxBlend, .fxGhost, .fxArt, .subjectCreate: true
+        case .light, .color, .detail, .effects, .filter, .fxBlur, .fxBlend, .fxGhost, .fxArt, .fxLight, .fxRetro, .subjectCreate: true
         case .local, .adjust, .fxPrivacy, .subjectStyle: false
         }
     }
@@ -89,6 +89,33 @@ extension PhotoAdjustmentState {
             case .planet:
                 next.littlePlanet = random(0.3...1)
                 next.planetSpin = random(0...360)
+            case .depth:
+                next.depthMap = random(0.6...1)
+                next.depthHeat = coin()
+            }
+        case .fxLight:
+            next = resetting(.fxLight)
+            switch LightEffect.allCases.randomElement(using: &rng) ?? .glow {
+            case .blinds:
+                next.blinds = random(0.4...0.9)
+                next.blindsAngle = random(15...60)
+                next.blindsSize = random(0.2...0.7)
+            case .spot:
+                next.spotlight = random(0.4...0.9)
+                next.spotlightSize = random(0.3...0.7)
+            case .glow: next.glow = random(0.3...0.8)
+            case .sparkle: next.sparkle = random(0.4...1)
+            }
+        case .fxRetro:
+            next = resetting(.fxRetro)
+            switch RetroEffect.allCases.randomElement(using: &rng) ?? .vhs {
+            case .vhs: next.vhs = random(0.5...1)
+            case .halftone:
+                next.halftone = random(0.6...1)
+                next.halftoneDot = random(0.2...0.7)
+                next.halftoneBalance = random(-0.4...0.4)
+                next.halftoneColor = coin()
+            case .chroma: next.chroma = random(0.3...0.9)
             }
         case .subjectCreate:
             next.dispersion = random(0.4...1)

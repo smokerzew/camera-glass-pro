@@ -111,3 +111,19 @@ using namespace metal;
     }
     return float4(mix(s.rgb, pow(v, float3(2.2)), amount), s.a);
 }
+
+// VHS tape: sharp-ish brightness, colors from a horizontally smeared copy (bleed), scan lines,
+// a warm-magenta tape cast and lifted blacks, blended by `amount`.
+[[stitchable]] float4 vhsLook(coreimage::sample_t s, coreimage::sample_t smear, coreimage::sample_t lines, float amount) {
+    float3 w = float3(0.2126, 0.7152, 0.0722);
+    float y = dot(s.rgb, w);
+    float3 color = (smear.rgb - dot(smear.rgb, w)) * 1.25;
+    float3 v = max(y + color, 0.0) * mix(1.0, lines.r, 0.45);
+    v = v * float3(1.04, 0.97, 1.03) + float3(0.012, 0.006, 0.02);
+    return float4(mix(s.rgb, v, amount), s.a);
+}
+
+// Takes red from one image, green from a second and blue from a third (chromatic fringe).
+[[stitchable]] float4 combineChannels(coreimage::sample_t r, coreimage::sample_t g, coreimage::sample_t b) {
+    return float4(r.r, g.g, b.b, g.a);
+}

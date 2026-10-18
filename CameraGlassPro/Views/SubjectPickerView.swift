@@ -76,6 +76,19 @@ struct SubjectPickerView: View {
     /// Color Splash and Background Swap.
     private var stylePage: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Fix what counts as the subject (stray hair, a missed arm) with a brush.
+            Button { vm.showMaskEditor = true } label: {
+                Label(vm.adjustments.maskStrokes.isEmpty ? "Refine Subject" : "Refine Subject (\(vm.adjustments.maskStrokes.count))",
+                      systemImage: "paintbrush.pointed")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 36)
+                    .cameraGlass(.interactive, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(vm.photo == nil)
+            .padding(.horizontal, 6)
             Toggle(isOn: Binding(get: { vm.adjustments.colorSplash }, set: { vm.setColorSplash($0) })) {
                 Label("Color Splash", systemImage: "paintpalette")
                     .font(.subheadline.weight(.semibold))

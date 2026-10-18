@@ -3,7 +3,7 @@ import CoreImage.CIFilterBuiltins
 
 /// Filter groups shown as tabs in the filter picker.
 enum FilterCategory: String, CaseIterable, Identifiable {
-    case classic, film, creative, cinematic, portrait, nature, seasons, blackWhite, vintage, moody, food, y2k, quality, digicam
+    case classic, film, creative, cinematic, portrait, nature, seasons, travel, blackWhite, vintage, moody, food, y2k, quality, digicam
 
     var id: String { rawValue }
 
@@ -13,6 +13,7 @@ enum FilterCategory: String, CaseIterable, Identifiable {
         case .film: "Film"
         case .creative: "Creative"
         case .seasons: "Seasons"
+        case .travel: "Travel"
         case .cinematic: "Cinematic"
         case .portrait: "Portrait"
         case .nature: "Nature"
@@ -174,6 +175,19 @@ extension ImageProcessingService {
             ])
         }
         x = curve(x, r.curve)
+        if let levels = r.posterize, let tones = r.duotone {
+            // A few flat tones mapped from the dark color to the light one, in display values.
+            let (dark, light) = tones
+            x = x.applyingFilter("CILinearToSRGBToneCurve")
+                .applyingFilter("CIColorPosterize", parameters: ["inputLevels": levels])
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: light.0 - dark.0, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: light.1 - dark.1, y: 0, z: 0, w: 0),
+                    "inputBVector": CIVector(x: light.2 - dark.2, y: 0, z: 0, w: 0),
+                    "inputBiasVector": CIVector(x: dark.0, y: dark.1, z: dark.2, w: 0),
+                ])
+                .applyingFilter("CISRGBToneCurveToLinear")
+        }
         x = saturation(x, r.saturation)
         if r.vibrance != 0 { x = vibrance(x, r.vibrance) }
         if r.shadows != (0, 0, 0) || r.highlights != (0, 0, 0), let kernel = Self.kernel("lookSplitTone"),

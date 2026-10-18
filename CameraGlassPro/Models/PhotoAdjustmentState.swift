@@ -11,6 +11,12 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var warmth: Double = 0
     var highlights: Double = 0
     var shadows: Double = 0
+    /// White and black points (-1...1), Dehaze (+ cuts haze, - adds it), Tint (+ magenta, - green), Vibrance.
+    var whites: Double = 0
+    var blacks: Double = 0
+    var dehaze: Double = 0
+    var tint: Double = 0
+    var vibrance: Double = 0
     /// Local contrast (iOS 27 "Styles 3" texture): + crisper detail, − softer.
     var texture: Double = 0
     /// Film-like luminance grain.
@@ -97,6 +103,27 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Little Planet: 0 = off, higher = bigger planet; spin turns it (degrees).
     var littlePlanet: Double = 0
     var planetSpin: Double = 0
+    /// Depth Map (estimated): mix amount, gray or heat colors.
+    var depthMap: Double = 0
+    var depthHeat = false
+    /// Light FX: window blinds, spotlight, Orton glow, sparkle.
+    var blinds: Double = 0
+    var blindsAngle: Double = 35
+    var blindsSize: Double = 0.4
+    var spotlight: Double = 0
+    var spotlightSize: Double = 0.5
+    var glow: Double = 0
+    var sparkle: Double = 0
+    /// Retro FX: VHS, halftone (mix, dot size, black-white balance, color), chroma fringe.
+    var vhs: Double = 0
+    var halftone: Double = 0
+    var halftoneDot: Double = 0.4
+    var halftoneBalance: Double = 0
+    var halftoneColor = false
+    var chroma: Double = 0
+    /// Refine Subject strokes and Liquify pushes (photo coordinates before crop and rotation).
+    var maskStrokes: [MaskStroke] = []
+    var liquifyStrokes: [LiquifyStroke] = []
 
     var orbitClones: Int { orbitCount >= 1.5 ? Int(orbitCount.rounded()) : 0 }
     var redactionStrokes: [RedactionStroke] = []
@@ -137,7 +164,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
             || speedBlur > 0 || doubleExposure > 0 || dispersion > 0 || ghostOpacity > 0 // the subject goes back on top of the ghost
             || hologram > 0 || melt > 0 || orbitClones > 0 || (pixelSort > 0 && pixelSortSubjectOnly)
-            || (filter != .none && filterTarget != .all)
+            || (filter != .none && filterTarget != .all) || spotlight > 0 || depthMap > 0
     }
 
     /// Same edit with everything that needs a subject switched off (what renders when none is found).
@@ -190,6 +217,11 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         warmth = try c.decodeIfPresent(Double.self, forKey: .warmth) ?? 0
         highlights = try c.decodeIfPresent(Double.self, forKey: .highlights) ?? 0
         shadows = try c.decodeIfPresent(Double.self, forKey: .shadows) ?? 0
+        whites = (try? c.decodeIfPresent(Double.self, forKey: .whites)) ?? 0
+        blacks = (try? c.decodeIfPresent(Double.self, forKey: .blacks)) ?? 0
+        dehaze = (try? c.decodeIfPresent(Double.self, forKey: .dehaze)) ?? 0
+        tint = (try? c.decodeIfPresent(Double.self, forKey: .tint)) ?? 0
+        vibrance = (try? c.decodeIfPresent(Double.self, forKey: .vibrance)) ?? 0
         texture = try c.decodeIfPresent(Double.self, forKey: .texture) ?? 0
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
         grainSize = (try? c.decodeIfPresent(GrainSize.self, forKey: .grainSize)) ?? .medium
@@ -233,6 +265,23 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         pixelSortVertical = (try? c.decodeIfPresent(Bool.self, forKey: .pixelSortVertical)) ?? false
         pixelSortSubjectOnly = (try? c.decodeIfPresent(Bool.self, forKey: .pixelSortSubjectOnly)) ?? false
         littlePlanet = unit(.littlePlanet)
+        depthMap = unit(.depthMap)
+        depthHeat = (try? c.decodeIfPresent(Bool.self, forKey: .depthHeat)) ?? false
+        blinds = unit(.blinds)
+        blindsAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .blindsAngle)) ?? 35, 0), 180)
+        blindsSize = unit(.blindsSize, 0.4)
+        spotlight = unit(.spotlight)
+        spotlightSize = unit(.spotlightSize, 0.5)
+        glow = unit(.glow)
+        sparkle = unit(.sparkle)
+        vhs = unit(.vhs)
+        halftone = unit(.halftone)
+        halftoneDot = unit(.halftoneDot, 0.4)
+        halftoneBalance = min(max((try? c.decodeIfPresent(Double.self, forKey: .halftoneBalance)) ?? 0, -1), 1)
+        halftoneColor = (try? c.decodeIfPresent(Bool.self, forKey: .halftoneColor)) ?? false
+        chroma = unit(.chroma)
+        maskStrokes = Array(((try? c.decodeIfPresent([MaskStroke].self, forKey: .maskStrokes)) ?? []).prefix(MaskStroke.limit))
+        liquifyStrokes = Array(((try? c.decodeIfPresent([LiquifyStroke].self, forKey: .liquifyStrokes)) ?? []).prefix(LiquifyStroke.limit))
         planetSpin = min(max((try? c.decodeIfPresent(Double.self, forKey: .planetSpin)) ?? 0, 0), 360)
         dispersionAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dispersionAngle)) ?? 0, 0), 360)
         faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none
@@ -314,7 +363,8 @@ enum AdjustGroup: String, CaseIterable, Identifiable, Sendable {
 }
 
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
-    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, sharpen, noise, skin, vignette, halation, grain
+    case exposure, brightness, contrast, highlights, shadows, whites, blacks, dehaze, saturation, vibrance, warmth, tint,
+         texture, sharpen, noise, skin, vignette, halation, grain
 
     var id: String { rawValue }
     var title: String {
@@ -327,8 +377,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
 
     var group: AdjustGroup {
         switch self {
-        case .exposure, .brightness, .contrast, .highlights, .shadows: .light
-        case .saturation, .warmth: .color
+        case .exposure, .brightness, .contrast, .highlights, .shadows, .whites, .blacks, .dehaze: .light
+        case .saturation, .vibrance, .warmth, .tint: .color
         case .texture, .sharpen, .noise, .skin: .detail
         case .vignette, .halation, .grain: .effects
         }
@@ -343,6 +393,11 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .warmth: "thermometer.medium"
         case .highlights: "circle.righthalf.filled.inverse"
         case .shadows: "circle.bottomhalf.filled"
+        case .whites: "circle"
+        case .blacks: "circle.fill"
+        case .dehaze: "sun.haze.fill"
+        case .tint: "drop.triangle"
+        case .vibrance: "paintpalette"
         case .texture: "circle.hexagongrid"
         case .sharpen: "triangle"
         case .noise: "aqi.low"
@@ -362,6 +417,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .warmth: -1...1
         case .highlights: -1...0        // 0 = unchanged, -1 = strongest recovery
         case .shadows: -1...1
+        case .whites, .blacks, .dehaze, .tint, .vibrance: -1...1
         case .texture: -1...1
         case .sharpen, .noise: 0...1
         case .skin: 0...1
@@ -387,6 +443,11 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .warmth: \.warmth
         case .highlights: \.highlights
         case .shadows: \.shadows
+        case .whites: \.whites
+        case .blacks: \.blacks
+        case .dehaze: \.dehaze
+        case .tint: \.tint
+        case .vibrance: \.vibrance
         case .texture: \.texture
         case .sharpen: \.sharpen
         case .noise: \.noiseReduction
@@ -429,6 +490,8 @@ enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case pointShoot, nightFlash, coolCCD, y2006
     case aerochrome, crossProcess, technicolor, vaporwave, synthwave, animePastel, expiredFilm, underwaterFix
     case springLight, summerHeat, winterFrost, goldenHour
+    case vision3, agfaVista, delta3200, lomoPurple, polaroid600, gameBoy
+    case tokyoNeon, santoriniBlue, parisRose, thrillerGreen, pastelSymmetry, sunKissed
     case y2kGlow, flashPop, cyber, pastel
     case hd, clarity, hdr, crisp
     case digicam, ccd, retro

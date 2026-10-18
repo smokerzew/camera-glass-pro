@@ -38,9 +38,38 @@ enum FilterTarget: String, Codable, CaseIterable, Identifiable, Sendable {
     var label: String { self == .all ? "Everything" : rawValue.capitalized }
 }
 
+/// Pages inside FX > Light.
+enum LightEffect: String, CaseIterable, Identifiable, Sendable {
+    case blinds, spot, glow, sparkle
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .blinds: "Blinds"
+        case .spot: "Spotlight"
+        case .glow: "Glow"
+        case .sparkle: "Sparkle"
+        }
+    }
+}
+
+/// Pages inside FX > Retro.
+enum RetroEffect: String, CaseIterable, Identifiable, Sendable {
+    case vhs, halftone, chroma
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .vhs: "VHS"
+        case .halftone: "Halftone"
+        case .chroma: "Chroma"
+        }
+    }
+}
+
 /// Pages inside FX > Art.
 enum ArtEffect: String, CaseIterable, Identifiable, Sendable {
-    case hologram, vision, sort, orbit, melt, planet
+    case hologram, vision, sort, orbit, melt, planet, depth
 
     var id: String { rawValue }
     var label: String {
@@ -51,6 +80,7 @@ enum ArtEffect: String, CaseIterable, Identifiable, Sendable {
         case .orbit: "Orbit"
         case .melt: "Melt"
         case .planet: "Planet"
+        case .depth: "Depth"
         }
     }
 }
