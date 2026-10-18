@@ -114,7 +114,7 @@ extension ImageProcessingService {
         guard amount > 0 else { return image }
         let k = min(amount, 1)
         // Low resolution (about 480 px across), smoothly blown back up: mushy, soft detail.
-        let s = min(1, 480 / max(e.width, e.height))
+        let s = min(0.5, 480 / max(e.width, e.height)) // at least half resolution, even on small images
         let origin = CGAffineTransform(translationX: -e.minX, y: -e.minY)
         let lowRes = image.clampedToExtent()
             .transformed(by: origin.concatenating(CGAffineTransform(scaleX: s, y: s)))
