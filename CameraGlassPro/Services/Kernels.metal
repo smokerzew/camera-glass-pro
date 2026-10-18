@@ -89,10 +89,3 @@ using namespace metal;
     float3 matched = pow(clamp(float3(r, g, b), 0.0, 1.0), float3(2.2));
     return float4(mix(s.rgb, matched, amount), s.a);
 }
-
-// Dispersion: a cell breaks off when its random value is below the chance at that spot (`zone`, 0 deep
-// inside the subject, 1 at the leading edge), scaled by `density`. Gives an organic, eroding edge.
-[[stitchable]] float4 dispersionHoles(coreimage::sample_t noise, coreimage::sample_t zone, float density) {
-    float h = noise.r < zone.r * density ? 1.0 : 0.0;
-    return float4(h, h, h, 1.0);
-}

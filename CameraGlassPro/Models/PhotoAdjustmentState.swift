@@ -114,7 +114,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Any edit that needs the subject mask.
     var needsSubject: Bool {
         portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
-            || speedBlur > 0 || doubleExposure > 0 || dispersion > 0 || (ghostOpacity > 0 && ghostTarget == .subject)
+            || speedBlur > 0 || doubleExposure > 0 || dispersion > 0 || ghostOpacity > 0 // the subject goes back on top of the ghost
     }
 
     /// Same edit with everything that needs a subject switched off (what renders when none is found).

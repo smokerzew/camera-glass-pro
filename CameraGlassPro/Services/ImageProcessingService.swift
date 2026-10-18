@@ -28,7 +28,7 @@ final class ImageProcessingService: @unchecked Sendable {
             }
         }
         if a.ghostOpacity > 0, a.ghostTarget == .photo || mask != nil {
-            image = ghost(image, mask: a.ghostTarget == .subject ? mask?.cropped(to: input.extent) : nil,
+            image = ghost(image, mask: mask?.cropped(to: input.extent), wholePhoto: a.ghostTarget == .photo,
                           opacity: a.ghostOpacity, distance: a.ghostDistance, degrees: a.ghostAngle,
                           hideOriginal: a.ghostHideOriginal, extent: input.extent)
         }

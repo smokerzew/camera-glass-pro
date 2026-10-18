@@ -442,10 +442,50 @@ final class GhostTests: XCTestCase {
         state.ghostTarget = .photo
         state.ghostOpacity = 1
         state.ghostDistance = 1
-        XCTAssertFalse(state.needsSubject)
+        XCTAssertEqual(state.withoutSubjectEdits.ghostOpacity, 1, "works without a subject too")
         let output = processor.apply(state, to: photo)
         XCTAssertGreaterThan(redness(output, CGRect(x: 175, y: 130, width: 40, height: 40)), 40)
         XCTAssertEqual(PhotoAdjustmentState().resetting(.fxGhost), PhotoAdjustmentState())
-        XCTAssertNotNil(ImageProcessingService.kernel("dispersionHoles"))
+    }
+}
+
+final class GhostBehindTests: XCTestCase {
+    func testGhostStaysBehindTheSubject() {
+        let processor = ImageProcessingService.shared
+        let extent = CGRect(x: 0, y: 0, width: 300, height: 300)
+        let subjectRect = CGRect(x: 100, y: 100, width: 100, height: 100)
+        // Red subject with a blue stripe on its left, on gray: a ghost moved right would put blue over the red.
+        let photo = CIImage(color: CIColor(red: 0.1, green: 0.1, blue: 0.9)).cropped(to: CGRect(x: 100, y: 100, width: 30, height: 100))
+            .composited(over: CIImage(color: CIColor(red: 0.9, green: 0.1, blue: 0.1)).cropped(to: subjectRect))
+            .composited(over: CIImage(color: CIColor(red: 0.3, green: 0.3, blue: 0.3)).cropped(to: extent))
+        let mask = CIImage(color: .white).cropped(to: subjectRect).composited(over: CIImage(color: .black).cropped(to: extent))
+        for target in GhostTarget.allCases {
+            var state = PhotoAdjustmentState()
+            state.ghostTarget = target
+            state.ghostOpacity = 1
+            state.ghostDistance = 40.0 / 105.0 // 40 px right
+            let output = processor.apply(state, to: photo, subjectMask: mask)
+            let inside = CGRect(x: 150, y: 130, width: 20, height: 40) // red part, where the moved blue stripe would land
+            let averaged = output.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: inside)])
+            var pixel = [UInt8](repeating: 0, count: 4)
+            processor.context.render(averaged, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                     format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            XCTAssertGreaterThan(Int(pixel[0]), 200, "\(target): the subject is on top, still red")
+            XCTAssertLessThan(Int(pixel[2]), 60, "\(target): no ghost showing over the subject")
+        }
+    }
+
+    func testDispersionIsTheSameEveryRender() {
+        let processor = ImageProcessingService.shared
+        let extent = CGRect(x: 0, y: 0, width: 240, height: 240)
+        let photo = CIImage(color: CIColor(red: 0.9, green: 0.1, blue: 0.1)).cropped(to: CGRect(x: 60, y: 60, width: 80, height: 120))
+            .composited(over: CIImage(color: CIColor(red: 0.3, green: 0.3, blue: 0.3)).cropped(to: extent))
+        let mask = CIImage(color: .white).cropped(to: CGRect(x: 60, y: 60, width: 80, height: 120))
+            .composited(over: CIImage(color: .black).cropped(to: extent))
+        func render() -> Data? {
+            let out = processor.dispersion(photo, mask: mask, amount: 1, size: 0.5, extent: extent)
+            return processor.context.pngRepresentation(of: out, format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!)
+        }
+        XCTAssertEqual(render(), render(), "preview and export see the same pieces")
     }
 }
