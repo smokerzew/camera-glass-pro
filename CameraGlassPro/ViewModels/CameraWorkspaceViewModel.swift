@@ -44,6 +44,9 @@ final class CameraWorkspaceViewModel {
     private(set) var renderedPreview: CGImage?
     private(set) var adjustments = PhotoAdjustmentState()
     private(set) var showOriginal = false
+    /// AI edit: true while the on-device model works; the last result or problem to show.
+    private(set) var isAskingAI = false
+    private(set) var aiMessage: String?
 
     // MARK: Video playback
     private(set) var player: AVPlayer?
@@ -1263,6 +1266,37 @@ final class CameraWorkspaceViewModel {
         adjustments.subjectEdit = RegionEdit()
         adjustments.backgroundEdit = RegionEdit()
         adjustmentsChanged()
+    }
+
+    /// Describe an edit in words; Apple's on-device model sets the editor's controls (one undo step).
+    func applyAIEdit(_ request: String) {
+        let text = request.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !isAskingAI, let source = photo?.preview ?? video?.poster else { return }
+        isAskingAI = true
+        aiMessage = nil
+        let processor = self.processor
+        let current = adjustments
+        Task { [weak self] in
+            let facts = await Task.detached(priority: .userInitiated) { () -> String in
+                let input = CIImage(cgImage: source)
+                let hasFaces = !ImageProcessingService.faceRects(in: input, extent: input.extent).isEmpty
+                return processor.photoFacts(for: source, hasFaces: hasFaces)
+            }.value
+            do {
+                let plan = try await AIEditService.plan(for: text, current: current, photoFacts: facts)
+                guard let self else { return }
+                let next = plan.applied(to: self.adjustments)
+                if next != self.adjustments {
+                    self.recordUndoPoint(force: true)
+                    self.adjustments = next
+                    self.adjustmentsChanged()
+                }
+                self.aiMessage = plan.summary.isEmpty ? "Done." : plan.summary
+            } catch {
+                self?.aiMessage = error.localizedDescription
+            }
+            self?.isAskingAI = false
+        }
     }
 
     func setGrainSize(_ size: GrainSize) {

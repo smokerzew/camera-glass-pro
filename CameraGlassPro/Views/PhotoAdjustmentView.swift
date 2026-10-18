@@ -14,6 +14,7 @@ struct PhotoAdjustmentView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     statusRow
+                    AIEditBox(vm: vm)
                     presetsRow
 
                     ForEach(AdjustmentParameter.allCases) { parameter in
