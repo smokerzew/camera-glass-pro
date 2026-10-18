@@ -2,7 +2,7 @@ import Foundation
 
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
-    case flash, live, aspect, timer, exposure, styles, filter, crop, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, format
+    case flash, live, aspect, timer, exposure, styles, filter, adjust, fx, crop, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, format
 
     var id: String { rawValue }
 
@@ -17,8 +17,17 @@ enum CameraControl: String, CaseIterable, Identifiable {
     /// Controls that act on the imported photo or video and are disabled until there is one.
     var requiresMedia: Bool {
         switch self {
-        case .exposure, .styles, .filter, .crop, .depth, .subject, .nightMode, .scopes, .peaking, .zebras, .liveText, .effects, .trim: true
+        case .exposure, .styles, .filter, .adjust, .fx, .crop, .depth, .subject, .nightMode, .scopes, .peaking, .zebras, .liveText, .effects, .trim: true
         default: false
+        }
+    }
+
+    /// Which page of the controls panel it sits on.
+    var group: PanelGroup {
+        switch self {
+        case .flash, .live, .aspect, .timer, .exposure, .nightMode, .format: .camera
+        case .adjust, .styles, .filter, .fx, .crop, .depth, .subject, .effects: .edit
+        case .grid, .level, .scopes, .peaking, .zebras, .liveText, .trim: .tools
         }
     }
 
@@ -55,6 +64,8 @@ extension CameraWorkspaceViewModel {
         case .exposure: "plusminus"
         case .styles: "square.3.layers.3d"
         case .filter: "camera.filters"
+        case .adjust: "slider.horizontal.3"
+        case .fx: "wand.and.stars"
         case .depth: "f.cursive"
         case .nightMode: adjustments.nightLook ? "moon.fill" : "moon"
         case .grid: "squareshape.split.3x3"
@@ -80,6 +91,9 @@ extension CameraWorkspaceViewModel {
         case .exposure: isExposureDialVisible || adjustments.exposure != 0
         case .styles: hasEdits
         case .filter: adjustments.filter != .none
+        case .adjust: false
+        case .fx: adjustments.speedBlur > 0 || adjustments.tiltShift > 0 || adjustments.doubleExposure > 0
+            || adjustments.faceRedaction != .none || !adjustments.redactionStrokes.isEmpty
         case .depth: depthEffect
         case .nightMode: adjustments.nightLook
         case .grid: gridStyle != .off
@@ -117,6 +131,8 @@ extension CameraWorkspaceViewModel {
         case .exposure: AdjustmentParameter.exposure.format(adjustments.exposure)
         case .styles: hasEdits ? "Edited" : "No edits"
         case .filter: adjustments.filter.label
+        case .adjust: hasEdits ? "Edited" : "No edits"
+        case .fx: isActive(.fx) ? "On" : "Off"
         case .depth: depthEffect ? String(format: "On, f %.1f, %@", adjustments.aperture, adjustments.lighting.label.capitalized) : "Off"
         case .nightMode: adjustments.nightLook ? "On" : "Off"
         case .grid: gridStyle.label
@@ -143,7 +159,9 @@ extension CameraWorkspaceViewModel {
         case .timer: "Delays opening the photo picker"
         case .exposure: "Shows the exposure slider"
         case .styles: "Opens Photographic Styles: style, tone and color pad, palette"
-        case .filter: "Opens the filter picker: Classic, Y2K, Quality and DigiCam FX"
+        case .filter: "Opens the filter picker: 100 filters in 12 tabs"
+        case .adjust: "Opens Adjust: light, color, detail, effects, local filters and AI"
+        case .fx: "Speed blur, tilt-shift, double exposure, blur or pixelate, and shuffle"
         case .depth: "Blurs the background behind the subject; tap the f-number to change depth"
         case .nightMode: "Lifts shadows and reduces noise"
         case .grid: "Cycles off, rule of thirds and fine grid"
@@ -176,6 +194,10 @@ extension CameraWorkspaceViewModel {
             }
         case .styles: openStylesPad()
         case .filter: openFilterPicker()
+        case .adjust:
+            isControlPanelOpen = false
+            showAdjustments = true
+        case .fx: openFXPicker()
         case .depth:
             // From the top bar, the f-number readout opens the aperture slider (as in the Camera app).
             if fromTopBar && depthEffect { isApertureDialVisible.toggle() } else { setDepth(!depthEffect) }
@@ -193,6 +215,11 @@ extension CameraWorkspaceViewModel {
         case .format: cycleExportFormat()
         }
     }
+}
+
+/// Pages of the controls panel, so it shows a handful of controls at a time.
+enum PanelGroup: String, CaseIterable, Sendable {
+    case camera, edit, tools
 }
 
 private extension String {

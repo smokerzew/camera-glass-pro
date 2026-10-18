@@ -19,8 +19,12 @@ final class ImageProcessingService: @unchecked Sendable {
         guard !a.isIdentity else { return input }
         var image = input
 
-        if a.needsSubject, let mask = subjectMask ?? SubjectMasker.mask(for: input, fast: fastMask) {
+        let mask = a.needsSubject ? (subjectMask ?? SubjectMasker.mask(for: input, fast: fastMask)) : nil
+        if let mask {
             image = composeSubject(a, to: image, mask: mask, backgroundPhoto: backgroundPhoto)
+        }
+        if a.doubleExposure > 0, let second = backgroundPhoto {
+            image = doubleExposure(image, second: second, mask: mask, amount: a.doubleExposure, extent: input.extent)
         }
 
         // Sky found on the untouched photo, so edits never change what counts as sky.
@@ -113,12 +117,17 @@ final class ImageProcessingService: @unchecked Sendable {
         if a.sharpen > 0 {
             image = sharpen(image, amount: a.sharpen, extent: extent)
         }
+        if a.tiltShift > 0 {
+            image = tiltShift(image, amount: a.tiltShift, position: a.tiltShiftPosition, extent: extent)
+        }
         for local in a.localAdjustments where !local.edit.isNeutral {
             image = applyLocal(local, to: image, extent: extent)
         }
         if a.vignette != 0 {
             image = vignette(image, amount: a.vignette, extent: extent)
         }
+        // Privacy last (before grain), so nothing after it can reveal what was hidden.
+        image = redact(image, faces: a.faceRedaction, strokes: a.redactionStrokes, extent: extent)
         if a.grain > 0 {
             image = filmGrain(image, amount: a.grain, size: a.grainSize, extent: extent)
         }

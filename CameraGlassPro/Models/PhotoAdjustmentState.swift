@@ -51,6 +51,17 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var backgroundEdit = RegionEdit()
     /// Light and color for the detected sky only.
     var skyEdit = RegionEdit()
+    /// Motion blur behind the subject (0...1) and its direction in degrees (0 = horizontal).
+    var speedBlur: Double = 0
+    var speedAngle: Double = 0
+    /// Miniature effect: blur strength (0...1) and where the sharp band sits (0 top ... 1 bottom).
+    var tiltShift: Double = 0
+    var tiltShiftPosition: Double = 0.55
+    /// Blends the second photo in (0...1): through the subject when one is found, else over everything.
+    var doubleExposure: Double = 0
+    /// Hide every detected face, and painted areas (final framing).
+    var faceRedaction: Redaction = .none
+    var redactionStrokes: [RedactionStroke] = []
     /// Graduated and radial filters, applied on the final framing.
     var localAdjustments: [LocalAdjustment] = []
 
@@ -86,6 +97,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Any edit that needs the subject mask.
     var needsSubject: Bool {
         portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
+            || speedBlur > 0 || doubleExposure > 0
     }
 
     /// Same edit with everything that needs a subject switched off (what renders when none is found).
@@ -96,6 +108,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         copy.background = .original
         copy.subjectEdit = RegionEdit()
         copy.backgroundEdit = RegionEdit()
+        copy.speedBlur = 0 // double exposure still works without a subject
         return copy
     }
 
@@ -142,6 +155,18 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         subjectEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .subjectEdit)) ?? RegionEdit()
         backgroundEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .backgroundEdit)) ?? RegionEdit()
         skyEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .skyEdit)) ?? RegionEdit()
+        func unit(_ key: CodingKeys, _ fallback: Double = 0) -> Double {
+            let v = (try? c.decodeIfPresent(Double.self, forKey: key)) ?? fallback
+            return v.isFinite ? min(max(v, 0), 1) : fallback
+        }
+        speedBlur = unit(.speedBlur)
+        speedAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .speedAngle)) ?? 0, 0), 180)
+        tiltShift = unit(.tiltShift)
+        tiltShiftPosition = unit(.tiltShiftPosition, 0.55)
+        doubleExposure = unit(.doubleExposure)
+        faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none
+        redactionStrokes = Array(((try? c.decodeIfPresent([RedactionStroke].self, forKey: .redactionStrokes)) ?? [])
+            .prefix(RedactionStroke.limit))
         localAdjustments = ((try? c.decodeIfPresent([LocalAdjustment].self, forKey: .localAdjustments)) ?? [])
             .prefix(LocalAdjustment.limit).map(\.clamped)
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
@@ -205,6 +230,14 @@ enum GrainSize: String, CaseIterable, Codable, Sendable {
     }
 }
 
+/// Pages of the Adjust sheet.
+enum AdjustGroup: String, CaseIterable, Identifiable, Sendable {
+    case light, color, detail, effects, local, ai
+
+    var id: String { rawValue }
+    var title: String { self == .ai ? "AI" : rawValue.capitalized }
+}
+
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
     case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, sharpen, noise, skin, vignette, halation, grain
 
@@ -214,6 +247,15 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .skin: "Smooth Skin"
         case .noise: "Noise Reduction"
         default: rawValue.capitalized
+        }
+    }
+
+    var group: AdjustGroup {
+        switch self {
+        case .exposure, .brightness, .contrast, .highlights, .shadows: .light
+        case .saturation, .warmth: .color
+        case .texture, .sharpen, .noise, .skin: .detail
+        case .vignette, .halation, .grain: .effects
         }
     }
 

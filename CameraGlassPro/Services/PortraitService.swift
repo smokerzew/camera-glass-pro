@@ -141,6 +141,7 @@ extension ImageProcessingService {
         if a.colorSplash {
             background = background.applyingFilter("CIPhotoEffectMono")
         }
+        background = speedBlurred(background, amount: a.speedBlur, degrees: a.speedAngle, extent: extent)
         subject = regionEdit(a.subjectEdit, to: subject)
         background = regionEdit(a.backgroundEdit, to: background)
 

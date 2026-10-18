@@ -7,6 +7,7 @@ struct CameraControlPanel: View {
     @Bindable var vm: CameraWorkspaceViewModel
     @Environment(\.cameraReduceMotion) private var reduceMotion
     @State private var dragOffset: CGFloat = 0
+    @State private var group: PanelGroup = .edit
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
@@ -27,6 +28,9 @@ struct CameraControlPanel: View {
                     .padding(.bottom, 10)
                     .transition(.opacity)
             }
+
+            GlassTabs(tabs: PanelGroup.allCases, selection: $group) { $0.rawValue.capitalized }
+                .padding(.bottom, 14)
 
             ViewThatFits(in: .vertical) {
                 content
@@ -58,7 +62,7 @@ struct CameraControlPanel: View {
     private var content: some View {
         VStack(spacing: 18) {
             LazyVGrid(columns: columns, spacing: 18) {
-                ForEach(CameraControl.allCases) { control in
+                ForEach(CameraControl.allCases.filter { $0.group == group }) { control in
                     let unavailable = !vm.isEditingTopBar && !vm.isAvailable(control)
                     PanelControlButton(
                         systemImage: vm.symbol(for: control),

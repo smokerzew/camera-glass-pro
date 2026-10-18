@@ -7,6 +7,10 @@ struct SubjectPickerView: View {
     @Environment(\.cameraReduceMotion) private var reduceMotion
     @State private var dragOffset: CGFloat = 0
     @State private var region: PhotoRegion = .subject
+    @State private var page: Page = .style
+
+    /// Three short pages instead of one long card.
+    enum Page: String, CaseIterable { case style, adjust, create }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -31,46 +35,14 @@ struct SubjectPickerView: View {
             }
             .padding(.horizontal, 6)
 
-            Toggle(isOn: Binding(get: { vm.adjustments.colorSplash }, set: { vm.setColorSplash($0) })) {
-                Label("Color Splash", systemImage: "paintpalette")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-            }
-            .tint(.yellow)
-            .padding(.horizontal, 6)
-            .accessibilityHint("Keeps the subject in color and turns the background black and white")
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("BACKGROUND")
-                    .font(.caption2.weight(.semibold))
-                    .tracking(1)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(.horizontal, 6)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(BackgroundStyle.allCases) { style in
-                            PanelControlButton(
-                                systemImage: style.systemImage, title: style.label,
-                                isActive: vm.adjustments.background == style,
-                                hint: style == .photo ? "Choose a photo to put behind the subject" : "Puts this behind the subject"
-                            ) {
-                                withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { vm.setBackground(style) }
-                            }
-                            .frame(width: 76)
-                        }
-                    }
-                    .padding(.horizontal, 2)
-                }
-            }
-
-            regionEdits
-
-            Text("Sky is found on-device from color, smoothness and position, so a plain bright wall near the top can count as sky. "
-                 + "Subject works with people, pets and objects, using on-device subject detection. Combine with Portrait for depth blur and lighting.")
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.65))
-                .multilineTextAlignment(.center)
+            GlassTabs(tabs: Page.allCases, selection: $page) { $0.rawValue.capitalized }
                 .padding(.horizontal, 6)
+
+            switch page {
+            case .style: stylePage
+            case .adjust: regionEdits
+            case .create: createPage
+            }
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 18)
@@ -89,6 +61,66 @@ struct SubjectPickerView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Subject")
         .accessibilityAction(.escape) { close() }
+    }
+
+    /// Color Splash and Background Swap.
+    private var stylePage: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: Binding(get: { vm.adjustments.colorSplash }, set: { vm.setColorSplash($0) })) {
+                Label("Color Splash", systemImage: "paintpalette")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+            }
+            .tint(.yellow)
+            .padding(.horizontal, 6)
+            .accessibilityHint("Keeps the subject in color and turns the background black and white")
+
+            Text("BACKGROUND")
+                .font(.caption2.weight(.semibold))
+                .tracking(1)
+                .foregroundStyle(.white.opacity(0.7))
+                .padding(.horizontal, 6)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(BackgroundStyle.allCases) { style in
+                        PanelControlButton(
+                            systemImage: style.systemImage, title: style.label,
+                            isActive: vm.adjustments.background == style,
+                            hint: style == .photo ? "Choose a photo to put behind the subject" : "Puts this behind the subject"
+                        ) {
+                            withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { vm.setBackground(style) }
+                        }
+                        .frame(width: 76)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    /// Stickers and 3D video made from the subject.
+    private var createPage: some View {
+        VStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 6) {
+                PanelControlButton(systemImage: "face.dashed", title: "STICKER",
+                                   hint: "Saves the subject as a transparent sticker to Photos and copies it") {
+                    vm.makeSticker()
+                }
+                .frame(maxWidth: .infinity)
+                PanelControlButton(systemImage: "cube.transparent", title: "3D VIDEO",
+                                   hint: "Makes a short clip where the subject floats in front of a moving background") {
+                    vm.makeParallaxVideo()
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .disabled(vm.photo == nil)
+            .opacity(vm.photo == nil ? 0.45 : 1)
+            Text("Sticker saves a see-through PNG to Photos and copies it for Messages. 3D Video opens as a new item you can save.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.65))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 6)
     }
 
     /// Brightness, saturation and warmth for just the subject or just the background.
@@ -135,6 +167,11 @@ struct SubjectPickerView: View {
                         .foregroundStyle(value == 0 ? Color.white.opacity(0.6) : Color.yellow)
                         .frame(width: 34, alignment: .trailing)
                 }
+            }
+            if region == .sky {
+                Text("Sky is found on-device from color, smoothness and position, so a plain bright wall near the top can count as sky.")
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.65))
             }
         }
         .padding(.horizontal, 6)

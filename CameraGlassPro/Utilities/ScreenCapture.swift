@@ -38,6 +38,19 @@ enum ScreenCapture {
         }
     }
 
+    /// Saves PNG data as-is (keeps transparency, e.g. stickers).
+    static func savePNGToPhotos(_ data: Data) async throws {
+        try await requestAddAccess()
+        try await PHPhotoLibrary.shared().performChanges {
+            PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
+        }
+    }
+
+    @MainActor
+    static func copyPNG(_ data: Data) {
+        UIPasteboard.general.setData(data, forPasteboardType: "public.png")
+    }
+
     static func saveVideoToPhotos(_ url: URL) async throws {
         try await requestAddAccess()
         try await PHPhotoLibrary.shared().performChanges {

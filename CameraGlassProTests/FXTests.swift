@@ -1,0 +1,139 @@
+import AVFoundation
+import CoreImage
+import CoreImage.CIFilterBuiltins
+import XCTest
+@testable import CameraGlassPro
+
+final class FXTests: XCTestCase {
+    private let processor = ImageProcessingService.shared
+
+    /// Fine black and white checkerboard: lots of detail, so blur shows up as lower spread.
+    private func checker(_ size: CGSize = CGSize(width: 300, height: 300)) -> CIImage {
+        let f = CIFilter.checkerboardGenerator()
+        f.color0 = .black
+        f.color1 = .white
+        f.width = 4
+        return (f.outputImage ?? CIImage(color: .gray)).cropped(to: CGRect(origin: .zero, size: size))
+    }
+
+    private func spread(_ image: CIImage, in rect: CGRect) -> Double {
+        let w = Int(rect.width), h = Int(rect.height)
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        let moved = image.cropped(to: rect).transformed(by: CGAffineTransform(translationX: -rect.minX, y: -rect.minY))
+        processor.context.render(moved, toBitmap: &pixels, rowBytes: w * 4, bounds: CGRect(x: 0, y: 0, width: w, height: h),
+                                 format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        let values: [Double] = stride(from: 0, to: pixels.count, by: 4).map { (i: Int) -> Double in Double(pixels[i + 1]) }
+        let mean: Double = values.reduce(0, +) / Double(values.count)
+        let squares: [Double] = values.map { (v: Double) -> Double in (v - mean) * (v - mean) }
+        return (squares.reduce(0, +) / Double(values.count)).squareRoot()
+    }
+
+    func testTiltShiftKeepsTheBandSharp() {
+        var state = PhotoAdjustmentState()
+        state.tiltShift = 1
+        state.tiltShiftPosition = 0.5
+        let input = checker()
+        let output = processor.apply(state, to: input)
+        XCTAssertEqual(output.extent, input.extent)
+        let band = CGRect(x: 100, y: 140, width: 100, height: 20)
+        let top = CGRect(x: 100, y: 270, width: 100, height: 20)
+        XCTAssertGreaterThan(spread(output, in: band), spread(input, in: band) * 0.85, "focus band stays sharp")
+        XCTAssertLessThan(spread(output, in: top), spread(input, in: top) * 0.5, "top is blurred")
+    }
+
+    func testSpeedBlurStreaks() {
+        let input = checker()
+        let blurred = processor.speedBlurred(input, amount: 1, degrees: 0, extent: input.extent)
+        let rect = CGRect(x: 100, y: 100, width: 100, height: 100)
+        XCTAssertLessThan(spread(blurred, in: rect), spread(input, in: rect) * 0.6)
+        var state = PhotoAdjustmentState()
+        state.speedBlur = 0.5
+        XCTAssertTrue(state.needsSubject)
+        XCTAssertEqual(state.withoutSubjectEdits.speedBlur, 0, "nothing to streak behind without a subject")
+    }
+
+    func testDoubleExposureBlendsTheSecondPhoto() {
+        let input = CIImage(color: CIColor(red: 0.2, green: 0.2, blue: 0.2)).cropped(to: CGRect(x: 0, y: 0, width: 200, height: 200))
+        let second = CIImage(color: CIColor(red: 0.9, green: 0.1, blue: 0.1)).cropped(to: CGRect(x: 0, y: 0, width: 50, height: 80))
+        var state = PhotoAdjustmentState()
+        state.doubleExposure = 1
+        let output = processor.apply(state, to: input, subjectMask: nil, backgroundPhoto: second)
+        XCTAssertEqual(output.extent, input.extent)
+        // Red came in: the red channel average rose well above the gray.
+        let averaged = output.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: output.extent)])
+        var pixel = [UInt8](repeating: 0, count: 4)
+        processor.context.render(averaged, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                 format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        XCTAssertGreaterThan(Int(pixel[0]), Int(pixel[2]) + 60)
+    }
+
+    func testPaintedStrokeHidesOnlyThatArea() {
+        let input = checker()
+        for mode in [Redaction.blur, .pixelate] {
+            var state = PhotoAdjustmentState()
+            // A thick stroke across the top-left quarter (normalized, top-left origin).
+            state.redactionStrokes = [RedactionStroke(mode: mode, width: 0.2, points: [CGPoint(x: 0.05, y: 0.15), CGPoint(x: 0.45, y: 0.15)])]
+            let output = processor.apply(state, to: input)
+            let painted = CGRect(x: 40, y: 245, width: 80, height: 20) // CI y: top of the picture is high
+            let untouched = CGRect(x: 180, y: 40, width: 80, height: 60)
+            XCTAssertLessThan(spread(output, in: painted), spread(input, in: painted) * 0.5, "\(mode) hides the painted area")
+            XCTAssertEqual(spread(output, in: untouched), spread(input, in: untouched), accuracy: 2, "\(mode) leaves the rest")
+        }
+    }
+
+    func testFaceRedactionWithoutFacesChangesNothing() {
+        let input = checker()
+        var state = PhotoAdjustmentState()
+        state.faceRedaction = .pixelate
+        let rect = CGRect(x: 100, y: 100, width: 100, height: 100)
+        XCTAssertEqual(spread(processor.apply(state, to: input), in: rect), spread(input, in: rect), accuracy: 1)
+    }
+
+    func testSavedStrokesAreLimited() throws {
+        var state = PhotoAdjustmentState()
+        state.redactionStrokes = Array(repeating: RedactionStroke(mode: .blur, width: 0.1, points: [.zero]), count: 80)
+        let decoded = try JSONDecoder().decode(PhotoAdjustmentState.self, from: JSONEncoder().encode(state))
+        XCTAssertEqual(decoded.redactionStrokes.count, RedactionStroke.limit)
+    }
+
+    @MainActor
+    func testShufflePicksAnotherFilter() {
+        var state = PhotoAdjustmentState()
+        state.filter = .portra
+        for _ in 0..<20 {
+            let next = CameraWorkspaceViewModel.shuffled(state)
+            XCTAssertNotEqual(next.filter, .portra)
+            XCTAssertNotEqual(next.filter, .none)
+        }
+    }
+
+    func testStickerIsTrimmedAndTransparent() throws {
+        let photo = CIImage(color: CIColor(red: 0.6, green: 0.3, blue: 0.2)).cropped(to: CGRect(x: 0, y: 0, width: 400, height: 300))
+        let mask = CIImage(color: .white).cropped(to: CGRect(x: 100, y: 50, width: 100, height: 150))
+            .composited(over: CIImage(color: .black).cropped(to: photo.extent))
+        let data = try XCTUnwrap(processor.stickerPNG(edited: photo, mask: mask))
+        let image = try XCTUnwrap(CIImage(data: data))
+        XCTAssertLessThan(image.extent.width, 140, "trimmed to the subject")
+        XCTAssertGreaterThan(image.extent.width, 90)
+    }
+
+    func testParallaxVideoIsWritten() async throws {
+        let photo = CIImage(color: CIColor(red: 0.4, green: 0.5, blue: 0.6)).cropped(to: CGRect(x: 0, y: 0, width: 200, height: 160))
+        let mask = CIImage(color: .white).cropped(to: CGRect(x: 60, y: 30, width: 80, height: 100))
+            .composited(over: CIImage(color: .black).cropped(to: photo.extent))
+        let url = try LiveEffectsService.newURL("mov")
+        try await ParallaxVideo.render(edited: photo, mask: mask, processor: processor, to: url)
+        let duration = try await AVURLAsset(url: url).load(.duration)
+        XCTAssertEqual(duration.seconds, ParallaxVideo.seconds, accuracy: 0.2)
+    }
+
+    func testPanelPagesStaySmall() {
+        for group in PanelGroup.allCases {
+            let count = CameraControl.allCases.filter { $0.group == group }.count
+            XCTAssertTrue((1...8).contains(count), "\(group) has \(count) controls")
+        }
+        for group in AdjustGroup.allCases where group != .local && group != .ai {
+            XCTAssertFalse(AdjustmentParameter.allCases.filter { $0.group == group }.isEmpty)
+        }
+    }
+}

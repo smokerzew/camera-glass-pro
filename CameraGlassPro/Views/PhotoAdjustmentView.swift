@@ -8,45 +8,49 @@ struct PhotoAdjustmentView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isNamingPreset = false
     @State private var presetName = ""
+    @State private var section: AdjustGroup = .light
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     statusRow
-                    AIEditBox(vm: vm)
-                    presetsRow
 
-                    ForEach(AdjustmentParameter.allCases) { parameter in
-                        AdjustmentSliderRow(
-                            parameter: parameter,
-                            value: Binding(
-                                get: { vm.adjustments[parameter] },
-                                set: { vm.setAdjustment(parameter, to: $0) }
-                            ),
-                            isModified: vm.adjustments.isModified(parameter),
-                            changedByAI: vm.aiChangedParameters.contains(parameter),
-                            onReset: { vm.resetAdjustment(parameter) }
-                        )
+                    // Short pages instead of one long list, so the photo above stays the focus.
+                    Picker("Section", selection: $section) {
+                        ForEach(AdjustGroup.allCases) { Text($0.title).tag($0) }
                     }
+                    .pickerStyle(.segmented)
 
-                    Toggle(isOn: Binding(get: { vm.adjustments.nightLook }, set: { vm.setNightLook($0) })) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Night Look")
-                                Text("Lifts shadows and reduces noise. A filter, not a capture mode.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                    switch section {
+                    case .light:
+                        presetsRow
+                        sliders(for: .light)
+                        Toggle(isOn: Binding(get: { vm.adjustments.nightLook }, set: { vm.setNightLook($0) })) {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Night Look")
+                                    Text("Lifts shadows and reduces noise. A filter, not a capture mode.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "moon.stars")
                             }
-                        } icon: {
-                            Image(systemName: "moon.stars")
                         }
+                        .tint(.yellow)
+                    case .color:
+                        sliders(for: .color)
+                        ColorMixerSection(vm: vm)
+                    case .detail:
+                        sliders(for: .detail)
+                    case .effects:
+                        sliders(for: .effects)
+                    case .local:
+                        LocalAdjustmentsSection(vm: vm)
+                    case .ai:
+                        AIEditBox(vm: vm)
                     }
-                    .tint(.yellow)
-
-                    ColorMixerSection(vm: vm)
-
-                    LocalAdjustmentsSection(vm: vm)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
@@ -82,6 +86,22 @@ struct PhotoAdjustmentView: View {
         .modifier(GlassSheetBackground())
         .appAlert(vm)
         .onDisappear { vm.setShowOriginal(false) }
+    }
+
+    @ViewBuilder
+    private func sliders(for group: AdjustGroup) -> some View {
+        ForEach(AdjustmentParameter.allCases.filter { $0.group == group }) { parameter in
+            AdjustmentSliderRow(
+                parameter: parameter,
+                value: Binding(
+                    get: { vm.adjustments[parameter] },
+                    set: { vm.setAdjustment(parameter, to: $0) }
+                ),
+                isModified: vm.adjustments.isModified(parameter),
+                changedByAI: vm.aiChangedParameters.contains(parameter),
+                onReset: { vm.resetAdjustment(parameter) }
+            )
+        }
     }
 
     /// Saved styles: tap to apply, long-press to delete, + to save the current adjustments.

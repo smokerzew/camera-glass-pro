@@ -24,6 +24,15 @@ struct FilterPickerView: View {
                     .tracking(1.2)
                     .foregroundStyle(.white.opacity(0.9))
                 Spacer()
+                Button {
+                    vm.shuffleLook()
+                    category = vm.adjustments.filter.category
+                } label: {
+                    Image(systemName: "dice").font(.body.weight(.semibold)).foregroundStyle(.white)
+                        .frame(width: 44, height: 32)
+                }
+                .accessibilityLabel("Shuffle")
+                .accessibilityHint("Tries a random filter, grain and vignette")
                 Button("Done") { close() }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.yellow)
@@ -76,31 +85,25 @@ struct FilterPickerView: View {
                     .font(.caption.monospacedDigit().weight(.semibold))
                     .foregroundStyle(vm.adjustments.grain == 0 ? Color.white.opacity(0.6) : Color.yellow)
                     .frame(width: 32, alignment: .trailing)
-            }
-            .padding(.horizontal, 6)
-
-            HStack(spacing: 8) {
-                Text("SIZE")
-                    .font(.caption2.weight(.semibold))
-                    .tracking(1)
-                    .foregroundStyle(.white.opacity(0.85))
-                ForEach(GrainSize.allCases, id: \.self) { size in
-                    let selected = vm.adjustments.grainSize == size
-                    Button { vm.setGrainSize(size) } label: {
-                        Text(size.label)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(selected ? Color.yellow : .white)
-                            .frame(maxWidth: .infinity, minHeight: 30)
-                            .cameraGlass(selected ? .selected : .interactive, in: Capsule())
+                // Grain size as a compact menu instead of its own row.
+                Menu {
+                    Picker("Grain Size", selection: Binding(get: { vm.adjustments.grainSize }, set: { vm.setGrainSize($0) })) {
+                        ForEach(GrainSize.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(size.label) grain")
-                    .accessibilityAddTraits(selected ? .isSelected : [])
+                } label: {
+                    Text(vm.adjustments.grainSize.label.uppercased())
+                        .font(.caption2.weight(.semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 28)
+                        .cameraGlass(.interactive, in: Capsule())
                 }
+                .disabled(vm.adjustments.grain == 0)
+                .opacity(vm.adjustments.grain > 0 ? 1 : 0.4)
+                .accessibilityLabel("Grain size, \(vm.adjustments.grainSize.label)")
             }
             .padding(.horizontal, 6)
-            .opacity(vm.adjustments.grain > 0 ? 1 : 0.4)
-            .disabled(vm.adjustments.grain == 0)
 
             HStack {
                 // Hold to see the untouched original.

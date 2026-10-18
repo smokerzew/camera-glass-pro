@@ -97,6 +97,9 @@ final class CameraWorkspaceViewModel {
     /// True while the Live Photo motion plays (touch and hold the LIVE badge).
     var isPlayingLive = false
     var showEffectsPicker = false
+    /// FX pop-up (speed blur, tilt-shift, double exposure, blur/pixelate, shuffle) and the brush editor.
+    var showFXPicker = false
+    var showRedactionEditor = false
     /// Whether Live Photos made from videos keep the video's sound (saved preference).
     private(set) var livePhotoSound = true
     private(set) var isRenderingEffect = false
@@ -187,6 +190,8 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var renderTask: Task<Void, Never>?
     /// Set when the edit changed since the last preview render started.
     @ObservationIgnored private var renderNeeded = false
+    /// The next picked second photo is for Double Exposure rather than Background Swap.
+    @ObservationIgnored private var pendingDoubleExposure = false
     @ObservationIgnored private var countdownTask: Task<Void, Never>?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
     @ObservationIgnored private var depthTagTask: Task<Void, Never>?
@@ -914,6 +919,7 @@ final class CameraWorkspaceViewModel {
         isControlPanelOpen = false
         showFilterPicker = false
         showEffectsPicker = false
+        showFXPicker = false
         showStylesPad = true
     }
 
@@ -978,6 +984,7 @@ final class CameraWorkspaceViewModel {
     func runEffect(_ effect: LiveEffect) {
         guard let asset = effectSourceAsset else { return }
         showEffectsPicker = false
+        showFXPicker = false
         effectTask?.cancel()
         isRenderingEffect = true
         effectMessage = effect == .livePhoto ? "Making Live Photo…" : "Creating \(effect.title.capitalized)…"
@@ -1058,6 +1065,7 @@ final class CameraWorkspaceViewModel {
         showFilterPicker = false
         showStylesPad = false
         showEffectsPicker = false
+        showFXPicker = false
         showSubjectPicker = false
         showCropEditor = true
     }
@@ -1115,6 +1123,7 @@ final class CameraWorkspaceViewModel {
         showFilterPicker = false
         showStylesPad = false
         showEffectsPicker = false
+        showFXPicker = false
         showSubjectPicker = true
     }
 
@@ -1147,7 +1156,13 @@ final class CameraWorkspaceViewModel {
                 self.customBackground = photo.preview
                 self.recipe.backgroundPhoto = CIImage(cgImage: photo.preview)
                 self.recordUndoPoint(force: true)
-                self.adjustments.background = .photo
+                if self.pendingDoubleExposure {
+                    // Picked for Double Exposure, not as a new background.
+                    self.pendingDoubleExposure = false
+                    self.adjustments.doubleExposure = max(self.adjustments.doubleExposure, 0.7)
+                } else {
+                    self.adjustments.background = .photo
+                }
                 self.adjustmentsChanged()
             } catch {
                 let mapped = PhotoImportError.map(error)
@@ -1173,6 +1188,7 @@ final class CameraWorkspaceViewModel {
         isControlPanelOpen = false
         showStylesPad = false
         showEffectsPicker = false
+        showFXPicker = false
         showFilterPicker = true
         renderFilterThumbnails()
     }
@@ -1361,6 +1377,150 @@ final class CameraWorkspaceViewModel {
         recordUndoPoint(force: true)
         adjustments.localAdjustments.removeAll { $0.id == id }
         adjustmentsChanged()
+    }
+
+    // MARK: FX
+
+    func openFXPicker() {
+        showCropEditor = false
+        showSubjectPicker = false
+        isControlPanelOpen = false
+        showFilterPicker = false
+        showStylesPad = false
+        showEffectsPicker = false
+        showFXPicker = true
+    }
+
+    /// One drag of an FX slider is one undo step.
+    func setEffect(_ path: WritableKeyPath<PhotoAdjustmentState, Double>, to value: Double) {
+        recordUndoPoint()
+        adjustments[keyPath: path] = value.isFinite ? value : 0
+        adjustmentsChanged()
+    }
+
+    /// Double exposure needs a second photo: the first time, pick one (shared with Background Swap's photo).
+    func setDoubleExposure(_ amount: Double) {
+        if amount > 0, customBackground == nil {
+            pendingDoubleExposure = true
+            showBackgroundPhotoPicker = true
+            return
+        }
+        setEffect(\.doubleExposure, to: min(max(amount, 0), 1))
+    }
+
+    func chooseDoubleExposurePhoto() {
+        pendingDoubleExposure = true
+        showBackgroundPhotoPicker = true
+    }
+
+    func setFaceRedaction(_ mode: Redaction) {
+        guard mode != adjustments.faceRedaction else { return }
+        recordUndoPoint(force: true)
+        adjustments.faceRedaction = mode
+        adjustmentsChanged()
+    }
+
+    func addRedactionStroke(_ stroke: RedactionStroke) {
+        guard !stroke.points.isEmpty, adjustments.redactionStrokes.count < RedactionStroke.limit else { return }
+        recordUndoPoint(force: true)
+        adjustments.redactionStrokes.append(stroke)
+        adjustmentsChanged()
+    }
+
+    func removeLastRedactionStroke() {
+        guard !adjustments.redactionStrokes.isEmpty else { return }
+        recordUndoPoint(force: true)
+        adjustments.redactionStrokes.removeLast()
+        adjustmentsChanged()
+    }
+
+    func clearRedactionStrokes() {
+        guard !adjustments.redactionStrokes.isEmpty else { return }
+        recordUndoPoint(force: true)
+        adjustments.redactionStrokes = []
+        adjustmentsChanged()
+    }
+
+    /// A random look: another filter at a random strength, sometimes with grain, halation or a vignette.
+    func shuffleLook() {
+        guard hasMedia else { return }
+        recordUndoPoint(force: true)
+        adjustments = Self.shuffled(adjustments)
+        adjustmentsChanged()
+        showToast(adjustments.filter.label)
+    }
+
+    static func shuffled(_ state: PhotoAdjustmentState) -> PhotoAdjustmentState {
+        var next = state
+        next.filter = PhotoFilter.allCases.filter { $0 != .none && $0 != state.filter }.randomElement() ?? .vivid
+        next.filterStrength = [0.7, 0.85, 1].randomElement() ?? 1
+        next.grain = [0, 0, 0.15, 0.25, 0.35].randomElement() ?? 0
+        next.grainSize = GrainSize.allCases.randomElement() ?? .medium
+        next.halation = [0, 0, 0, 0.3].randomElement() ?? 0
+        next.vignette = [0, 0, 0.15, 0.3].randomElement() ?? 0
+        return next
+    }
+
+    /// Saves the edited subject as a transparent PNG sticker to Photos and copies it.
+    func makeSticker() {
+        guard let source = photo?.preview else { return }
+        let processor = self.processor
+        let recipe = adjustments.withoutGeometry
+        let cached = previewSubjectSource === source ? previewSubjectMask : nil
+        let background = customBackground.map { CIImage(cgImage: $0) }
+        isRenderingEffect = true
+        effectMessage = "Making sticker…"
+        effectTask?.cancel()
+        effectTask = Task { [weak self] in
+            let png = await Task.detached(priority: .userInitiated) { () -> Data? in
+                let input = CIImage(cgImage: source)
+                guard let mask = cached ?? SubjectMasker.mask(for: input) else { return nil }
+                let edited = processor.apply(recipe, to: input, subjectMask: mask, backgroundPhoto: background)
+                return processor.stickerPNG(edited: edited, mask: mask)
+            }.value
+            guard let self else { return }
+            self.isRenderingEffect = false
+            guard let png else { return self.showToast("No subject found") }
+            ScreenCapture.copyPNG(png)
+            do {
+                try await ScreenCapture.savePNGToPhotos(png)
+                self.showToast("Sticker saved to Photos and copied")
+            } catch {
+                self.showToast("Sticker copied. Allow Photos access to save it.")
+            }
+        }
+    }
+
+    /// Turns the photo into a short "3D" clip: the subject floats in front of a moving background.
+    func makeParallaxVideo() {
+        guard let source = photo?.preview else { return }
+        let processor = self.processor
+        let recipe = adjustments.withoutGeometry
+        let cached = previewSubjectSource === source ? previewSubjectMask : nil
+        let background = customBackground.map { CIImage(cgImage: $0) }
+        showSubjectPicker = false
+        isRenderingEffect = true
+        effectMessage = "Making 3D video…"
+        effectTask?.cancel()
+        effectTask = Task { [weak self] in
+            do {
+                let url = try LiveEffectsService.newURL("mov")
+                let made = try await Task.detached(priority: .userInitiated) { () -> Bool in
+                    let input = CIImage(cgImage: source)
+                    guard let mask = cached ?? SubjectMasker.mask(for: input) else { return false }
+                    let edited = processor.apply(recipe, to: input, subjectMask: mask, backgroundPhoto: background)
+                    try await ParallaxVideo.render(edited: edited, mask: mask, processor: processor, to: url)
+                    return true
+                }.value
+                guard let self else { return }
+                self.isRenderingEffect = false
+                if made { self.showEffectResult(url, toast: "3D video created") } else { self.showToast("No subject found") }
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.isRenderingEffect = false
+                self.alert = AppAlert(title: "3D Video Failed", message: error.localizedDescription)
+            }
+        }
     }
 
     func setGrainSize(_ size: GrainSize) {

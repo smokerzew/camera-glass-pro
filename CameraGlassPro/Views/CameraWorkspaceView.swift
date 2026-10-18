@@ -57,6 +57,7 @@ struct CameraWorkspaceView: View {
             .sheet(isPresented: $vm.showTrim) { VideoTrimView(vm: vm) }
             .sheet(isPresented: $vm.showTextSheet) { LiveTextSheet(vm: vm) }
             .fullScreenCover(isPresented: $vm.showCropEditor) { CropEditorView(vm: vm) }
+            .fullScreenCover(isPresented: $vm.showRedactionEditor) { RedactionEditorView(vm: vm) }
             .appAlert(vm)
             .sensoryFeedback(.success, trigger: vm.importSuccessCount)
             .sensoryFeedback(.selection, trigger: vm.mode)
@@ -146,6 +147,13 @@ struct CameraWorkspaceView: View {
 
                 if vm.showStylesPad {
                     StylesPadView(vm: vm)
+                        .padding(.bottom, 6)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(1)
+                }
+
+                if vm.showFXPicker {
+                    FXPickerView(vm: vm)
                         .padding(.bottom, 6)
                         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
