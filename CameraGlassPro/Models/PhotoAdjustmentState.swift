@@ -72,6 +72,12 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var dispersionSize: Double = 0.4
     /// Which way the particles drift, in degrees: 0 right, 90 up, 180 left, 270 down.
     var dispersionAngle: Double = 0
+    /// Ghost: a translucent copy of the subject or whole photo, moved (opacity 0 = off).
+    var ghostOpacity: Double = 0
+    var ghostDistance: Double = 0.25
+    var ghostAngle: Double = 0
+    var ghostTarget: GhostTarget = .subject
+    var ghostHideOriginal = false
     var redactionStrokes: [RedactionStroke] = []
     /// Graduated and radial filters, applied on the final framing.
     var localAdjustments: [LocalAdjustment] = []
@@ -108,7 +114,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Any edit that needs the subject mask.
     var needsSubject: Bool {
         portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
-            || speedBlur > 0 || doubleExposure > 0 || dispersion > 0
+            || speedBlur > 0 || doubleExposure > 0 || dispersion > 0 || (ghostOpacity > 0 && ghostTarget == .subject)
     }
 
     /// Same edit with everything that needs a subject switched off (what renders when none is found).
@@ -121,6 +127,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         copy.backgroundEdit = RegionEdit()
         copy.speedBlur = 0 // double exposure still works without a subject
         copy.dispersion = 0
+        if copy.ghostTarget == .subject { copy.ghostOpacity = 0 }
         return copy
     }
 
@@ -180,6 +187,11 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         redactionStrength = unit(.redactionStrength, 0.5)
         dispersion = unit(.dispersion)
         dispersionSize = unit(.dispersionSize, 0.4)
+        ghostOpacity = unit(.ghostOpacity)
+        ghostDistance = unit(.ghostDistance, 0.25)
+        ghostAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .ghostAngle)) ?? 0, 0), 360)
+        ghostTarget = (try? c.decodeIfPresent(GhostTarget.self, forKey: .ghostTarget)) ?? .subject
+        ghostHideOriginal = (try? c.decodeIfPresent(Bool.self, forKey: .ghostHideOriginal)) ?? false
         dispersionAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dispersionAngle)) ?? 0, 0), 360)
         faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none
         redactionStrokes = Array(((try? c.decodeIfPresent([RedactionStroke].self, forKey: .redactionStrokes)) ?? [])

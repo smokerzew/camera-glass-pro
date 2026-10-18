@@ -94,6 +94,7 @@ extension CameraWorkspaceViewModel {
         case .filter: adjustments.filter != .none
         case .adjust: false
         case .fx: adjustments.speedBlur > 0 || adjustments.tiltShift > 0 || adjustments.doubleExposure > 0
+            || adjustments.ghostOpacity > 0 || adjustments.lookMatch != nil
             || (adjustments.redactionTarget == .faces ? adjustments.faceRedaction != .none : !adjustments.redactionStrokes.isEmpty)
         case .depth: depthEffect
         case .nightMode: adjustments.nightLook
@@ -164,7 +165,7 @@ extension CameraWorkspaceViewModel {
         case .styles: "Opens Photographic Styles: style, tone and color pad, palette"
         case .filter: "Opens the filter picker: 100 filters in 12 tabs"
         case .adjust: "Opens Adjust: light, color, detail, effects, local filters and AI"
-        case .fx: "Speed blur, tilt-shift, double exposure, blur or pixelate, and shuffle"
+        case .fx: "Speed blur, tilt-shift, double exposure, match look, ghost, blur or pixelate, and shuffle"
         case .depth: "Blurs the background behind the subject; tap the f-number to change depth"
         case .nightMode: "Lifts shadows and reduces noise"
         case .grid: "Cycles off, rule of thirds and fine grid"

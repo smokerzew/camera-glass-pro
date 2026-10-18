@@ -382,3 +382,54 @@ final class MatchLookTests: XCTestCase {
         XCTAssertEqual(PhotoAdjustmentState().resetting(.fxBlend).lookMatch, nil)
     }
 }
+
+final class GhostTests: XCTestCase {
+    private let processor = ImageProcessingService.shared
+    private let extent = CGRect(x: 0, y: 0, width: 300, height: 300)
+    private let subjectRect = CGRect(x: 60, y: 110, width: 80, height: 80)
+
+    private var photo: CIImage {
+        CIImage(color: CIColor(red: 0.9, green: 0.1, blue: 0.1)).cropped(to: subjectRect)
+            .composited(over: CIImage(color: CIColor(red: 0.3, green: 0.3, blue: 0.3)).cropped(to: extent))
+    }
+
+    private var mask: CIImage {
+        CIImage(color: .white).cropped(to: subjectRect).composited(over: CIImage(color: .black).cropped(to: extent))
+    }
+
+    private func redness(_ image: CIImage, _ rect: CGRect) -> Int {
+        let averaged = image.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: rect)])
+        var pixel = [UInt8](repeating: 0, count: 4)
+        processor.context.render(averaged, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                 format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        return Int(pixel[0]) - Int(pixel[1])
+    }
+
+    func testSubjectGhostAppearsWhereItWasMoved() {
+        var state = PhotoAdjustmentState()
+        state.ghostOpacity = 0.6
+        state.ghostDistance = 1 // 0.35 x 300 = 105 px to the right
+        XCTAssertTrue(state.needsSubject)
+        let output = processor.apply(state, to: photo, subjectMask: mask)
+        let ghostSpot = CGRect(x: 175, y: 130, width: 40, height: 40)
+        XCTAssertGreaterThan(redness(output, ghostSpot), redness(photo, ghostSpot) + 40, "a see-through red copy")
+        XCTAssertLessThan(redness(output, ghostSpot), 200, "translucent, not solid")
+        XCTAssertGreaterThan(redness(output, CGRect(x: 80, y: 130, width: 40, height: 40)), 150, "original stays")
+
+        state.ghostHideOriginal = true
+        let hidden = processor.apply(state, to: photo, subjectMask: mask)
+        XCTAssertLessThan(redness(hidden, CGRect(x: 80, y: 130, width: 40, height: 40)), 150, "original leaves its place")
+    }
+
+    func testWholePhotoGhostNeedsNoSubject() {
+        var state = PhotoAdjustmentState()
+        state.ghostTarget = .photo
+        state.ghostOpacity = 1
+        state.ghostDistance = 1
+        XCTAssertFalse(state.needsSubject)
+        let output = processor.apply(state, to: photo)
+        XCTAssertGreaterThan(redness(output, CGRect(x: 175, y: 130, width: 40, height: 40)), 40)
+        XCTAssertEqual(PhotoAdjustmentState().resetting(.fxGhost), PhotoAdjustmentState())
+        XCTAssertNotNil(ImageProcessingService.kernel("dispersionHoles"))
+    }
+}

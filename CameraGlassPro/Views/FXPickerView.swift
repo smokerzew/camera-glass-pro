@@ -8,13 +8,14 @@ struct FXPickerView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var page: Page = .blur
 
-    enum Page: String, CaseIterable { case blur, blend, privacy }
+    enum Page: String, CaseIterable { case blur, blend, ghost, privacy }
 
     /// The Reset button clears only the page that's showing.
     private var resetArea: ResetArea {
         switch page {
         case .blur: .fxBlur
         case .blend: .fxBlend
+        case .ghost: .fxGhost
         case .privacy: .fxPrivacy
         }
     }
@@ -55,6 +56,7 @@ struct FXPickerView: View {
                 switch page {
                 case .blur: blurPage
                 case .blend: blendPage
+                case .ghost: ghostPage
                 case .privacy: privacyPage
                 }
             }
@@ -131,6 +133,36 @@ struct FXPickerView: View {
                 GlassSliderRow(title: "Match Amount", value: match.amount) { vm.setLookMatchAmount($0) }
             }
             note("The second photo shows through the subject and the background fades to white, like a film poster. Without a subject it blends over the whole picture. It's the same photo Background Swap uses. Match Look copies a reference photo's colors and tones.")
+        }
+    }
+
+    /// A see-through copy of the subject or the whole photo, moved in any direction.
+    private var ghostPage: some View {
+        let a = vm.adjustments
+        let on = a.ghostOpacity > 0
+        return VStack(alignment: .leading, spacing: 12) {
+            GlassTabs(tabs: GhostTarget.allCases, selection: Binding(get: { vm.adjustments.ghostTarget },
+                                                                   set: { vm.setGhostTarget($0) })) { $0.label }
+            GlassSliderRow(title: "Ghost", value: a.ghostOpacity) { vm.setEffect(\.ghostOpacity, to: min(max($0, 0), 1)) }
+            Group {
+                GlassSliderRow(title: "Distance", value: a.ghostDistance) { vm.setEffect(\.ghostDistance, to: min(max($0, 0), 1)) }
+                GlassSliderRow(title: "Direction", value: a.ghostAngle, range: 0...360,
+                               display: { "\(Int($0.rounded()))°" }) { vm.setEffect(\.ghostAngle, to: min(max($0, 0), 360)) }
+                if a.ghostTarget == .subject {
+                    Toggle(isOn: Binding(get: { vm.adjustments.ghostHideOriginal }, set: { vm.setGhostHideOriginal($0) })) {
+                        Text("HIDE ORIGINAL")
+                            .font(.caption2.weight(.semibold))
+                            .tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    .tint(.yellow)
+                }
+            }
+            .opacity(on ? 1 : 0.4)
+            .disabled(!on)
+            note(a.ghostTarget == .subject
+                 ? "A see-through copy of the subject, moved the way Direction points (0° right, 90° up). Hide Original leaves only the ghost."
+                 : "A see-through copy of the whole photo laid over it, like a double image.")
         }
     }
 

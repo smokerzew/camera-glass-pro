@@ -17,6 +17,14 @@ enum RedactionTarget: String, Codable, CaseIterable, Identifiable, Sendable {
     var label: String { rawValue.capitalized }
 }
 
+/// What the Ghost effect copies.
+enum GhostTarget: String, Codable, CaseIterable, Identifiable, Sendable {
+    case subject, photo
+
+    var id: String { rawValue }
+    var label: String { self == .subject ? "Subject" : "Whole Photo" }
+}
+
 /// One finger stroke painted in the Blur & Pixelate editor.
 struct RedactionStroke: Equatable, Codable, Sendable {
     var mode: Redaction

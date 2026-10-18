@@ -1497,6 +1497,20 @@ final class CameraWorkspaceViewModel {
         }
     }
 
+    func setGhostTarget(_ target: GhostTarget) {
+        guard target != adjustments.ghostTarget else { return }
+        recordUndoPoint(force: true)
+        adjustments.ghostTarget = target
+        adjustmentsChanged()
+    }
+
+    func setGhostHideOriginal(_ hide: Bool) {
+        guard hide != adjustments.ghostHideOriginal else { return }
+        recordUndoPoint(force: true)
+        adjustments.ghostHideOriginal = hide
+        adjustmentsChanged()
+    }
+
     func chooseDoubleExposurePhoto() {
         pendingDoubleExposure = true
         showBackgroundPhotoPicker = true

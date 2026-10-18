@@ -27,6 +27,11 @@ final class ImageProcessingService: @unchecked Sendable {
                                    size: a.dispersionSize, degrees: a.dispersionAngle, extent: input.extent)
             }
         }
+        if a.ghostOpacity > 0, a.ghostTarget == .photo || mask != nil {
+            image = ghost(image, mask: a.ghostTarget == .subject ? mask?.cropped(to: input.extent) : nil,
+                          opacity: a.ghostOpacity, distance: a.ghostDistance, degrees: a.ghostAngle,
+                          hideOriginal: a.ghostHideOriginal, extent: input.extent)
+        }
         if a.doubleExposure > 0, let second = backgroundPhoto {
             image = doubleExposure(image, second: second, mask: mask, amount: a.doubleExposure, extent: input.extent)
         }
