@@ -5,7 +5,7 @@ import Foundation
 extension PhotoAdjustmentState {
     static func canShuffle(_ area: ResetArea) -> Bool {
         switch area {
-        case .light, .color, .detail, .effects, .filter, .fxBlur, .fxBlend, .fxGhost, .subjectCreate: true
+        case .light, .color, .detail, .effects, .filter, .fxBlur, .fxBlend, .fxGhost, .fxArt, .subjectCreate: true
         case .local, .adjust, .fxPrivacy, .subjectStyle: false
         }
     }
@@ -70,6 +70,23 @@ extension PhotoAdjustmentState {
             next.ghostDistance = random(0.08...0.6)
             next.ghostAngle = random(0...360)
             if ghostTarget == .subject { next.ghostHideOriginal = coin(0.3) }
+        case .fxArt:
+            // One art effect at a time, with a random setting.
+            next = resetting(.fxArt)
+            switch ArtEffect.allCases.randomElement(using: &rng) ?? .hologram {
+            case .hologram: next.hologram = random(0.5...1)
+            case .vision:
+                next.visionMode = coin() ? .thermal : .night
+                next.visionAmount = random(0.7...1)
+            case .sort:
+                next.pixelSort = random(0.3...0.9)
+                next.pixelSortVertical = coin()
+            case .orbit:
+                next.orbitCount = Double(Int.random(in: 3...9, using: &rng))
+                next.orbitSize = random(0.25...0.7)
+                next.orbitDistance = random(0.2...0.8)
+            case .melt: next.melt = random(0.4...1)
+            }
         case .subjectCreate:
             next.dispersion = random(0.4...1)
             next.dispersionSize = random(0.2...0.8)

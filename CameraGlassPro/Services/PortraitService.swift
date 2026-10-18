@@ -100,7 +100,7 @@ extension ImageProcessingService {
             .applyingGaussianBlur(sigma: Double(feather))
             .cropped(to: extent)
         var subject = image
-        var background = replacementBackground(a.background, for: image, photo: backgroundPhoto) ?? image
+        var background = replacementBackground(a, for: image, mask: rawMask, photo: backgroundPhoto) ?? image
 
         if a.portrait {
             let radius = Self.portraitBlurRadius(aperture: a.aperture, width: extent.width)
@@ -173,13 +173,15 @@ extension ImageProcessingService {
     }
 
     /// The swapped background at the image's size, or nil to keep the original.
-    private func replacementBackground(_ style: BackgroundStyle, for image: CIImage, photo: CIImage?) -> CIImage? {
+    private func replacementBackground(_ a: PhotoAdjustmentState, for image: CIImage, mask: CIImage, photo: CIImage?) -> CIImage? {
         let extent = image.extent
-        switch style {
+        switch a.background {
         case .original:
             return nil
         case .blur:
-            return image.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 45)).cropped(to: extent)
+            let box = maskBounds(mask.cropped(to: extent), extent: extent) ?? extent
+            return blurredBackground(image, kind: a.backgroundBlurKind, amount: a.backgroundBlurAmount,
+                                     center: CGPoint(x: box.midX, y: box.midY), extent: extent)
         case .black:
             return CIImage(color: CIColor(red: 0.02, green: 0.02, blue: 0.02)).cropped(to: extent)
         case .white:

@@ -7,7 +7,7 @@ enum ResetArea: String, CaseIterable, Sendable {
     /// Filter pop-up: filter, strength and grain.
     case filter
     /// FX pages.
-    case fxBlur, fxBlend, fxPrivacy, fxGhost
+    case fxBlur, fxBlend, fxPrivacy, fxGhost, fxArt
     /// SUBJECT pages (the Adjust page has its own reset for subject / background / sky edits).
     case subjectStyle, subjectCreate
 
@@ -20,7 +20,7 @@ enum ResetArea: String, CaseIterable, Sendable {
         case .local: "Reset Filters"
         case .adjust: "Reset Adjust"
         case .filter: "Reset Filter"
-        case .fxBlur, .fxBlend, .fxPrivacy, .fxGhost, .subjectStyle, .subjectCreate: "Reset"
+        case .fxBlur, .fxBlend, .fxPrivacy, .fxGhost, .fxArt, .subjectStyle, .subjectCreate: "Reset"
         }
     }
 
@@ -87,9 +87,22 @@ extension PhotoAdjustmentState {
             next.ghostAngle = d.ghostAngle
             next.ghostTarget = d.ghostTarget
             next.ghostHideOriginal = d.ghostHideOriginal
+        case .fxArt:
+            next.hologram = d.hologram
+            next.melt = d.melt
+            next.orbitCount = d.orbitCount
+            next.orbitSize = d.orbitSize
+            next.orbitDistance = d.orbitDistance
+            next.visionMode = d.visionMode
+            next.visionAmount = d.visionAmount
+            next.pixelSort = d.pixelSort
+            next.pixelSortVertical = d.pixelSortVertical
+            next.pixelSortSubjectOnly = d.pixelSortSubjectOnly
         case .subjectStyle:
             next.colorSplash = d.colorSplash
             next.background = d.background
+            next.backgroundBlurKind = d.backgroundBlurKind
+            next.backgroundBlurAmount = d.backgroundBlurAmount
         case .subjectCreate:
             next.dispersion = d.dispersion
             next.dispersionSize = d.dispersionSize

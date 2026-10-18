@@ -7,8 +7,9 @@ struct FXPickerView: View {
     @Environment(\.cameraReduceMotion) private var reduceMotion
     @State private var dragOffset: CGFloat = 0
     @State private var page: Page = .blur
+    @State private var art: ArtEffect = .hologram
 
-    enum Page: String, CaseIterable { case blur, blend, ghost, privacy }
+    enum Page: String, CaseIterable { case blur, blend, ghost, art, privacy }
 
     /// The Reset button clears only the page that's showing.
     private var resetArea: ResetArea {
@@ -16,6 +17,7 @@ struct FXPickerView: View {
         case .blur: .fxBlur
         case .blend: .fxBlend
         case .ghost: .fxGhost
+        case .art: .fxArt
         case .privacy: .fxPrivacy
         }
     }
@@ -55,6 +57,7 @@ struct FXPickerView: View {
                 case .blur: blurPage
                 case .blend: blendPage
                 case .ghost: ghostPage
+                case .art: artPage
                 case .privacy: privacyPage
                 }
             }
@@ -161,6 +164,57 @@ struct FXPickerView: View {
             note(a.ghostTarget == .subject
                  ? "A see-through copy of the subject, moved the way Direction points (0° right, 90° up). Hide Original leaves only the ghost."
                  : "A see-through copy of the whole photo laid over it, like a double image.")
+        }
+    }
+
+    /// Hologram, Thermal / Night Vision, Pixel Sort, Orbit clones and Melt, one at a time.
+    private var artPage: some View {
+        let a = vm.adjustments
+        return VStack(alignment: .leading, spacing: 12) {
+            GlassTabs(tabs: ArtEffect.allCases, selection: $art) { $0.label }
+            PagedStack(pages: ArtEffect.allCases, selection: art) { effect in
+                VStack(alignment: .leading, spacing: 12) {
+                    switch effect {
+                    case .hologram:
+                        GlassSliderRow(title: "Hologram", value: a.hologram) { vm.setEffect(\.hologram, to: min(max($0, 0), 1)) }
+                        note("The subject turns into a see-through, glowing blue hologram with scan lines.")
+                    case .vision:
+                        GlassTabs(tabs: VisionMode.allCases, selection: Binding(get: { vm.adjustments.visionMode },
+                                                                              set: { vm.setVisionMode($0) })) { $0.label }
+                        GlassSliderRow(title: "Strength", value: a.visionAmount) { vm.setEffect(\.visionAmount, to: min(max($0, 0), 1)) }
+                            .opacity(a.visionMode == .none ? 0.4 : 1)
+                            .disabled(a.visionMode == .none)
+                        note("Thermal maps brightness to heat-camera colors; Night Vision is green goggles with grain.")
+                    case .sort:
+                        GlassSliderRow(title: "Pixel Sort", value: a.pixelSort) { vm.setEffect(\.pixelSort, to: min(max($0, 0), 1)) }
+                        HStack(spacing: 8) {
+                            GlassTabs(tabs: [false, true], selection: Binding(get: { vm.adjustments.pixelSortVertical },
+                                                                             set: { vm.setFlag(\.pixelSortVertical, to: $0) })) {
+                                $0 ? "Vertical" : "Horizontal"
+                            }
+                        }
+                        Toggle(isOn: Binding(get: { vm.adjustments.pixelSortSubjectOnly },
+                                             set: { vm.setFlag(\.pixelSortSubjectOnly, to: $0) })) {
+                            Text("SUBJECT ONLY").font(.caption2.weight(.semibold)).tracking(0.8).foregroundStyle(.white.opacity(0.85))
+                        }
+                        .tint(.yellow)
+                    case .orbit:
+                        GlassSliderRow(title: "Clones", value: a.orbitCount, range: 0...12,
+                                       display: { $0 < 1.5 ? "Off" : "\(Int($0.rounded()))" }) {
+                            vm.setEffect(\.orbitCount, to: min(max($0.rounded(), 0), 12))
+                        }
+                        Group {
+                            GlassSliderRow(title: "Size", value: a.orbitSize) { vm.setEffect(\.orbitSize, to: min(max($0, 0), 1)) }
+                            GlassSliderRow(title: "Distance", value: a.orbitDistance) { vm.setEffect(\.orbitDistance, to: min(max($0, 0), 1)) }
+                        }
+                        .opacity(a.orbitClones > 0 ? 1 : 0.4)
+                        .disabled(a.orbitClones == 0)
+                    case .melt:
+                        GlassSliderRow(title: "Melt", value: a.melt) { vm.setEffect(\.melt, to: min(max($0, 0), 1)) }
+                        note("The subject sags and drips downward like melting wax.")
+                    }
+                }
+            }
         }
     }
 

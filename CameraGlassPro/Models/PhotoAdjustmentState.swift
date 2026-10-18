@@ -78,6 +78,22 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var ghostAngle: Double = 0
     var ghostTarget: GhostTarget = .subject
     var ghostHideOriginal = false
+    /// Background blur kind and strength when the background is Blur.
+    var backgroundBlurKind: BackgroundBlurKind = .soft
+    var backgroundBlurAmount: Double = 0.5
+    /// Art FX. Hologram, Melt (0 = off) and Orbit (clone count, under 2 = off) need the subject.
+    var hologram: Double = 0
+    var melt: Double = 0
+    var orbitCount: Double = 0
+    var orbitSize: Double = 0.45
+    var orbitDistance: Double = 0.5
+    var visionMode: VisionMode = .none
+    var visionAmount: Double = 1
+    var pixelSort: Double = 0
+    var pixelSortVertical = false
+    var pixelSortSubjectOnly = false
+
+    var orbitClones: Int { orbitCount >= 1.5 ? Int(orbitCount.rounded()) : 0 }
     var redactionStrokes: [RedactionStroke] = []
     /// Graduated and radial filters, applied on the final framing.
     var localAdjustments: [LocalAdjustment] = []
@@ -115,6 +131,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var needsSubject: Bool {
         portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
             || speedBlur > 0 || doubleExposure > 0 || dispersion > 0 || ghostOpacity > 0 // the subject goes back on top of the ghost
+            || hologram > 0 || melt > 0 || orbitClones > 0 || (pixelSort > 0 && pixelSortSubjectOnly)
     }
 
     /// Same edit with everything that needs a subject switched off (what renders when none is found).
@@ -128,6 +145,10 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         copy.speedBlur = 0 // double exposure still works without a subject
         copy.dispersion = 0
         if copy.ghostTarget == .subject { copy.ghostOpacity = 0 }
+        copy.hologram = 0
+        copy.melt = 0
+        copy.orbitCount = 0
+        if copy.pixelSortSubjectOnly { copy.pixelSort = 0 }
         return copy
     }
 
@@ -192,6 +213,18 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         ghostAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .ghostAngle)) ?? 0, 0), 360)
         ghostTarget = (try? c.decodeIfPresent(GhostTarget.self, forKey: .ghostTarget)) ?? .subject
         ghostHideOriginal = (try? c.decodeIfPresent(Bool.self, forKey: .ghostHideOriginal)) ?? false
+        backgroundBlurKind = (try? c.decodeIfPresent(BackgroundBlurKind.self, forKey: .backgroundBlurKind)) ?? .soft
+        backgroundBlurAmount = unit(.backgroundBlurAmount, 0.5)
+        hologram = unit(.hologram)
+        melt = unit(.melt)
+        orbitCount = min(max((try? c.decodeIfPresent(Double.self, forKey: .orbitCount)) ?? 0, 0), 12)
+        orbitSize = unit(.orbitSize, 0.45)
+        orbitDistance = unit(.orbitDistance, 0.5)
+        visionMode = (try? c.decodeIfPresent(VisionMode.self, forKey: .visionMode)) ?? .none
+        visionAmount = unit(.visionAmount, 1)
+        pixelSort = unit(.pixelSort)
+        pixelSortVertical = (try? c.decodeIfPresent(Bool.self, forKey: .pixelSortVertical)) ?? false
+        pixelSortSubjectOnly = (try? c.decodeIfPresent(Bool.self, forKey: .pixelSortSubjectOnly)) ?? false
         dispersionAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dispersionAngle)) ?? 0, 0), 360)
         faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none
         redactionStrokes = Array(((try? c.decodeIfPresent([RedactionStroke].self, forKey: .redactionStrokes)) ?? [])

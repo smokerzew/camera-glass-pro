@@ -105,6 +105,16 @@ struct SubjectPickerView: View {
                 }
                 .padding(.horizontal, 2)
             }
+            if vm.adjustments.background == .blur {
+                // Kinds of background blur, and how strong.
+                GlassTabs(tabs: BackgroundBlurKind.allCases, selection: Binding(get: { vm.adjustments.backgroundBlurKind },
+                                                                              set: { vm.setBackgroundBlurKind($0) })) { $0.label }
+                    .padding(.horizontal, 6)
+                GlassSliderRow(title: "Blur", value: vm.adjustments.backgroundBlurAmount) {
+                    vm.setEffect(\.backgroundBlurAmount, to: min(max($0, 0), 1))
+                }
+                .padding(.horizontal, 6)
+            }
         }
     }
 

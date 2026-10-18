@@ -1497,6 +1497,28 @@ final class CameraWorkspaceViewModel {
         }
     }
 
+    /// On/off switches (pixel sort direction and subject-only, etc.), one undo step each.
+    func setFlag(_ path: WritableKeyPath<PhotoAdjustmentState, Bool>, to value: Bool) {
+        guard adjustments[keyPath: path] != value else { return }
+        recordUndoPoint(force: true)
+        adjustments[keyPath: path] = value
+        adjustmentsChanged()
+    }
+
+    func setVisionMode(_ mode: VisionMode) {
+        guard mode != adjustments.visionMode else { return }
+        recordUndoPoint(force: true)
+        adjustments.visionMode = mode
+        adjustmentsChanged()
+    }
+
+    func setBackgroundBlurKind(_ kind: BackgroundBlurKind) {
+        guard kind != adjustments.backgroundBlurKind else { return }
+        recordUndoPoint(force: true)
+        adjustments.backgroundBlurKind = kind
+        adjustmentsChanged()
+    }
+
     func setGhostTarget(_ target: GhostTarget) {
         guard target != adjustments.ghostTarget else { return }
         recordUndoPoint(force: true)

@@ -95,6 +95,8 @@ extension CameraWorkspaceViewModel {
         case .adjust: false
         case .fx: adjustments.speedBlur > 0 || adjustments.tiltShift > 0 || adjustments.doubleExposure > 0
             || adjustments.ghostOpacity > 0 || adjustments.lookMatch != nil
+            || adjustments.hologram > 0 || adjustments.melt > 0 || adjustments.orbitClones > 0
+            || adjustments.visionMode != .none || adjustments.pixelSort > 0
             || (adjustments.redactionTarget == .faces ? adjustments.faceRedaction != .none : !adjustments.redactionStrokes.isEmpty)
         case .depth: depthEffect
         case .nightMode: adjustments.nightLook

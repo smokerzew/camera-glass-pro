@@ -89,3 +89,25 @@ using namespace metal;
     float3 matched = pow(clamp(float3(r, g, b), 0.0, 1.0), float3(2.2));
     return float4(mix(s.rgb, matched, amount), s.a);
 }
+
+// Thermal camera (mode 0: dark blue -> purple -> red -> orange -> yellow -> white by brightness) or
+// night-vision goggles (mode 1: boosted green phosphor), blended by `amount`.
+[[stitchable]] float4 visionLook(coreimage::sample_t s, float mode, float amount) {
+    float3 c = pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float y = dot(c, float3(0.299, 0.587, 0.114));
+    float3 v;
+    if (mode < 0.5) {
+        float3 p0 = float3(0.02, 0.0, 0.12), p1 = float3(0.35, 0.0, 0.55), p2 = float3(0.85, 0.05, 0.25);
+        float3 p3 = float3(1.0, 0.45, 0.0), p4 = float3(1.0, 0.85, 0.1), p5 = float3(1.0, 1.0, 0.92);
+        float t = y * 5.0;
+        if (t < 1.0) v = mix(p0, p1, t);
+        else if (t < 2.0) v = mix(p1, p2, t - 1.0);
+        else if (t < 3.0) v = mix(p2, p3, t - 2.0);
+        else if (t < 4.0) v = mix(p3, p4, t - 3.0);
+        else v = mix(p4, p5, min(t - 4.0, 1.0));
+    } else {
+        float g = pow(clamp(y * 1.6, 0.0, 1.0), 0.8);
+        v = float3(0.12 * g, g, 0.18 * g);
+    }
+    return float4(mix(s.rgb, pow(v, float3(2.2)), amount), s.a);
+}

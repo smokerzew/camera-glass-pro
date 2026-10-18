@@ -32,6 +32,15 @@ final class ImageProcessingService: @unchecked Sendable {
                           opacity: a.ghostOpacity, distance: a.ghostDistance, degrees: a.ghostAngle,
                           hideOriginal: a.ghostHideOriginal, extent: input.extent)
         }
+        if let mask {
+            let subject = mask.cropped(to: input.extent)
+            if a.orbitClones > 0 {
+                image = orbitClones(image, mask: subject, count: a.orbitClones, size: a.orbitSize,
+                                    distance: a.orbitDistance, extent: input.extent)
+            }
+            if a.melt > 0 { image = melt(image, mask: subject, amount: a.melt, extent: input.extent) }
+            if a.hologram > 0 { image = hologram(image, mask: subject, amount: a.hologram, extent: input.extent) }
+        }
         if a.doubleExposure > 0, let second = backgroundPhoto {
             image = doubleExposure(image, second: second, mask: mask, amount: a.doubleExposure, extent: input.extent)
         }
@@ -114,6 +123,9 @@ final class ImageProcessingService: @unchecked Sendable {
         image = applyStyle(a, to: image)
         let unfiltered = image
         image = applyLook(a.filter, to: image, extent: input.extent)
+        if a.visionMode != .none {
+            image = vision(image, mode: a.visionMode, amount: a.visionAmount, extent: input.extent)
+        }
         if a.halation > 0 {
             image = halation(image, amount: a.halation, extent: input.extent)
         }
@@ -129,6 +141,13 @@ final class ImageProcessingService: @unchecked Sendable {
 
         if a.sharpen > 0 {
             image = sharpen(image, amount: a.sharpen, extent: extent)
+        }
+        if a.pixelSort > 0 {
+            // Subject-only sorting needs the mask in the final framing; without geometry it lines up.
+            let sortMask = a.pixelSortSubjectOnly && !a.hasGeometry ? mask?.cropped(to: extent) : nil
+            if !a.pixelSortSubjectOnly || sortMask != nil {
+                image = pixelSort(image, amount: a.pixelSort, vertical: a.pixelSortVertical, mask: sortMask, extent: extent)
+            }
         }
         if a.tiltShift > 0 {
             image = tiltShift(image, amount: a.tiltShift, position: a.tiltShiftPosition, extent: extent)
