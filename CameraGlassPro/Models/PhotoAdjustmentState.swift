@@ -16,6 +16,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Film-like luminance grain.
     var grain: Double = 0
     var grainSize: GrainSize = .medium
+    /// Fine detail (0...1) and noise cleanup (0...1).
+    var sharpen: Double = 0
+    var noiseReduction: Double = 0
     /// Softens skin on detected faces (0...1).
     var skinSmoothing: Double = 0
     /// Darkens (+) or lightens (−) the corners.
@@ -46,6 +49,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Separate light and color for the subject and for the background (subject mask).
     var subjectEdit = RegionEdit()
     var backgroundEdit = RegionEdit()
+    /// Light and color for the detected sky only.
+    var skyEdit = RegionEdit()
     /// Graduated and radial filters, applied on the final framing.
     var localAdjustments: [LocalAdjustment] = []
 
@@ -95,8 +100,20 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     }
 
     subscript(region: PhotoRegion) -> RegionEdit {
-        get { region == .subject ? subjectEdit : backgroundEdit }
-        set { if region == .subject { subjectEdit = newValue } else { backgroundEdit = newValue } }
+        get {
+            switch region {
+            case .subject: subjectEdit
+            case .background: backgroundEdit
+            case .sky: skyEdit
+            }
+        }
+        set {
+            switch region {
+            case .subject: subjectEdit = newValue
+            case .background: backgroundEdit = newValue
+            case .sky: skyEdit = newValue
+            }
+        }
     }
 
     var isIdentity: Bool { self == PhotoAdjustmentState() }
@@ -120,8 +137,11 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         colorMixer = (try? c.decodeIfPresent(ColorMixer.self, forKey: .colorMixer)) ?? ColorMixer()
         halation = min(max(try c.decodeIfPresent(Double.self, forKey: .halation) ?? 0, 0), 1)
         skinSmoothing = min(max(try c.decodeIfPresent(Double.self, forKey: .skinSmoothing) ?? 0, 0), 1)
+        sharpen = min(max(try c.decodeIfPresent(Double.self, forKey: .sharpen) ?? 0, 0), 1)
+        noiseReduction = min(max(try c.decodeIfPresent(Double.self, forKey: .noiseReduction) ?? 0, 0), 1)
         subjectEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .subjectEdit)) ?? RegionEdit()
         backgroundEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .backgroundEdit)) ?? RegionEdit()
+        skyEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .skyEdit)) ?? RegionEdit()
         localAdjustments = ((try? c.decodeIfPresent([LocalAdjustment].self, forKey: .localAdjustments)) ?? [])
             .prefix(LocalAdjustment.limit).map(\.clamped)
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
@@ -186,10 +206,16 @@ enum GrainSize: String, CaseIterable, Codable, Sendable {
 }
 
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
-    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, skin, vignette, halation, grain
+    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, sharpen, noise, skin, vignette, halation, grain
 
     var id: String { rawValue }
-    var title: String { self == .skin ? "Smooth Skin" : rawValue.capitalized }
+    var title: String {
+        switch self {
+        case .skin: "Smooth Skin"
+        case .noise: "Noise Reduction"
+        default: rawValue.capitalized
+        }
+    }
 
     var systemImage: String {
         switch self {
@@ -201,6 +227,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .highlights: "circle.righthalf.filled.inverse"
         case .shadows: "circle.bottomhalf.filled"
         case .texture: "circle.hexagongrid"
+        case .sharpen: "triangle"
+        case .noise: "aqi.low"
         case .skin: "face.smiling"
         case .vignette: "camera.aperture"
         case .halation: "sun.haze"
@@ -218,6 +246,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .highlights: -1...0        // 0 = unchanged, -1 = strongest recovery
         case .shadows: -1...1
         case .texture: -1...1
+        case .sharpen, .noise: 0...1
         case .skin: 0...1
         case .vignette: -1...1        // + darker corners, − lighter
         case .halation: 0...1
@@ -242,6 +271,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .highlights: \.highlights
         case .shadows: \.shadows
         case .texture: \.texture
+        case .sharpen: \.sharpen
+        case .noise: \.noiseReduction
         case .skin: \.skinSmoothing
         case .vignette: \.vignette
         case .halation: \.halation
@@ -285,7 +316,7 @@ enum PhotoFilter: String, CaseIterable, Codable, Sendable {
 
     var label: String {
         if let recipe = LookRecipe.recipe(self) { return recipe.label }
-        switch self {
+        return switch self {
         case .none: "Off"
         case .y2kGlow: "Y2K Glow"
         case .flashPop: "Flash Pop"

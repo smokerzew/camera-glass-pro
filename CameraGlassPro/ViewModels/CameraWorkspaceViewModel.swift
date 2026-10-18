@@ -1269,6 +1269,7 @@ final class CameraWorkspaceViewModel {
         recordUndoPoint(force: true)
         adjustments.subjectEdit = RegionEdit()
         adjustments.backgroundEdit = RegionEdit()
+        adjustments.skyEdit = RegionEdit()
         adjustmentsChanged()
     }
 

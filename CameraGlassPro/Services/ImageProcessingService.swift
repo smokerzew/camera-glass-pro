@@ -23,6 +23,13 @@ final class ImageProcessingService: @unchecked Sendable {
             image = composeSubject(a, to: image, mask: mask, backgroundPhoto: backgroundPhoto)
         }
 
+        // Sky found on the untouched photo, so edits never change what counts as sky.
+        let sky = a.skyEdit.isNeutral ? nil : skyMask(for: input, extent: input.extent)
+
+        if a.noiseReduction > 0 {
+            image = reduceNoise(image, amount: a.noiseReduction, extent: input.extent)
+        }
+
         if a.skinSmoothing > 0 {
             image = smoothSkin(image, amount: a.skinSmoothing, extent: input.extent)
         }
@@ -79,6 +86,10 @@ final class ImageProcessingService: @unchecked Sendable {
             image = filter.outputImage ?? image
         }
 
+        if let sky {
+            image = applySkyEdit(a.skyEdit, to: image, mask: sky, extent: input.extent)
+        }
+
         if !a.colorMixer.isNeutral {
             image = applyColorMixer(a.colorMixer, to: image)
         }
@@ -99,6 +110,9 @@ final class ImageProcessingService: @unchecked Sendable {
         image = applyGeometry(a, to: image.cropped(to: input.extent))
         let extent = image.extent
 
+        if a.sharpen > 0 {
+            image = sharpen(image, amount: a.sharpen, extent: extent)
+        }
         for local in a.localAdjustments where !local.edit.isNeutral {
             image = applyLocal(local, to: image, extent: extent)
         }

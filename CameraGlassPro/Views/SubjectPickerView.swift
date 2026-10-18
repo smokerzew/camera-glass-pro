@@ -65,7 +65,8 @@ struct SubjectPickerView: View {
 
             regionEdits
 
-            Text("Works with people, pets and objects, using on-device subject detection. Combine with Portrait for depth blur and lighting.")
+            Text("Sky is found on-device from color, smoothness and position, so a plain bright wall near the top can count as sky. "
+                 + "Subject works with people, pets and objects, using on-device subject detection. Combine with Portrait for depth blur and lighting.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.65))
                 .multilineTextAlignment(.center)
@@ -140,7 +141,7 @@ struct SubjectPickerView: View {
     }
 
     private var hasRegionEdits: Bool {
-        !vm.adjustments.subjectEdit.isNeutral || !vm.adjustments.backgroundEdit.isNeutral
+        !vm.adjustments.subjectEdit.isNeutral || !vm.adjustments.backgroundEdit.isNeutral || !vm.adjustments.skyEdit.isNeutral
     }
 
     private func close() {

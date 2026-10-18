@@ -2,7 +2,7 @@ import Foundation
 
 /// Which part of the photo a subject-aware edit targets.
 enum PhotoRegion: String, CaseIterable, Identifiable, Sendable {
-    case subject, background
+    case subject, background, sky
 
     var id: String { rawValue }
     var label: String { rawValue.capitalized }

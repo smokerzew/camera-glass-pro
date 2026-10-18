@@ -49,3 +49,25 @@ using namespace metal;
     float m = clamp(dot(s.rgb, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
     return float4(s.rgb + shadows * (1.0 - m) * min(1.0, m * 12.0) + highlights * m, s.a);
 }
+
+// Color noise reduction: keeps each pixel's own brightness (detail) but takes its color from a blurred
+// copy, which removes the red/green/blue speckle of night shots without softening edges.
+[[stitchable]] float4 chromaDenoise(coreimage::sample_t s, coreimage::sample_t blurred, float amount) {
+    float3 w = float3(0.2126, 0.7152, 0.0722);
+    float3 smoothed = dot(s.rgb, w) + (blurred.rgb - dot(blurred.rgb, w));
+    return float4(mix(s.rgb, smoothed, amount), s.a);
+}
+
+// How sky-like each pixel is (0...1): blue sky, bright overcast or dark night sky, smooth (no texture),
+// and toward the top of the frame (`top` is a vertical gradient). `texture` is local detail in display values.
+[[stitchable]] float4 skyLikelihood(coreimage::sample_t s, coreimage::sample_t texture, coreimage::sample_t top) {
+    float3 c = pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float y = dot(c, float3(0.2126, 0.7152, 0.0722));
+    float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+    float blue = smoothstep(0.03, 0.12, c.b - c.r) * smoothstep(0.15, 0.3, y);
+    float overcast = smoothstep(0.62, 0.82, y) * (1.0 - smoothstep(0.08, 0.2, sat));
+    float night = 1.0 - smoothstep(0.05, 0.14, y);
+    float smooth = 1.0 - smoothstep(0.012, 0.045, texture.r);
+    float m = max(blue, max(overcast, night)) * smooth * top.r;
+    return float4(m, m, m, 1.0);
+}
