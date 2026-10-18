@@ -73,9 +73,13 @@ extension ImageProcessingService {
         let longSide = max(e.width, e.height)
         let s = CGFloat(min(max(strength, 0), 1))
         let blurred = image.clampedToExtent().applyingGaussianBlur(sigma: Double(longSide * (0.006 + 0.03 * s))).cropped(to: e)
-        let pixelated = image.clampedToExtent().applyingFilter("CIPixellate", parameters: [
-            kCIInputScaleKey: max(4, longSide * (0.008 + 0.05 * s)), kCIInputCenterKey: CIVector(x: e.minX, y: e.minY),
-        ]).cropped(to: e)
+        // Blocks show each area's average color (blur first): CIPixellate alone samples one pixel per
+        // block, which can let fine detail survive as a pattern.
+        let block = max(4, longSide * (0.008 + 0.05 * s))
+        let pixelated = image.clampedToExtent().applyingGaussianBlur(sigma: Double(block * 0.5))
+            .applyingFilter("CIPixellate", parameters: [
+                kCIInputScaleKey: block, kCIInputCenterKey: CIVector(x: e.minX, y: e.minY),
+            ]).cropped(to: e)
         func hidden(_ m: Redaction) -> CIImage { m == .pixelate ? pixelated : blurred }
         func apply(_ source: CIImage, through mask: CIImage, over base: CIImage) -> CIImage {
             let blend = CIFilter.blendWithMask()
