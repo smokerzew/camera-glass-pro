@@ -1056,12 +1056,15 @@ final class CameraWorkspaceViewModel {
     }
 
     /// Commits the crop editor's result as one undoable edit.
-    func setGeometry(crop: CGRect, rotation: Int, flipped: Bool, straighten: Double) {
+    func setGeometry(crop: CGRect, rotation: Int, flipped: Bool, straighten: Double,
+                     perspectiveVertical: Double = 0, perspectiveHorizontal: Double = 0) {
         var next = adjustments
         next.cropRect = crop
         next.rotation = ((rotation % 4) + 4) % 4
         next.flipped = flipped
         next.straighten = min(max(straighten, -45), 45)
+        next.perspectiveVertical = min(max(perspectiveVertical, -1), 1)
+        next.perspectiveHorizontal = min(max(perspectiveHorizontal, -1), 1)
         guard next != adjustments else { return }
         recordUndoPoint(force: true)
         adjustments = next
@@ -1070,13 +1073,16 @@ final class CameraWorkspaceViewModel {
     }
 
     /// The photo with the current look and the given rotation/flip/straighten, uncropped (for the editor).
-    func geometryPreview(rotation: Int, flipped: Bool, straighten: Double) async -> CGImage? {
+    func geometryPreview(rotation: Int, flipped: Bool, straighten: Double,
+                         perspectiveVertical: Double = 0, perspectiveHorizontal: Double = 0) async -> CGImage? {
         guard let source = photo?.preview else { return nil }
         var recipe = adjustments
         recipe.cropRect = PhotoAdjustmentState.fullCrop
         recipe.rotation = rotation
         recipe.flipped = flipped
         recipe.straighten = straighten
+        recipe.perspectiveVertical = perspectiveVertical
+        recipe.perspectiveHorizontal = perspectiveHorizontal
         recipe.grain = 0
         let mask = previewSubjectSource === source ? previewSubjectMask : nil
         let background = customBackground.map { CIImage(cgImage: $0) }
@@ -1149,6 +1155,7 @@ final class CameraWorkspaceViewModel {
         guard filter != adjustments.filter else { return }
         recordUndoPoint(force: true)
         adjustments.filter = filter
+        adjustments = Self.withFilmTexture(adjustments)
         adjustmentsChanged()
     }
 
@@ -1181,6 +1188,7 @@ final class CameraWorkspaceViewModel {
                     state.colorSplash = false
                     state.background = .original
                     state.grain = 0 // tiles show the look itself, not grain
+                    state.skinSmoothing = 0 // and skip face detection for every tile
                     state.filterStrength = 1
                     let output = processor.apply(state, to: small)
                     if let image = processor.context.createCGImage(output, from: small.extent) {
@@ -1192,6 +1200,28 @@ final class CameraWorkspaceViewModel {
             guard !Task.isCancelled else { return }
             self?.filterThumbnails = tiles
         }
+    }
+
+    /// A film stock also brings its grain (and CineStill its halation), but never overrides values you set.
+    static func withFilmTexture(_ state: PhotoAdjustmentState) -> PhotoAdjustmentState {
+        let texture: (grain: Double, size: GrainSize, halation: Double)?
+        switch state.filter {
+        case .portra: texture = (0.25, .fine, 0)
+        case .ektar: texture = (0.15, .fine, 0)
+        case .gold: texture = (0.3, .medium, 0)
+        case .fuji400h: texture = (0.25, .fine, 0)
+        case .cinestill: texture = (0.35, .medium, 0.55)
+        case .trix: texture = (0.5, .coarse, 0)
+        default: texture = nil
+        }
+        guard let texture else { return state }
+        var next = state
+        if next.grain == 0 {
+            next.grain = texture.grain
+            next.grainSize = texture.size
+        }
+        if next.halation == 0 { next.halation = texture.halation }
+        return next
     }
 
     func cycleFilter() {

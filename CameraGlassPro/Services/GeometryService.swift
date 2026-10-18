@@ -16,7 +16,9 @@ extension ImageProcessingService {
         output = Self.atOrigin(output)
 
         let degrees = min(max(a.straighten, -45), 45)
-        guard abs(degrees) > 0.01 else { return output }
+        guard abs(degrees) > 0.01 else {
+            return Self.keystone(output, vertical: a.perspectiveVertical, horizontal: a.perspectiveHorizontal)
+        }
         // Rotate about the center, then crop to the largest same-shape rect with no empty corners.
         let extent = output.extent
         let radians = -degrees * .pi / 180 // positive straighten turns the picture clockwise
@@ -29,7 +31,8 @@ extension ImageProcessingService {
         let scale = Self.straightenScale(width: extent.width, height: extent.height, degrees: degrees)
         let inner = CGRect(x: center.x - extent.width * scale / 2, y: center.y - extent.height * scale / 2,
                            width: extent.width * scale, height: extent.height * scale).integral
-        return Self.atOrigin(rotated.cropped(to: inner))
+        return Self.keystone(Self.atOrigin(rotated.cropped(to: inner)),
+                             vertical: a.perspectiveVertical, horizontal: a.perspectiveHorizontal)
     }
 
     /// Full geometry: orientation, then the normalized crop (top-left origin).
@@ -46,6 +49,29 @@ extension ImageProcessingService {
         let c = CGFloat(cos(theta)), s = CGFloat(sin(theta))
         guard width > 0, height > 0 else { return 1 }
         return min(width / (width * c + height * s), height / (width * s + height * c))
+    }
+
+    /// Keystone (perspective) correction. Only the edge being corrected is stretched outward, so the
+    /// original frame stays fully covered: no empty corners, same output size.
+    /// `vertical` + widens the top (buildings leaning in when shot from below), − widens the bottom.
+    /// `horizontal` + widens the right side, − the left.
+    static func keystone(_ image: CIImage, vertical: Double, horizontal: Double) -> CIImage {
+        guard abs(vertical) > 0.001 || abs(horizontal) > 0.001 else { return image }
+        let e = image.extent
+        let dv = CGFloat(min(abs(vertical), 1)) * e.width * 0.3
+        let dh = CGFloat(min(abs(horizontal), 1)) * e.height * 0.3
+        let m: CGFloat = 1 // a pixel of overlap so edge pixels stay fully opaque
+        var tl = CGPoint(x: e.minX - m, y: e.maxY + m), tr = CGPoint(x: e.maxX + m, y: e.maxY + m)
+        var bl = CGPoint(x: e.minX - m, y: e.minY - m), br = CGPoint(x: e.maxX + m, y: e.minY - m)
+        if vertical > 0 { tl.x -= dv; tr.x += dv } else if vertical < 0 { bl.x -= dv; br.x += dv }
+        if horizontal > 0 { tr.y += dh; br.y -= dh } else if horizontal < 0 { tl.y += dh; bl.y -= dh }
+        let filter = CIFilter.perspectiveTransform()
+        filter.inputImage = image
+        filter.topLeft = tl
+        filter.topRight = tr
+        filter.bottomLeft = bl
+        filter.bottomRight = br
+        return (filter.outputImage ?? image).cropped(to: e)
     }
 
     static func atOrigin(_ image: CIImage) -> CIImage {

@@ -16,6 +16,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Film-like luminance grain.
     var grain: Double = 0
     var grainSize: GrainSize = .medium
+    /// Softens skin on detected faces (0...1).
+    var skinSmoothing: Double = 0
     /// Darkens (+) or lightens (−) the corners.
     var vignette: Double = 0
     /// Per-color hue, saturation and luminance.
@@ -51,11 +53,15 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var rotation = 0
     var flipped = false
     var straighten: Double = 0
+    /// Keystone correction, -1...1: + widens the top (vertical) / the right side (horizontal).
+    var perspectiveVertical: Double = 0
+    var perspectiveHorizontal: Double = 0
 
     static let fullCrop = CGRect(x: 0, y: 0, width: 1, height: 1)
 
     var hasGeometry: Bool {
         cropRect != Self.fullCrop || ((rotation % 4) + 4) % 4 != 0 || flipped || abs(straighten) > 0.01
+            || abs(perspectiveVertical) > 0.001 || abs(perspectiveHorizontal) > 0.001
     }
 
     /// Same edit without crop/rotate/flip/straighten (videos keep their frame size).
@@ -65,6 +71,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         copy.rotation = 0
         copy.flipped = false
         copy.straighten = 0
+        copy.perspectiveVertical = 0
+        copy.perspectiveHorizontal = 0
         return copy
     }
 
@@ -109,6 +117,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         vignette = min(max(try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0, -1), 1)
         colorMixer = (try? c.decodeIfPresent(ColorMixer.self, forKey: .colorMixer)) ?? ColorMixer()
         halation = min(max(try c.decodeIfPresent(Double.self, forKey: .halation) ?? 0, 0), 1)
+        skinSmoothing = min(max(try c.decodeIfPresent(Double.self, forKey: .skinSmoothing) ?? 0, 0), 1)
         subjectEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .subjectEdit)) ?? RegionEdit()
         backgroundEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .backgroundEdit)) ?? RegionEdit()
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
@@ -129,6 +138,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         rotation = ((try c.decodeIfPresent(Int.self, forKey: .rotation) ?? 0) % 4 + 4) % 4
         flipped = try c.decodeIfPresent(Bool.self, forKey: .flipped) ?? false
         straighten = min(max(try c.decodeIfPresent(Double.self, forKey: .straighten) ?? 0, -45), 45)
+        perspectiveVertical = min(max(try c.decodeIfPresent(Double.self, forKey: .perspectiveVertical) ?? 0, -1), 1)
+        perspectiveHorizontal = min(max(try c.decodeIfPresent(Double.self, forKey: .perspectiveHorizontal) ?? 0, -1), 1)
     }
 
     subscript(parameter: AdjustmentParameter) -> Double {
@@ -171,10 +182,10 @@ enum GrainSize: String, CaseIterable, Codable, Sendable {
 }
 
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
-    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, vignette, halation, grain
+    case exposure, brightness, contrast, saturation, warmth, highlights, shadows, texture, skin, vignette, halation, grain
 
     var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    var title: String { self == .skin ? "Smooth Skin" : rawValue.capitalized }
 
     var systemImage: String {
         switch self {
@@ -186,6 +197,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .highlights: "circle.righthalf.filled.inverse"
         case .shadows: "circle.bottomhalf.filled"
         case .texture: "circle.hexagongrid"
+        case .skin: "face.smiling"
         case .vignette: "camera.aperture"
         case .halation: "sun.haze"
         case .grain: "circle.dotted"
@@ -202,6 +214,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .highlights: -1...0        // 0 = unchanged, -1 = strongest recovery
         case .shadows: -1...1
         case .texture: -1...1
+        case .skin: 0...1
         case .vignette: -1...1        // + darker corners, − lighter
         case .halation: 0...1
         case .grain: 0...1
@@ -225,6 +238,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .highlights: \.highlights
         case .shadows: \.shadows
         case .texture: \.texture
+        case .skin: \.skinSmoothing
         case .vignette: \.vignette
         case .halation: \.halation
         case .grain: \.grain
@@ -247,6 +261,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
 /// Photo looks picked in the FILTER pop-up (grouped by `FilterCategory`).
 enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case none, vivid, mono, noir, chrome, fade, instant
+    case portra, ektar, gold, fuji400h, cinestill, trix
     case y2kGlow, flashPop, cyber, pastel
     case hd, clarity, hdr, crisp
     case digicam, ccd, retro
@@ -261,6 +276,12 @@ enum PhotoFilter: String, CaseIterable, Codable, Sendable {
         case .hdr: "HDR"
         case .digicam: "DigiCam"
         case .ccd: "CCD"
+        case .portra: "Portra 400"
+        case .ektar: "Ektar 100"
+        case .gold: "Gold 200"
+        case .fuji400h: "Fuji 400H"
+        case .cinestill: "CineStill 800T"
+        case .trix: "Tri-X 400"
         default: rawValue.capitalized
         }
     }

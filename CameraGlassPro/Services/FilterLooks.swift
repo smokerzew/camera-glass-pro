@@ -3,13 +3,14 @@ import CoreImage.CIFilterBuiltins
 
 /// Filter groups shown as tabs in the filter picker.
 enum FilterCategory: String, CaseIterable, Identifiable {
-    case classic, y2k, quality, digicam
+    case classic, film, y2k, quality, digicam
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .classic: "Classic"
+        case .film: "Film"
         case .y2k: "Y2K"
         case .quality: "Quality"
         case .digicam: "DigiCam FX"
@@ -26,6 +27,7 @@ extension PhotoFilter {
         case .y2kGlow, .flashPop, .cyber, .pastel: .y2k
         case .hd, .clarity, .hdr, .crisp: .quality
         case .digicam, .ccd, .retro: .digicam
+        case .portra, .ektar, .gold, .fuji400h, .cinestill, .trix: .film
         }
     }
 }
@@ -53,6 +55,31 @@ extension ImageProcessingService {
         case .chrome: return builtIn(CIFilter.photoEffectChrome(), image)
         case .fade: return builtIn(CIFilter.photoEffectFade(), image)
         case .instant: return builtIn(CIFilter.photoEffectInstant(), image)
+
+        // MARK: Film stocks (color and tone only; picking one also sets its grain, see `filmTexture`)
+        case .portra:
+            // Kodak Portra 400: warm, soft contrast, gentle saturation, flattering skin.
+            let soft = curve(temperature(image, shift: 250), [(0, 0.025), (0.25, 0.26), (0.5, 0.52), (0.75, 0.77), (1, 0.98)])
+            return splitTone(saturation(soft, 0.9), shadows: (-0.004, 0.002, 0.008), highlights: (0.014, 0.007, 0), amount: 1)
+        case .ektar:
+            // Kodak Ektar 100: punchy color, deep blues and reds, firm contrast.
+            let punchy = curve(vibrance(image, 0.45), [(0, 0), (0.25, 0.21), (0.5, 0.5), (0.75, 0.8), (1, 1)])
+            return splitTone(saturation(punchy, 1.12), shadows: (-0.004, 0, 0.012), highlights: (0.006, 0.002, 0), amount: 1)
+        case .gold:
+            // Kodak Gold 200: golden warmth, yellow highlights, everyday snapshot contrast.
+            let warm = curve(temperature(image, shift: 450), [(0, 0.02), (0.25, 0.24), (0.5, 0.52), (0.75, 0.79), (1, 0.98)])
+            return splitTone(saturation(warm, 1.06), shadows: (0.004, 0.002, -0.004), highlights: (0.016, 0.012, -0.01), amount: 1)
+        case .fuji400h:
+            // Fuji Pro 400H: airy pastels, cyan-green shadows, soft highlights.
+            let airy = curve(image, [(0, 0.05), (0.25, 0.29), (0.5, 0.54), (0.75, 0.78), (1, 0.97)])
+            return splitTone(saturation(airy, 0.88), shadows: (-0.008, 0.01, 0.008), highlights: (0.006, 0.002, 0.006), amount: 1)
+        case .cinestill:
+            // CineStill 800T: tungsten-balanced, so cool overall, teal shadows, warm practical lights.
+            let cool = curve(temperature(image, shift: -650), [(0, 0.03), (0.25, 0.25), (0.5, 0.51), (0.75, 0.79), (1, 0.98)])
+            return splitTone(saturation(cool, 1.04), shadows: (-0.012, 0.006, 0.018), highlights: (0.014, 0.004, -0.006), amount: 1)
+        case .trix:
+            // Kodak Tri-X 400: black and white with rich blacks and bright, punchy midtones.
+            return curve(saturation(image, 0), [(0, 0.02), (0.25, 0.2), (0.5, 0.5), (0.75, 0.82), (1, 1)])
 
         // MARK: Y2K
         case .y2kGlow:

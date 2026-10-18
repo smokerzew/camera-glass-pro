@@ -27,3 +27,18 @@ using namespace metal;
                                   coreimage::sample_t tight, float strength) {
     return float4(s.rgb + (wide.rgb + tight.rgb) * strength, s.a);
 }
+
+// Skin smoothing: blends toward the blurred photo only where `area` (soft face regions) is white,
+// the pixel is skin-colored (YCbCr range) and there is no edge (big gap between photo and blur).
+[[stitchable]] float4 skinSmooth(coreimage::sample_t s, coreimage::sample_t blurred,
+                                 coreimage::sample_t area, float amount) {
+    float3 c = pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2)); // judge color on display values
+    float cb = 0.5 - 0.1687 * c.r - 0.3313 * c.g + 0.5 * c.b;
+    float cr = 0.5 + 0.5 * c.r - 0.4187 * c.g - 0.0813 * c.b;
+    float skin = smoothstep(0.26, 0.31, cb) * (1.0 - smoothstep(0.49, 0.54, cb))
+               * smoothstep(0.51, 0.55, cr) * (1.0 - smoothstep(0.68, 0.72, cr));
+    float3 b = pow(clamp(blurred.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float edge = 1.0 - smoothstep(0.04, 0.12, length(c - b));
+    float w = area.r * skin * edge * amount * 0.85; // keep a little texture so skin never looks plastic
+    return float4(mix(s.rgb, blurred.rgb, w), s.a);
+}

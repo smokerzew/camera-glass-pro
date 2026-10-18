@@ -10,13 +10,17 @@ struct CropEditorView: View {
     @State private var rotation = 0
     @State private var flipped = false
     @State private var straighten: Double = 0
+    @State private var vertical: Double = 0
+    @State private var horizontal: Double = 0
     @State private var crop = PhotoAdjustmentState.fullCrop
     @State private var aspect: CropAspect = .freeform
     @State private var preview: CGImage?
     @State private var dragStart: CGRect?
     @State private var note: String?
 
-    private struct Params: Equatable { let rotation: Int; let flipped: Bool; let straighten: Double }
+    private struct Params: Equatable {
+        let rotation: Int; let flipped: Bool; let straighten: Double; let vertical: Double; let horizontal: Double
+    }
 
     var body: some View {
         ZStack {
@@ -34,12 +38,15 @@ struct CropEditorView: View {
             rotation = vm.adjustments.rotation
             flipped = vm.adjustments.flipped
             straighten = vm.adjustments.straighten
+            vertical = vm.adjustments.perspectiveVertical
+            horizontal = vm.adjustments.perspectiveHorizontal
             crop = vm.adjustments.cropRect
         }
-        .task(id: Params(rotation: rotation, flipped: flipped, straighten: straighten)) {
+        .task(id: Params(rotation: rotation, flipped: flipped, straighten: straighten, vertical: vertical, horizontal: horizontal)) {
             try? await Task.sleep(for: .milliseconds(40)) // coalesce slider ticks
             guard !Task.isCancelled else { return }
-            if let image = await vm.geometryPreview(rotation: rotation, flipped: flipped, straighten: straighten) {
+            if let image = await vm.geometryPreview(rotation: rotation, flipped: flipped, straighten: straighten,
+                                                    perspectiveVertical: vertical, perspectiveHorizontal: horizontal) {
                 preview = image
             }
         }
@@ -60,7 +67,8 @@ struct CropEditorView: View {
                 .foregroundStyle(.white.opacity(0.9))
             Spacer()
             Button("Done") {
-                vm.setGeometry(crop: crop, rotation: rotation, flipped: flipped, straighten: straighten)
+                vm.setGeometry(crop: crop, rotation: rotation, flipped: flipped, straighten: straighten,
+                               perspectiveVertical: vertical, perspectiveHorizontal: horizontal)
                 dismiss()
             }
             .font(.body.weight(.semibold))
@@ -154,6 +162,9 @@ struct CropEditorView: View {
             }
             .padding(.horizontal, 20)
 
+            perspectiveRow("VERTICAL", value: $vertical, hint: "Straightens buildings that lean in or out")
+            perspectiveRow("HORIZONTAL", value: $horizontal, hint: "Squares up walls shot from the side")
+
             if let note {
                 Text(note).font(.footnote).foregroundStyle(.white.opacity(0.7))
             }
@@ -190,6 +201,8 @@ struct CropEditorView: View {
                     rotation = 0
                     flipped = false
                     straighten = 0
+                    vertical = 0
+                    horizontal = 0
                     aspect = .freeform
                     crop = PhotoAdjustmentState.fullCrop
                     note = nil
@@ -198,6 +211,27 @@ struct CropEditorView: View {
             .padding(.horizontal, 12)
         }
         .padding(.bottom, 16)
+    }
+
+    /// One keystone slider (-100...100) with a reset.
+    private func perspectiveRow(_ title: String, value: Binding<Double>, hint: String) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .tracking(0.8)
+                .foregroundStyle(abs(value.wrappedValue) < 0.005 ? .white : Color.yellow)
+                .frame(width: 84, alignment: .leading)
+            Slider(value: value, in: -1...1)
+                .tint(.yellow)
+                .accessibilityLabel(title.capitalized + " perspective")
+                .accessibilityValue(String(Int((value.wrappedValue * 100).rounded())))
+                .accessibilityHint(hint)
+            Button("0") { value.wrappedValue = 0 }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 24)
+        }
+        .padding(.horizontal, 20)
     }
 
     // MARK: Interaction

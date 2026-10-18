@@ -23,6 +23,10 @@ final class ImageProcessingService: @unchecked Sendable {
             image = composeSubject(a, to: image, mask: mask, backgroundPhoto: backgroundPhoto)
         }
 
+        if a.skinSmoothing > 0 {
+            image = smoothSkin(image, amount: a.skinSmoothing, extent: input.extent)
+        }
+
         if a.exposure != 0 {
             let filter = CIFilter.exposureAdjust()
             filter.inputImage = image
@@ -230,7 +234,7 @@ final class ImageProcessingService: @unchecked Sendable {
     }
 
     /// Kernels from Kernels.metal, compiled into the app's default.metallib at build time.
-    private static func kernel(_ name: String) -> CIColorKernel? {
+    static func kernel(_ name: String) -> CIColorKernel? {
         guard let url = Bundle(for: ImageProcessingService.self).url(forResource: "default", withExtension: "metallib"),
               let data = try? Data(contentsOf: url) else { return nil }
         return try? CIColorKernel(functionName: name, fromMetalLibraryData: data)

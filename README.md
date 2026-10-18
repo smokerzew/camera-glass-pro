@@ -37,6 +37,9 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Vignette | Adjust slider: + darkens, − lightens the corners with a soft radial falloff (in exposure stops, so hues stay true). Framed on the final cropped picture, applied before grain. | Real |
 | Halation | Adjust slider: the red-orange glow real film gets around bright lights (CineStill style). Only highlights feed it, so dark areas stay clean. | Real |
 | Subject vs background | SUBJECT pop-up > ADJUST: brightness, saturation and warmth for just the subject or just the background, using the same on-device subject mask as Portrait. | Real |
+| Film stocks | FILTER > Film tab: Portra 400, Ektar 100, Gold 200, Fuji 400H, CineStill 800T and Tri-X 400, built from tone curves, white balance and split toning. Picking one also sets matching grain (and CineStill its halation) unless you already set those. Strength slider applies. | Real (inspired by, not measured from, the film stocks) |
+| Smooth Skin | Adjust slider: softens skin only, on faces found on-device (Vision), on skin-colored pixels and never across edges, so eyes, lips and hair stay sharp. Photos without faces are unchanged. | Real |
+| Perspective | Crop editor: Vertical and Horizontal keystone sliders straighten leaning buildings and walls; the frame stays filled (no empty corners). Photos only. | Real |
 | Color Mixer | In Adjust: pick one of eight colors (red, orange, yellow, green, aqua, blue, purple, magenta) and shift its hue, saturation and luminance. Neighboring colors blend smoothly and grays are never touched. Runs as a 3D lookup table in Core Image. | Real |
 | Night Look | Shadow lift plus noise reduction | Real filter. It is not a capture mode. |
 | Flash | Off / Auto / On. "On" plays a screen flash when you use the center control. | Visual only |
