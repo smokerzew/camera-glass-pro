@@ -259,3 +259,71 @@ final class RedactionTargetTests: XCTestCase {
         XCTAssertEqual(vm.adjustments.faceRedaction, .blur, "face setting is kept")
     }
 }
+
+final class ResetAreaTests: XCTestCase {
+    private var busy: PhotoAdjustmentState {
+        var s = PhotoAdjustmentState()
+        s.exposure = 0.5
+        s.nightLook = true
+        s.warmth = 0.3
+        s.colorMixer[.blue, .hue] = 0.4
+        s.sharpen = 0.5
+        s.vignette = 0.4
+        s.grain = 0.3
+        s.localAdjustments = [LocalAdjustment(shape: .radial)]
+        s.filter = .portra
+        s.filterStrength = 0.6
+        s.speedBlur = 0.5
+        s.doubleExposure = 0.5
+        s.faceRedaction = .blur
+        s.colorSplash = true
+        s.dispersion = 0.5
+        s.rotation = 1
+        return s
+    }
+
+    func testEachAreaResetsOnlyItself() {
+        let light = busy.resetting(.light)
+        XCTAssertEqual(light.exposure, 0)
+        XCTAssertFalse(light.nightLook)
+        XCTAssertEqual(light.filter, .portra, "filters stay")
+        XCTAssertEqual(light.warmth, 0.3, "other tabs stay")
+
+        let color = busy.resetting(.color)
+        XCTAssertEqual(color.warmth, 0)
+        XCTAssertTrue(color.colorMixer.isNeutral)
+        XCTAssertEqual(color.exposure, 0.5)
+
+        let adjust = busy.resetting(.adjust)
+        XCTAssertEqual(adjust.exposure, 0)
+        XCTAssertEqual(adjust.sharpen, 0)
+        XCTAssertTrue(adjust.localAdjustments.isEmpty)
+        XCTAssertEqual(adjust.filter, .portra, "Adjust's reset keeps the filter")
+        XCTAssertEqual(adjust.speedBlur, 0.5, "and FX")
+        XCTAssertEqual(adjust.rotation, 1, "and the crop")
+
+        let filter = busy.resetting(.filter)
+        XCTAssertEqual(filter.filter, .none)
+        XCTAssertEqual(filter.filterStrength, 1)
+        XCTAssertEqual(filter.exposure, 0.5)
+
+        XCTAssertEqual(busy.resetting(.fxBlur).speedBlur, 0)
+        XCTAssertEqual(busy.resetting(.fxBlur).doubleExposure, 0.5)
+        XCTAssertEqual(busy.resetting(.fxPrivacy).faceRedaction, .none)
+        XCTAssertFalse(busy.resetting(.subjectStyle).colorSplash)
+        XCTAssertEqual(busy.resetting(.subjectCreate).dispersion, 0)
+        XCTAssertFalse(PhotoAdjustmentState().canReset(.light))
+    }
+
+    @MainActor
+    func testResetIsUndoable() {
+        let vm = CameraWorkspaceViewModel(defaults: UserDefaults(suiteName: "Reset-" + UUID().uuidString) ?? .standard)
+        vm.setAdjustment(.exposure, to: 0.5)
+        vm.setFilter(.portra)
+        vm.reset(.light)
+        XCTAssertEqual(vm.adjustments.exposure, 0)
+        XCTAssertEqual(vm.adjustments.filter, .portra)
+        vm.undo()
+        XCTAssertEqual(vm.adjustments.exposure, 0.5)
+    }
+}

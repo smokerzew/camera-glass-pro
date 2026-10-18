@@ -123,13 +123,8 @@ struct FilterPickerView: View {
                         Toggle("Show original", isOn: Binding(get: { vm.showOriginal }, set: { vm.setShowOriginal($0) }))
                     }
                 Spacer()
-                Button("Reset All") {
-                    withAnimation(reduceMotion ? nil : .spring(duration: 0.25)) { vm.resetAllAdjustments() }
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(vm.hasEdits ? Color.yellow : .white.opacity(0.4))
-                .disabled(!vm.hasEdits)
-                .accessibilityHint("Removes every adjustment, filter, style and grain")
+                // Only the filter, its strength and grain; adjustments and FX stay.
+                AreaResetButton(vm: vm, area: .filter)
             }
             .padding(.horizontal, 6)
         }

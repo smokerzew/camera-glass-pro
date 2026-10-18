@@ -48,6 +48,22 @@ struct PagedStack<Page: Hashable, Content: View>: View {
     }
 }
 
+/// Small "Reset" text button for one area of the edit (yellow when there is something to reset).
+struct AreaResetButton: View {
+    @Bindable var vm: CameraWorkspaceViewModel
+    let area: ResetArea
+    var onDark = true
+
+    var body: some View {
+        let active = vm.adjustments.canReset(area)
+        Button(area.title) { vm.reset(area) }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(active ? Color.yellow : (onDark ? Color.white.opacity(0.4) : Color.secondary))
+            .disabled(!active)
+            .accessibilityHint("Resets only this part of the edit")
+    }
+}
+
 /// A labeled slider row in the pop-ups' style (caption, yellow slider, value).
 struct GlassSliderRow: View {
     let title: String

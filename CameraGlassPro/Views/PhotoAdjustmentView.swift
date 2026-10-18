@@ -9,6 +9,7 @@ struct PhotoAdjustmentView: View {
     @State private var isNamingPreset = false
     @State private var presetName = ""
     @State private var section: AdjustGroup = .light
+    @State private var confirmResetEverything = false
 
     var body: some View {
         NavigationStack {
@@ -21,6 +22,13 @@ struct PhotoAdjustmentView: View {
                         ForEach(AdjustGroup.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
+
+                    if let area = ResetArea(section) {
+                        HStack {
+                            Spacer()
+                            AreaResetButton(vm: vm, area: area, onDark: false)
+                        }
+                    }
 
                     switch section {
                     case .light:
@@ -59,8 +67,13 @@ struct PhotoAdjustmentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Reset All", role: .destructive) { vm.resetAllAdjustments() }
-                        .disabled(!vm.hasEdits)
+                    Menu("Reset") {
+                        Button("Reset Adjust Tabs") { vm.reset(.adjust) }
+                            .disabled(!vm.adjustments.canReset(.adjust))
+                        Button("Reset Everything…", role: .destructive) { confirmResetEverything = true }
+                            .disabled(!vm.hasEdits)
+                    }
+                    .disabled(!vm.hasEdits)
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { vm.undo() } label: { Image(systemName: "arrow.uturn.backward") }
@@ -71,6 +84,11 @@ struct PhotoAdjustmentView: View {
                         .accessibilityLabel("Redo")
                     Button("Done") { dismiss() }
                 }
+            }
+            .confirmationDialog("Reset everything?", isPresented: $confirmResetEverything, titleVisibility: .visible) {
+                Button("Reset Everything", role: .destructive) { vm.resetAllAdjustments() }
+            } message: {
+                Text("Removes all adjustments, filters, FX, subject edits and the crop. You can undo it.")
             }
             .alert("Save Style", isPresented: $isNamingPreset) {
                 TextField("Name", text: $presetName)

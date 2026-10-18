@@ -10,6 +10,15 @@ struct FXPickerView: View {
 
     enum Page: String, CaseIterable { case blur, blend, privacy }
 
+    /// The Reset button clears only the page that's showing.
+    private var resetArea: ResetArea {
+        switch page {
+        case .blur: .fxBlur
+        case .blend: .fxBlend
+        case .privacy: .fxPrivacy
+        }
+    }
+
     var body: some View {
         VStack(spacing: 14) {
             Capsule()
@@ -24,6 +33,8 @@ struct FXPickerView: View {
                     .tracking(1.2)
                     .foregroundStyle(.white.opacity(0.9))
                 Spacer()
+                AreaResetButton(vm: vm, area: resetArea)
+                    .padding(.trailing, 12)
                 Button { vm.shuffleLook() } label: {
                     Label("Shuffle", systemImage: "dice")
                         .font(.subheadline.weight(.semibold))

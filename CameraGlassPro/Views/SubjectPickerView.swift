@@ -26,6 +26,11 @@ struct SubjectPickerView: View {
                     .tracking(1.2)
                     .foregroundStyle(.white.opacity(0.9))
                 Spacer()
+                // The Adjust page has its own Reset next to its region buttons.
+                if page != .adjust {
+                    AreaResetButton(vm: vm, area: page == .style ? .subjectStyle : .subjectCreate)
+                        .padding(.trailing, 12)
+                }
                 if vm.isFindingSubject {
                     ProgressView().controlSize(.small).tint(.white)
                 }

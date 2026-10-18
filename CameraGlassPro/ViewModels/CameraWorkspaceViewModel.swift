@@ -1584,6 +1584,16 @@ final class CameraWorkspaceViewModel {
         adjustmentsChanged()
     }
 
+    /// Resets one area only (a tab or pop-up page); everything else stays.
+    func reset(_ area: ResetArea) {
+        let next = adjustments.resetting(area)
+        guard next != adjustments else { return }
+        recordUndoPoint(force: true)
+        adjustments = next
+        adjustmentsChanged()
+    }
+
+    /// Everything: adjustments, filters, FX, subject edits, crop.
     func resetAllAdjustments() {
         recordUndoPoint(force: true)
         adjustments = PhotoAdjustmentState()
