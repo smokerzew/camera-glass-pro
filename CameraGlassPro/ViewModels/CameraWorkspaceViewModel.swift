@@ -1198,7 +1198,7 @@ final class CameraWorkspaceViewModel {
                     state.skinSmoothing = 0 // and skip face detection for every tile
                     state.filterStrength = 1
                     let output = processor.apply(state, to: small)
-                    if let image = processor.context.createCGImage(output, from: small.extent) {
+                    if let image = processor.context.createCGImage(output, from: output.extent) {
                         result[filter] = image
                     }
                 }

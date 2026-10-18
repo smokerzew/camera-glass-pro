@@ -266,10 +266,17 @@ struct CropEditorView: View {
         }
     }
 
-    /// Rotating 90° swaps width and height, so the old crop no longer fits.
+    /// Rotating 90° swaps width and height: a locked aspect turns with the photo (4:3 → 3:4) and the
+    /// crop is re-centered on the rotated picture; freeform goes back to the full frame.
     private func resetCropForShapeChange() {
-        crop = PhotoAdjustmentState.fullCrop
-        if aspect != .freeform { aspect = .freeform }
+        aspect = aspect.rotated
+        guard let preview else { crop = PhotoAdjustmentState.fullCrop; return }
+        let turned = CGSize(width: preview.height, height: preview.width)
+        if let ratio = aspect.ratio(imageSize: turned) {
+            crop = CropAspect.centeredCrop(ratio: ratio, imageSize: turned)
+        } else {
+            crop = PhotoAdjustmentState.fullCrop
+        }
     }
 }
 

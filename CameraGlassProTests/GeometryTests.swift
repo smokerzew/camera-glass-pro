@@ -128,3 +128,19 @@ final class CropMathTests: XCTestCase {
         XCTAssertFalse(vm.isAvailable(.crop), "crop needs a photo")
     }
 }
+
+final class RotatedPreviewTests: XCTestCase {
+    /// The rendered preview takes the rotated shape (no black bars from cutting at the original size).
+    func testRotatedPreviewIsLandscape() throws {
+        let processor = ImageProcessingService.shared
+        let portrait = CIImage(color: CIColor(red: 0.5, green: 0.4, blue: 0.3)).cropped(to: CGRect(x: 0, y: 0, width: 300, height: 400))
+        let source = try XCTUnwrap(processor.context.createCGImage(portrait, from: portrait.extent))
+        var state = PhotoAdjustmentState()
+        state.rotation = 1
+        let preview = try XCTUnwrap(processor.renderPreview(source, adjustments: state))
+        XCTAssertEqual(preview.width, 400)
+        XCTAssertEqual(preview.height, 300)
+        XCTAssertEqual(CropAspect.fourThree.rotated, .threeFour)
+        XCTAssertEqual(CropAspect.square.rotated, .square)
+    }
+}

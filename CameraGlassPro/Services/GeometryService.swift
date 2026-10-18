@@ -106,6 +106,17 @@ enum CropAspect: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The same shape turned 90° (4:3 ↔ 3:4, 16:9 ↔ 9:16), used when the photo is rotated.
+    var rotated: CropAspect {
+        switch self {
+        case .fourThree: .threeFour
+        case .threeFour: .fourThree
+        case .sixteenNine: .nineSixteen
+        case .nineSixteen: .sixteenNine
+        default: self
+        }
+    }
+
     /// Width / height, nil for freeform; `original` uses the image's own ratio.
     func ratio(imageSize: CGSize) -> CGFloat? {
         switch self {

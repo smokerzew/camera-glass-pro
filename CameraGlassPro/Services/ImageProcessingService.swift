@@ -428,8 +428,9 @@ final class ImageProcessingService: @unchecked Sendable {
     func renderPreview(_ source: CGImage, adjustments: PhotoAdjustmentState, subjectMask: CIImage? = nil,
                        backgroundPhoto: CIImage? = nil) -> CGImage? {
         let input = CIImage(cgImage: source)
-        return context.createCGImage(apply(adjustments, to: input, subjectMask: subjectMask,
-                                           backgroundPhoto: backgroundPhoto), from: input.extent)
+        let output = apply(adjustments, to: input, subjectMask: subjectMask, backgroundPhoto: backgroundPhoto)
+        // The output's own size: rotation and crop change it (cutting at the input size left black bars).
+        return context.createCGImage(output, from: output.extent)
     }
 
     func encode(_ image: CIImage, as format: ExportFormat) throws -> Data {
