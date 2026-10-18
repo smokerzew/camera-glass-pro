@@ -99,6 +99,8 @@ final class CameraWorkspaceViewModel {
     var showEffectsPicker = false
     /// FX pop-up (speed blur, tilt-shift, double exposure, blur/pixelate, shuffle) and the brush editor.
     var showFXPicker = false
+    /// Picker for Match Look's reference photo.
+    var showMatchPhotoPicker = false
     var showRedactionEditor = false
     /// Whether Live Photos made from videos keep the video's sound (saved preference).
     private(set) var livePhotoSound = true
@@ -1422,6 +1424,79 @@ final class CameraWorkspaceViewModel {
         setEffect(\.doubleExposure, to: min(max(amount, 0), 1))
     }
 
+    /// Match Look: copies the reference photo's colors and tones onto this photo or video (one undo step).
+    func setLookMatchReference(from item: PhotosPickerItem) {
+        guard let source = photo?.preview ?? video?.poster else { return }
+        let importer = self.importer
+        let processor = self.processor
+        Task { [weak self] in
+            do {
+                let reference = try await importer.loadImage(from: item)
+                let referencePreview = reference.preview
+                let match = await Task.detached(priority: .userInitiated) {
+                    LookMatch.between(source: processor.colorStats(of: source),
+                                      reference: processor.colorStats(of: referencePreview))
+                }.value
+                guard let self else { return }
+                self.recordUndoPoint(force: true)
+                self.adjustments.lookMatch = match
+                self.adjustmentsChanged()
+                self.showToast("Look matched")
+            } catch {
+                let mapped = PhotoImportError.map(error)
+                if mapped != .cancelled {
+                    self?.alert = AppAlert(title: "Couldn't Use Photo", message: mapped.errorDescription ?? "")
+                }
+            }
+        }
+    }
+
+    func setLookMatchAmount(_ amount: Double) {
+        guard var match = adjustments.lookMatch else { return }
+        recordUndoPoint() // one drag = one undo step
+        match.amount = amount.isFinite ? min(max(amount, 0), 1) : 0
+        adjustments.lookMatch = match
+        adjustmentsChanged()
+    }
+
+    func removeLookMatch() {
+        guard adjustments.lookMatch != nil else { return }
+        recordUndoPoint(force: true)
+        adjustments.lookMatch = nil
+        adjustmentsChanged()
+    }
+
+    /// Saves the video frame on screen as a full-resolution photo with the current edits.
+    func saveCurrentFrame() {
+        guard let video, let player else { return }
+        if isPlaying { togglePlayback() }
+        let time = player.currentTime()
+        let processor = self.processor
+        let recipe = adjustments
+        let format = exportFormat
+        let background = customBackground.map { CIImage(cgImage: $0) }
+        isRenderingEffect = true
+        effectMessage = "Saving frame…"
+        effectTask?.cancel()
+        effectTask = Task { [weak self] in
+            do {
+                let data = try await Task.detached(priority: .userInitiated) { () -> Data in
+                    let frame = try await processor.editedFrame(of: video.asset, at: time, adjustments: recipe,
+                                                                backgroundPhoto: background)
+                    return try processor.encode(frame, as: format)
+                }.value
+                try await ScreenCapture.saveImageDataToPhotos(data)
+                guard let self else { return }
+                self.isRenderingEffect = false
+                self.showToast("Frame saved to Photos")
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.isRenderingEffect = false
+                self.alert = AppAlert(title: "Couldn't Save Frame", message: error.localizedDescription)
+            }
+        }
+    }
+
     func chooseDoubleExposurePhoto() {
         pendingDoubleExposure = true
         showBackgroundPhotoPicker = true
@@ -1517,7 +1592,7 @@ final class CameraWorkspaceViewModel {
             guard let png else { return self.showToast("No subject found") }
             ScreenCapture.copyPNG(png)
             do {
-                try await ScreenCapture.savePNGToPhotos(png)
+                try await ScreenCapture.saveImageDataToPhotos(png)
                 self.showToast("Sticker saved to Photos and copied")
             } catch {
                 self.showToast("Sticker copied. Allow Photos access to save it.")

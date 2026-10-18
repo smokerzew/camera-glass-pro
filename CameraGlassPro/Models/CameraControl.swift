@@ -2,7 +2,7 @@ import Foundation
 
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
-    case flash, live, aspect, timer, exposure, styles, filter, adjust, fx, crop, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, format
+    case flash, live, aspect, timer, exposure, styles, filter, adjust, fx, crop, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, frame, format
 
     var id: String { rawValue }
 
@@ -17,7 +17,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
     /// Controls that act on the imported photo or video and are disabled until there is one.
     var requiresMedia: Bool {
         switch self {
-        case .exposure, .styles, .filter, .adjust, .fx, .crop, .depth, .subject, .nightMode, .scopes, .peaking, .zebras, .liveText, .effects, .trim: true
+        case .exposure, .styles, .filter, .adjust, .fx, .crop, .depth, .subject, .nightMode, .scopes, .peaking, .zebras, .liveText, .effects, .trim, .frame: true
         default: false
         }
     }
@@ -27,7 +27,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
         switch self {
         case .flash, .live, .aspect, .timer, .exposure, .nightMode, .format: .camera
         case .adjust, .styles, .filter, .fx, .crop, .depth, .subject, .effects: .edit
-        case .grid, .level, .scopes, .peaking, .zebras, .liveText, .trim: .tools
+        case .grid, .level, .scopes, .peaking, .zebras, .liveText, .trim, .frame: .tools
         }
     }
 
@@ -49,7 +49,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
 extension CameraWorkspaceViewModel {
     /// Whether a control can be used right now (TRIM needs a video, editing controls need media).
     func isAvailable(_ control: CameraControl) -> Bool {
-        if control == .trim { return video != nil }
+        if control == .trim || control == .frame { return video != nil }
         if control == .effects { return canMakeEffects }
         if control == .crop { return photo != nil }
         return !control.requiresMedia || hasMedia
@@ -74,6 +74,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: "scope"
         case .zebras: "line.diagonal"
         case .trim: "timeline.selection"
+        case .frame: "photo.badge.arrow.down"
         case .liveText: "text.viewfinder"
         case .effects: "livephoto.play"
         case .subject: "person.crop.rectangle.stack"
@@ -102,6 +103,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: focusPeaking
         case .zebras: zebras
         case .trim: isTrimmed
+        case .frame: false
         case .liveText: liveTextEnabled
         case .effects: false
         case .subject: adjustments.colorSplash || adjustments.background != .original
@@ -141,6 +143,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: focusPeaking ? "On" : "Off"
         case .zebras: zebras ? "On" : "Off"
         case .trim: isTrimmed ? String(format: "%.1f s to %.1f s", trimStart, trimEnd) : "Full length"
+        case .frame: video != nil ? "Saves the frame on screen" : "Needs a video"
         case .liveText: liveTextEnabled ? "\(recognizedText.count) lines found" : "Off"
         case .effects: canMakeEffects ? "Loop, Bounce, Long Exposure, Live Photo" : "Needs a video or Live Photo"
         case .crop: adjustments.hasGeometry ? "Edited" : "Original framing"
@@ -170,6 +173,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: "Highlights the sharpest edges in red"
         case .zebras: "Stripes the brightest areas that are close to clipping"
         case .trim: "Choose where the video starts and ends"
+        case .frame: "Saves the paused video frame as a full-quality photo with your edits"
         case .liveText: "Finds text you can copy or translate (pauses videos)"
         case .effects: "Makes a Loop, Bounce or Long Exposure, or turns a video into a Live Photo"
         case .subject: "Color Splash and Background Swap for people, pets and objects"
@@ -208,6 +212,7 @@ extension CameraWorkspaceViewModel {
         case .peaking: setFocusPeaking(!focusPeaking)
         case .zebras: setZebras(!zebras)
         case .trim: showTrim = true
+        case .frame: saveCurrentFrame()
         case .liveText: setLiveText(!liveTextEnabled)
         case .effects: openEffectsPicker()
         case .subject: openSubjectPicker()

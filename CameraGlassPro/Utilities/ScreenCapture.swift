@@ -38,8 +38,8 @@ enum ScreenCapture {
         }
     }
 
-    /// Saves PNG data as-is (keeps transparency, e.g. stickers).
-    static func savePNGToPhotos(_ data: Data) async throws {
+    /// Saves encoded image data as-is (PNG keeps transparency, e.g. stickers; HEIF/JPEG for frames).
+    static func saveImageDataToPhotos(_ data: Data) async throws {
         try await requestAddAccess()
         try await PHPhotoLibrary.shared().performChanges {
             PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)

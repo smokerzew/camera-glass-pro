@@ -327,3 +327,50 @@ final class ResetAreaTests: XCTestCase {
         XCTAssertEqual(vm.adjustments.exposure, 0.5)
     }
 }
+
+final class MatchLookTests: XCTestCase {
+    private func pixels(_ r: UInt8, _ g: UInt8, _ b: UInt8, count: Int = 200) -> [UInt8] {
+        (0..<count).flatMap { i in [UInt8(min(255, Int(r) + i % 20)), UInt8(min(255, Int(g) + i % 20)), UInt8(min(255, Int(b) + i % 20)), 255] }
+    }
+
+    func testMatchingAPhotoToItselfChangesNothing() {
+        let stats = ColorStats.from(rgba: pixels(120, 110, 100))
+        let match = LookMatch.between(source: stats, reference: stats)
+        for c in 0..<3 { XCTAssertEqual(match.scale[c], 1, accuracy: 1e-6) }
+        XCTAssertEqual(match.offset[0], 0, accuracy: 1e-6)
+        XCTAssertEqual(match.offset[1], 0, accuracy: 1e-6)
+        XCTAssertTrue(match.isUsable)
+    }
+
+    func testWarmReferenceWarmsTheRender() {
+        let processor = ImageProcessingService.shared
+        let source = ColorStats.from(rgba: pixels(120, 120, 120))
+        let reference = ColorStats.from(rgba: pixels(200, 140, 70))
+        var state = PhotoAdjustmentState()
+        state.lookMatch = LookMatch.between(source: source, reference: reference, amount: 1)
+        let gray = CIImage(color: CIColor(red: 0.47, green: 0.47, blue: 0.47)).cropped(to: CGRect(x: 0, y: 0, width: 64, height: 64))
+        let averaged = processor.apply(state, to: gray).applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: gray.extent)])
+        var pixel = [UInt8](repeating: 0, count: 4)
+        processor.context.render(averaged, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                 format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        XCTAssertGreaterThan(Int(pixel[0]), Int(pixel[2]) + 30, "red above blue: warmer")
+        XCTAssertNotNil(ImageProcessingService.kernel("matchLook"))
+    }
+
+    func testExtremeReferencesAreLimited() {
+        let source = ColorStats(mean: [0.5, 0.5, 0.5], std: [0.2, 0.01, 0.01])
+        let reference = ColorStats(mean: [1, 1, 0], std: [0.9, 0.5, 0.5])
+        let match = LookMatch.between(source: source, reference: reference)
+        XCTAssertLessThanOrEqual(match.scale[0], 1.6)
+        XCTAssertLessThanOrEqual(match.scale[1], 2.0)
+        XCTAssertTrue(match.isUsable)
+    }
+
+    @MainActor
+    func testFrameNeedsAVideo() {
+        let vm = CameraWorkspaceViewModel(defaults: UserDefaults(suiteName: "Frame-" + UUID().uuidString) ?? .standard)
+        XCTAssertFalse(vm.isAvailable(.frame))
+        XCTAssertEqual(CameraControl.frame.group, .tools)
+        XCTAssertEqual(PhotoAdjustmentState().resetting(.fxBlend).lookMatch, nil)
+    }
+}

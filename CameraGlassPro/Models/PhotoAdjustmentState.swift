@@ -59,6 +59,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var tiltShiftPosition: Double = 0.55
     /// Blends the second photo in (0...1): through the subject when one is found, else over everything.
     var doubleExposure: Double = 0
+    /// Colors and tones matched to a reference photo (nil = off).
+    var lookMatch: LookMatch?
     /// Hide every detected face, and painted areas (final framing).
     var faceRedaction: Redaction = .none
     /// Faces or drawing: only the chosen one is hidden (the other's settings are kept for switching back).
@@ -174,6 +176,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         tiltShift = unit(.tiltShift)
         tiltShiftPosition = unit(.tiltShiftPosition, 0.55)
         doubleExposure = unit(.doubleExposure)
+        lookMatch = (try? c.decodeIfPresent(LookMatch.self, forKey: .lookMatch)).flatMap { $0.isUsable ? $0 : nil }
         redactionStrength = unit(.redactionStrength, 0.5)
         dispersion = unit(.dispersion)
         dispersionSize = unit(.dispersionSize, 0.4)

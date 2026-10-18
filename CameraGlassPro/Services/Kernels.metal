@@ -77,3 +77,15 @@ using namespace metal;
     float m = max(blue, max(overcast, night)) * smooth * top.r;
     return float4(m, m, m, 1.0);
 }
+
+// Match Look: per-channel scale/offset in YCbCr (display values), blended by `amount`.
+[[stitchable]] float4 matchLook(coreimage::sample_t s, float3 scale, float3 offset, float amount) {
+    float3 c = pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float y = dot(c, float3(0.299, 0.587, 0.114));
+    float3 t = float3(y, (c.b - y) * 0.564 + 0.5, (c.r - y) * 0.713 + 0.5) * scale + offset;
+    float r = t.x + 1.403 * (t.z - 0.5);
+    float b = t.x + 1.773 * (t.y - 0.5);
+    float g = (t.x - 0.299 * r - 0.114 * b) / 0.587;
+    float3 matched = pow(clamp(float3(r, g, b), 0.0, 1.0), float3(2.2));
+    return float4(mix(s.rgb, matched, amount), s.a);
+}

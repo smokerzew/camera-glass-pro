@@ -8,6 +8,7 @@ struct CameraWorkspaceView: View {
     @State private var vm = CameraWorkspaceViewModel(sessionStore: .standard)
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var backgroundItem: PhotosPickerItem?
+    @State private var matchItem: PhotosPickerItem?
     @Environment(\.scenePhase) private var scenePhase
     @State private var flashOpacity = 0.0
     @State private var motion = MotionLevel()
@@ -47,6 +48,13 @@ struct CameraWorkspaceView: View {
                 guard let item else { return }
                 vm.setCustomBackground(from: item)
                 backgroundItem = nil
+            }
+            .photosPicker(isPresented: $vm.showMatchPhotoPicker, selection: $matchItem,
+                          matching: .images, preferredItemEncoding: .current)
+            .onChange(of: matchItem) { _, item in
+                guard let item else { return }
+                vm.setLookMatchReference(from: item)
+                matchItem = nil
             }
             .task { vm.restoreLastSession() }
             .onChange(of: scenePhase) { _, phase in

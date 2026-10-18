@@ -107,7 +107,30 @@ struct FXPickerView: View {
                     .cameraGlass(.interactive, in: Capsule())
             }
             .buttonStyle(.plain)
-            note("The second photo shows through the subject and the background fades to white, like a film poster. Without a subject it blends over the whole picture. It's the same photo Background Swap uses.")
+            Divider().overlay(Color.white.opacity(0.2))
+            // Match Look: copy another photo's colors and tones.
+            HStack(spacing: 8) {
+                Button { vm.showMatchPhotoPicker = true } label: {
+                    Label(vm.adjustments.lookMatch == nil ? "Match Look of a Photo" : "Change Reference",
+                          systemImage: "eyedropper.halffull")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                        .cameraGlass(.interactive, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Copies the colors and tones of a photo you choose")
+                if vm.adjustments.lookMatch != nil {
+                    Button("Remove") { vm.removeLookMatch() }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.yellow)
+                }
+            }
+            if let match = vm.adjustments.lookMatch {
+                GlassSliderRow(title: "Match Amount", value: match.amount) { vm.setLookMatchAmount($0) }
+            }
+            note("The second photo shows through the subject and the background fades to white, like a film poster. Without a subject it blends over the whole picture. It's the same photo Background Swap uses. Match Look copies a reference photo's colors and tones.")
         }
     }
 

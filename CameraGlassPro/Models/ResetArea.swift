@@ -75,6 +75,7 @@ extension PhotoAdjustmentState {
             next.tiltShiftPosition = d.tiltShiftPosition
         case .fxBlend:
             next.doubleExposure = d.doubleExposure
+            next.lookMatch = d.lookMatch
         case .fxPrivacy:
             next.faceRedaction = d.faceRedaction
             next.redactionTarget = d.redactionTarget

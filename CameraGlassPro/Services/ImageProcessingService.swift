@@ -38,6 +38,10 @@ final class ImageProcessingService: @unchecked Sendable {
             image = reduceNoise(image, amount: a.noiseReduction, extent: input.extent)
         }
 
+        if let match = a.lookMatch {
+            image = applyLookMatch(match, to: image, extent: input.extent)
+        }
+
         if a.skinSmoothing > 0 {
             image = smoothSkin(image, amount: a.skinSmoothing, extent: input.extent)
         }
