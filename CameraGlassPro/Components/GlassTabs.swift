@@ -64,6 +64,26 @@ struct AreaResetButton: View {
     }
 }
 
+/// Dice button that shuffles only one area's settings.
+struct AreaShuffleButton: View {
+    @Bindable var vm: CameraWorkspaceViewModel
+    let area: ResetArea
+    var category: FilterCategory? = nil
+    var onDark = true
+
+    var body: some View {
+        Button { vm.shuffle(area, category: category) } label: {
+            Image(systemName: "dice")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(onDark ? Color.white : Color.primary)
+                .frame(width: 44, height: 32)
+        }
+        .disabled(!vm.hasMedia)
+        .accessibilityLabel("Shuffle")
+        .accessibilityHint("Randomizes only the settings on this tab")
+    }
+}
+
 /// A labeled slider row in the pop-ups' style (caption, yellow slider, value).
 struct GlassSliderRow: View {
     let title: String

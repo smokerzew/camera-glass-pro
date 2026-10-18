@@ -136,15 +136,31 @@ final class FXTests: XCTestCase {
         XCTAssertEqual(decoded.redactionStrokes.count, RedactionStroke.limit)
     }
 
-    @MainActor
-    func testShufflePicksAnotherFilter() {
+    func testShuffleTouchesOnlyItsArea() {
+        var rng = SystemRandomNumberGenerator()
         var state = PhotoAdjustmentState()
         state.filter = .portra
+        state.exposure = 0.3
+        state.speedBlur = 0.4
         for _ in 0..<20 {
-            let next = CameraWorkspaceViewModel.shuffled(state)
-            XCTAssertNotEqual(next.filter, .portra)
-            XCTAssertNotEqual(next.filter, .none)
+            let filter = state.shuffling(.filter, category: .film, using: &rng)!
+            XCTAssertNotEqual(filter.filter, .portra)
+            XCTAssertEqual(filter.filter.category, .film, "stays in the tab")
+            XCTAssertEqual(filter.exposure, 0.3, "adjustments untouched")
+            XCTAssertEqual(filter.speedBlur, 0.4, "FX untouched")
+            XCTAssertEqual(filter.vignette, 0, "effects untouched")
+
+            let light = state.shuffling(.light, using: &rng)!
+            XCTAssertEqual(light.filter, .portra)
+            XCTAssertEqual(light.resetting(.light), state.resetting(.light), "only Light changed")
+
+            let ghost = state.shuffling(.fxGhost, using: &rng)!
+            XCTAssertEqual(ghost.resetting(.fxGhost), state.resetting(.fxGhost), "only Ghost changed")
         }
+        XCTAssertNil(state.shuffling(.fxPrivacy, using: &rng))
+        XCTAssertNil(state.shuffling(.local, using: &rng))
+        let blend = state.shuffling(.fxBlend, hasSecondPhoto: false, using: &rng)!
+        XCTAssertEqual(blend.doubleExposure, 0, "no double exposure without a second photo")
     }
 
     func testStickerIsTrimmedAndTransparent() throws {

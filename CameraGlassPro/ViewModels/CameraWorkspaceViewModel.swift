@@ -1564,24 +1564,20 @@ final class CameraWorkspaceViewModel {
         adjustmentsChanged()
     }
 
-    /// A random look: another filter at a random strength, sometimes with grain, halation or a vignette.
-    func shuffleLook() {
+    /// Shuffles only one area's settings (the tab or page the dice is on). One undo step.
+    func shuffle(_ area: ResetArea, category: FilterCategory? = nil) {
         guard hasMedia else { return }
+        if area == .fxBlend, customBackground == nil, adjustments.lookMatch == nil {
+            showToast("Choose a second photo or a Match Look photo first")
+            return
+        }
+        var rng = SystemRandomNumberGenerator()
+        guard let next = adjustments.shuffling(area, category: category, hasSecondPhoto: customBackground != nil, using: &rng),
+              next != adjustments else { return }
         recordUndoPoint(force: true)
-        adjustments = Self.shuffled(adjustments)
+        adjustments = next
         adjustmentsChanged()
-        showToast(adjustments.filter.label)
-    }
-
-    static func shuffled(_ state: PhotoAdjustmentState) -> PhotoAdjustmentState {
-        var next = state
-        next.filter = PhotoFilter.allCases.filter { $0 != .none && $0 != state.filter }.randomElement() ?? .vivid
-        next.filterStrength = [0.7, 0.85, 1].randomElement() ?? 1
-        next.grain = [0, 0, 0.15, 0.25, 0.35].randomElement() ?? 0
-        next.grainSize = GrainSize.allCases.randomElement() ?? .medium
-        next.halation = [0, 0, 0, 0.3].randomElement() ?? 0
-        next.vignette = [0, 0, 0.15, 0.3].randomElement() ?? 0
-        return next
+        if area == .filter { showToast(adjustments.filter.label) }
     }
 
     /// Saves the edited subject as a transparent PNG sticker to Photos and copies it.

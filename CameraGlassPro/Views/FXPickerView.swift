@@ -36,12 +36,10 @@ struct FXPickerView: View {
                 Spacer()
                 AreaResetButton(vm: vm, area: resetArea)
                     .padding(.trailing, 12)
-                Button { vm.shuffleLook() } label: {
-                    Label("Shuffle", systemImage: "dice")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
+                // Shuffles only the page that's showing (no shuffle for Privacy).
+                if PhotoAdjustmentState.canShuffle(resetArea) {
+                    AreaShuffleButton(vm: vm, area: resetArea)
                 }
-                .accessibilityHint("Tries a random filter, grain and vignette")
                 Button("Done") { close() }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.yellow)

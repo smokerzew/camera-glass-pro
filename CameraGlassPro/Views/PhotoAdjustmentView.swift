@@ -26,6 +26,9 @@ struct PhotoAdjustmentView: View {
                     if let area = ResetArea(section) {
                         HStack {
                             Spacer()
+                            if PhotoAdjustmentState.canShuffle(area) {
+                                AreaShuffleButton(vm: vm, area: area, onDark: false)
+                            }
                             AreaResetButton(vm: vm, area: area, onDark: false)
                         }
                     }

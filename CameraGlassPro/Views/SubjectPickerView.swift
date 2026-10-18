@@ -27,6 +27,9 @@ struct SubjectPickerView: View {
                     .foregroundStyle(.white.opacity(0.9))
                 Spacer()
                 // The Adjust page has its own Reset next to its region buttons.
+                if page == .create {
+                    AreaShuffleButton(vm: vm, area: .subjectCreate)
+                }
                 if page != .adjust {
                     AreaResetButton(vm: vm, area: page == .style ? .subjectStyle : .subjectCreate)
                         .padding(.trailing, 12)

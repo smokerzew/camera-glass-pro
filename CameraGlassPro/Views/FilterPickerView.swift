@@ -24,15 +24,8 @@ struct FilterPickerView: View {
                     .tracking(1.2)
                     .foregroundStyle(.white.opacity(0.9))
                 Spacer()
-                Button {
-                    vm.shuffleLook()
-                    category = vm.adjustments.filter.category
-                } label: {
-                    Image(systemName: "dice").font(.body.weight(.semibold)).foregroundStyle(.white)
-                        .frame(width: 44, height: 32)
-                }
-                .accessibilityLabel("Shuffle")
-                .accessibilityHint("Tries a random filter, grain and vignette")
+                // A random filter from the tab you're on (with strength and grain); nothing else changes.
+                AreaShuffleButton(vm: vm, area: .filter, category: category)
                 Button("Done") { close() }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.yellow)
