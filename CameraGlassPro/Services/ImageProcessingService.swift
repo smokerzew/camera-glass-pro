@@ -99,6 +99,9 @@ final class ImageProcessingService: @unchecked Sendable {
         image = applyGeometry(a, to: image.cropped(to: input.extent))
         let extent = image.extent
 
+        for local in a.localAdjustments where !local.edit.isNeutral {
+            image = applyLocal(local, to: image, extent: extent)
+        }
         if a.vignette != 0 {
             image = vignette(image, amount: a.vignette, extent: extent)
         }
@@ -200,6 +203,49 @@ final class ImageProcessingService: @unchecked Sendable {
         let tight = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 300)).cropped(to: extent)
         // Added in the kernel: Core Image's addition blend also adds alpha, which brightened whole images.
         return kernels.add.apply(extent: extent, arguments: [image, wide, tight, Float(0.9 * k)])?.cropped(to: extent) ?? image
+    }
+
+    /// One graduated or radial filter: the region edit, blended in through its soft mask.
+    func applyLocal(_ local: LocalAdjustment, to image: CIImage, extent e: CGRect) -> CIImage {
+        let l = local.clamped
+        let mask: CIImage?
+        switch l.shape {
+        case .graduated:
+            // Full effect from the edge to `reach * (1 - softness)`, fading to nothing at `reach`.
+            let horizontal = l.edge == .left || l.edge == .right
+            let span = horizontal ? e.width : e.height
+            let reach = CGFloat(l.position) * span
+            let full = max(0, reach * CGFloat(1 - l.softness))
+            let fade = max(full + 1, reach)
+            let (from, to): (CGPoint, CGPoint)
+            switch l.edge {
+            case .top: (from, to) = (CGPoint(x: e.midX, y: e.maxY - full), CGPoint(x: e.midX, y: e.maxY - fade))
+            case .bottom: (from, to) = (CGPoint(x: e.midX, y: e.minY + full), CGPoint(x: e.midX, y: e.minY + fade))
+            case .left: (from, to) = (CGPoint(x: e.minX + full, y: e.midY), CGPoint(x: e.minX + fade, y: e.midY))
+            case .right: (from, to) = (CGPoint(x: e.maxX - full, y: e.midY), CGPoint(x: e.maxX - fade, y: e.midY))
+            }
+            let gradient = CIFilter.linearGradient()
+            gradient.point0 = from
+            gradient.point1 = to
+            gradient.color0 = .white
+            gradient.color1 = .black
+            mask = gradient.outputImage
+        case .radial:
+            let outer = CGFloat(l.size) * hypot(e.width, e.height) / 2
+            let gradient = CIFilter.radialGradient()
+            gradient.center = CGPoint(x: e.minX + CGFloat(l.centerX) * e.width, y: e.maxY - CGFloat(l.centerY) * e.height)
+            gradient.radius0 = Float(outer * CGFloat(1 - l.softness))
+            gradient.radius1 = Float(max(outer, 1))
+            gradient.color0 = l.inverted ? .black : .white
+            gradient.color1 = l.inverted ? .white : .black
+            mask = gradient.outputImage
+        }
+        guard let mask else { return image }
+        let blend = CIFilter.blendWithMask()
+        blend.inputImage = regionEdit(l.edit, to: image)
+        blend.backgroundImage = image
+        blend.maskImage = mask.cropped(to: e)
+        return (blend.outputImage ?? image).cropped(to: e)
     }
 
     /// Darkens (+) or lightens (−) toward the corners with a soft radial falloff, framed on the

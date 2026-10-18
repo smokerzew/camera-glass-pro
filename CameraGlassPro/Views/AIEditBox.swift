@@ -35,10 +35,25 @@ struct AIEditBox: View {
             .cameraGlass(.interactive, in: Capsule())
 
             if let message = vm.aiMessage {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    if let changes = vm.aiChangeSummary {
+                        // What moved, so it can be fine-tuned with the sliders below (marked with ✦).
+                        Text(changes)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.yellow)
+                        HStack(spacing: 8) {
+                            Button("Undo AI Edit", systemImage: "arrow.uturn.backward") { vm.revertAIEdit() }
+                            Button("Keep") { vm.clearAIEdit() }
+                        }
+                        .font(.caption.weight(.semibold))
+                        .buttonStyle(.bordered)
+                        .tint(.yellow)
+                    }
+                }
+                .transition(.opacity)
             } else if let reason = AIEditService.unavailableReason {
                 Text(reason)
                     .font(.footnote)

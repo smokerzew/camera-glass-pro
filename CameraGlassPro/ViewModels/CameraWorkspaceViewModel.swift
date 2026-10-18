@@ -47,6 +47,10 @@ final class CameraWorkspaceViewModel {
     /// AI edit: true while the on-device model works; the last result or problem to show.
     private(set) var isAskingAI = false
     private(set) var aiMessage: String?
+    /// The edit just before and right after the last AI edit (same photo), to show and undo what it moved.
+    private(set) var aiBefore: PhotoAdjustmentState?
+    private(set) var aiAfter: PhotoAdjustmentState?
+    @ObservationIgnored private var aiMediaID: UUID?
 
     // MARK: Video playback
     private(set) var player: AVPlayer?
@@ -1285,18 +1289,77 @@ final class CameraWorkspaceViewModel {
             do {
                 let plan = try await AIEditService.plan(for: text, current: current, photoFacts: facts)
                 guard let self else { return }
-                let next = plan.applied(to: self.adjustments)
-                if next != self.adjustments {
+                let before = self.adjustments
+                let next = plan.applied(to: before)
+                if next != before {
                     self.recordUndoPoint(force: true)
                     self.adjustments = next
                     self.adjustmentsChanged()
                 }
+                self.aiBefore = before
+                self.aiAfter = next
+                self.aiMediaID = self.photo?.id ?? self.video?.id
                 self.aiMessage = plan.summary.isEmpty ? "Done." : plan.summary
             } catch {
                 self?.aiMessage = error.localizedDescription
             }
             self?.isAskingAI = false
         }
+    }
+
+    /// What the last AI edit changed on this photo, for highlighting (empty when it no longer applies).
+    var aiChangedParameters: Set<AdjustmentParameter> {
+        guard let before = aiBefore, let after = aiAfter, aiMediaID == (photo?.id ?? video?.id) else { return [] }
+        return Set(AdjustmentParameter.allCases.filter { after[$0] != before[$0] })
+    }
+
+    /// "Exposure +0.4 EV · Warmth +20 · Look: Portra 400", or nil when there is nothing to show.
+    var aiChangeSummary: String? {
+        guard let before = aiBefore, let after = aiAfter, aiMediaID == (photo?.id ?? video?.id) else { return nil }
+        var parts = AdjustmentParameter.allCases.filter { after[$0] != before[$0] }
+            .map { "\($0.title) \($0.format(after[$0]))" }
+        if after.filter != before.filter { parts.append("Look: \(after.filter.label)") }
+        if after.subjectEdit != before.subjectEdit { parts.append("Subject") }
+        if after.backgroundEdit != before.backgroundEdit { parts.append("Background") }
+        return parts.isEmpty ? "No changes" : parts.joined(separator: " · ")
+    }
+
+    /// Puts back the edit from before the last AI edit (itself undoable).
+    func revertAIEdit() {
+        guard let before = aiBefore, aiMediaID == (photo?.id ?? video?.id) else { return }
+        recordUndoPoint(force: true)
+        adjustments = before
+        clearAIEdit()
+        adjustmentsChanged()
+    }
+
+    func clearAIEdit() {
+        aiBefore = nil
+        aiAfter = nil
+        aiMessage = nil
+    }
+
+    // MARK: Graduated and radial filters
+
+    func addLocal(_ shape: LocalAdjustment.Shape) {
+        guard adjustments.localAdjustments.count < LocalAdjustment.limit else { return }
+        recordUndoPoint(force: true)
+        adjustments.localAdjustments.append(LocalAdjustment(shape: shape))
+        adjustmentsChanged()
+    }
+
+    func updateLocal(_ id: UUID, _ change: (inout LocalAdjustment) -> Void) {
+        guard let index = adjustments.localAdjustments.firstIndex(where: { $0.id == id }) else { return }
+        recordUndoPoint() // one drag = one undo step
+        change(&adjustments.localAdjustments[index])
+        adjustments.localAdjustments[index] = adjustments.localAdjustments[index].clamped
+        adjustmentsChanged()
+    }
+
+    func removeLocal(_ id: UUID) {
+        recordUndoPoint(force: true)
+        adjustments.localAdjustments.removeAll { $0.id == id }
+        adjustmentsChanged()
     }
 
     func setGrainSize(_ size: GrainSize) {

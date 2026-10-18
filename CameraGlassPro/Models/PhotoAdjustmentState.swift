@@ -46,6 +46,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Separate light and color for the subject and for the background (subject mask).
     var subjectEdit = RegionEdit()
     var backgroundEdit = RegionEdit()
+    /// Graduated and radial filters, applied on the final framing.
+    var localAdjustments: [LocalAdjustment] = []
 
     /// Crop (normalized, top-left origin, relative to the rotated/straightened photo), quarter turns
     /// clockwise, horizontal mirror and straighten angle in degrees. Photos only.
@@ -120,6 +122,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         skinSmoothing = min(max(try c.decodeIfPresent(Double.self, forKey: .skinSmoothing) ?? 0, 0), 1)
         subjectEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .subjectEdit)) ?? RegionEdit()
         backgroundEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .backgroundEdit)) ?? RegionEdit()
+        localAdjustments = ((try? c.decodeIfPresent([LocalAdjustment].self, forKey: .localAdjustments)) ?? [])
+            .prefix(LocalAdjustment.limit).map(\.clamped)
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false
         filter = (try? c.decodeIfPresent(PhotoFilter.self, forKey: .filter)) ?? .none
         filterStrength = min(max(try c.decodeIfPresent(Double.self, forKey: .filterStrength) ?? 1, 0), 1)

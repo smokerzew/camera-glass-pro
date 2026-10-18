@@ -25,6 +25,7 @@ struct PhotoAdjustmentView: View {
                                 set: { vm.setAdjustment(parameter, to: $0) }
                             ),
                             isModified: vm.adjustments.isModified(parameter),
+                            changedByAI: vm.aiChangedParameters.contains(parameter),
                             onReset: { vm.resetAdjustment(parameter) }
                         )
                     }
@@ -44,6 +45,8 @@ struct PhotoAdjustmentView: View {
                     .tint(.yellow)
 
                     ColorMixerSection(vm: vm)
+
+                    LocalAdjustmentsSection(vm: vm)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
@@ -152,6 +155,7 @@ struct AdjustmentSliderRow: View {
     let parameter: AdjustmentParameter
     @Binding var value: Double
     let isModified: Bool
+    var changedByAI = false
     let onReset: () -> Void
 
     var body: some View {
@@ -159,6 +163,12 @@ struct AdjustmentSliderRow: View {
             HStack {
                 Label(parameter.title, systemImage: parameter.systemImage)
                     .font(.subheadline.weight(.medium))
+                if changedByAI {
+                    Image(systemName: "sparkles")
+                        .font(.caption)
+                        .foregroundStyle(.yellow)
+                        .accessibilityLabel("Changed by AI")
+                }
                 Spacer()
                 Text(parameter.format(value))
                     .font(.subheadline.monospacedDigit())
