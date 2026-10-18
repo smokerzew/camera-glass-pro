@@ -99,14 +99,21 @@ final class Pack5Tests: XCTestCase {
 
     // MARK: Night stacking
 
-    /// A soft checkerboard scene, 256 px.
+    /// A soft, non-repeating blotchy scene, 256 px (a repeating pattern can't be lined up unambiguously).
     private var scene: CIImage {
         let e = CGRect(x: 0, y: 0, width: 256, height: 256)
-        let checker = CIFilter(name: "CICheckerboardGenerator", parameters: [
-            "inputColor0": CIColor(red: 0.2, green: 0.2, blue: 0.2), "inputColor1": CIColor(red: 0.6, green: 0.6, blue: 0.6),
-            "inputWidth": 24,
-        ])?.outputImage ?? CIImage(color: .gray)
-        return checker.applyingGaussianBlur(sigma: 2).cropped(to: e)
+        let big = e.insetBy(dx: -40, dy: -40)
+        return (CIFilter(name: "CIRandomGenerator")?.outputImage ?? CIImage.empty())
+            .transformed(by: CGAffineTransform(translationX: 3000, y: 1000)) // a different patch from the noise below
+            .cropped(to: big)
+            .settingAlphaOne(in: big)
+            .applyingGaussianBlur(sigma: 5)
+            .applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 3, kCIInputSaturationKey: 0])
+            .applyingFilter("CIColorMatrix", parameters: [ // squeeze into 0.2...0.6 so noise never clips
+                "inputRVector": CIVector(x: 0.4, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 0.4, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: 0.4, w: 0), "inputBiasVector": CIVector(x: 0.2, y: 0.2, z: 0.2, w: 0),
+            ])
+            .cropped(to: e)
     }
 
     /// The scene plus its own monochrome noise (about ±0.1), different for each `seed`.
