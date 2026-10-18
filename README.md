@@ -8,12 +8,10 @@ A native SwiftUI iPhone app with a camera-style workspace for photos you **alrea
 
 | Item | Status |
 |---|---|
-| Source code, Xcode project, scheme, tests | Complete. Written on Windows. |
-| Compiled with Xcode | **Not yet.** There was no macOS or Xcode in the authoring environment. |
-| Unit tests executed | **Not yet.** They run on the first Mac or CI build. |
-| `.ipa` | **Not produced yet.** Build it with the GitHub Actions workflow or on a Mac (see below). |
-
-The first Xcode build may find a few compile errors that a static review missed. They should be small, local fixes.
+| Source code, Xcode project, scheme, tests | Written on Windows. |
+| Compiled and tested | Every push to `main` is built and unit-tested on GitHub Actions (macos-26, Xcode 26). |
+| `.ipa` | CI publishes an unsigned IPA to the `latest` release; install it with Sideloadly. |
+| Real iPhone | Features from the last several packs (including Pack 5 below) have not been tried on a device yet. |
 
 ## Requirements
 
@@ -62,7 +60,7 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Flash | Off / Auto / On. "On" plays a screen flash when you use the center control. | Visual only |
 | Live | Shows a LIVE badge | Preference only |
 | Timer | 3 s / 10 s countdown before the photo picker opens | Real delay |
-| Modes | PHOTO is the working mode. PORTRAIT adds a vignette; VIDEO, SLO-MO and TIME-LAPSE play imported videos; CINEMATIC and PANO say "Preview only". | Simulated looks |
+| Modes | PHOTO is the working mode. PORTRAIT turns on real Portrait; VIDEO, SLO-MO and TIME-LAPSE play imported videos; CINEMATIC and PANO are described above. | Real |
 | Export | Original as an exact byte-for-byte copy, or an edited copy (JPEG/HEIC/PNG) at full resolution. Optional crop to framing and optional burned-in guides. Uses the native share sheet (Save Image, Files, AirDrop). | Real |
 | ⠿ panel | FLASH, LIVE, ASPECT, TIMER, EXPOSURE (slider), STYLES (adjustments), FILTER (Vivid/Mono/Noir/Chrome/Fade/Instant), DEPTH, NIGHT MODE, FORMAT (export format) | Real except Flash/Live (visual) and Depth (preview-only vignette) |
 | Video | Import videos from Photos or Files. Full-screen looping playback; the red center control plays/pauses (stop square while playing) with a running timecode. Exposure, Styles, Filter and Night Look apply live per frame and to the edited MOV export. | Real |
@@ -94,6 +92,14 @@ If you build with an older Xcode (16.x), the `#if compiler(>=6.2)` guards drop t
 | Subject | SUBJECT pop-up: Color Splash (subject in color, background black and white) and Background Swap (Original, Blur, Black, White, Gray, Sky, Sunset, or one of your photos), using on-device subject detection; combines with Portrait. Photos, video frames and exports. | Real |
 | Crop | CROP opens a full-screen editor: crop box with corner handles and thirds grid, straighten (+/-45 degrees, auto-zoom so no empty corners), rotate 90, flip, Auto (Vision horizon) and aspect presets (Freeform, Original, Square, 4:3, 3:4, 16:9, 9:16). One undo step; preview and export match. Photos only (videos keep their frame). | Real |
 | Depth tags | PORTRAIT / NATURAL LIGHT (or PORTRAIT OFF) show for about 1.6 s after toggling depth, then fade. | — |
+| 9:16 Story | Export › Edited Copy › 9:16 Story, Blurred Fill: the whole photo centered in a 9:16 frame over a blurred, slightly darker copy of itself (no bars, text or borders). Photos only. | Real |
+| Sky Replace | SUBJECT › Style › SKY: Blue, Golden, Sunset, Overcast or one of your photos (shared with Background Swap) in the detected sky, with Sky Amount; the land gets matching light. Uses the same on-device sky heuristic as the Sky edits, so a plain bright wall near the top can be replaced too. | Real (heuristic sky) |
+| Night shot | NIGHT MODE on a Live Photo (or EFFECTS › NIGHT on a Live Photo or video): up to 16 frames around the moment are lined up (Vision), averaged with anything that moved taken from one frame, then the cleaner shadows are lifted. Opens as a new item at the motion clip's resolution (smaller than the Live Photo's still). Other photos keep the Night Look filter. | Real |
+| PANO | PANO mode: pick 2–8 overlapping photos in order (left to right or right to left), then tap the shutter. Each is projected onto a cylinder, neighbours are lined up with Vision, exposure is matched in the overlap, seams are feathered and the ragged edges cropped. Opens as a new item. Horizontal panoramas only; built from the 2400 px previews. | Real |
+| CINEMATIC | CINEMATIC mode on a video: Portrait blur turns on; tap a person or object to focus on it from that moment (rack focus over 0.4 s), or tap the background to focus there and blur the subjects. Points are listed (and cleared) in SUBJECT › Style. Applies to playback and the edited export (trim and speed aware). | Real |
+| Smooth Slo-Mo | EFFECTS › SMOOTH SLO-MO: up to 5 s of a video or Live Photo played 4× slower, with three new frames made between each pair from the motion (Vision optical flow) instead of repeated frames. Silent. Opens as a new item. | Real |
+| Remove | Controls panel › Edit › REMOVE: paint over a small object, spot or wire; it's filled from its surroundings (seamless color fill plus the texture of the best-matching nearby patch). Undo/redo, Clear All. Best on sky, walls, grass and skin; large or detailed areas can look smeared. Photos only. | Real |
+| Photos app editing | In Photos: Edit › ⋯ › Camera Glass. Filters, Photographic Styles and the Light and Color sliders. Photos keeps the original plus the recipe, so the edit can be reopened in Camera Glass and changed, or reverted in Photos. | Real (extension; needs the extension signed too) |
 | Layout | iOS 27 Camera style: full-screen photo, plain status row, ƒ / shutter / ⠿ over the photo, thumbnail (export) · mode capsule · Files button in the bottom bar. No settings screen. | — |
 
 **Center control:** the big circle imports a photo when none is loaded, or replaces the current one. Touch and hold it for Photos or Files. Its accessibility label says "Import photo" or "Replace photo". It never claims to take a picture.
@@ -249,9 +255,8 @@ Everything is processed on the device. There are no network calls, analytics or 
 
 ## Known limitations
 
-- Not compiled or tested yet (see Build status).
+- Pack 5 features are untested on a real iPhone (see Build status).
 - The level shows phone tilt, not the horizon inside the photo.
-- Modes other than Photo are preview-only looks.
 - Burned-in guides cover the grid and center crosshair only, not the level guide or mode bands.
 - No RAW development. RAW files import through ImageIO's default rendering.
 - No pinch-to-zoom haptics. Haptics fire only on discrete events.

@@ -19,6 +19,9 @@ enum ScreenCapture {
 
     @MainActor
     static func captureKeyWindow() throws -> UIImage {
+        #if PHOTO_EDIT_EXTENSION // the Photos extension has no app window to capture
+        throw CaptureError.noWindow
+        #else
         let windows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
@@ -29,6 +32,7 @@ enum ScreenCapture {
         return renderer.image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
+        #endif
     }
 
     static func saveToPhotos(_ image: UIImage) async throws {
@@ -67,17 +71,25 @@ enum ScreenCapture {
 
     @MainActor
     static func startRecording() async throws {
+        #if PHOTO_EDIT_EXTENSION
+        throw CaptureError.recordingUnavailable
+        #else
         let recorder = RPScreenRecorder.shared()
         guard recorder.isAvailable else { throw CaptureError.recordingUnavailable }
         recorder.isMicrophoneEnabled = false
         try await recorder.startRecording()
+        #endif
     }
 
     @MainActor
     static func stopRecording() async throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("CameraGlass-Screen-\(UUID().uuidString).mov")
+        #if PHOTO_EDIT_EXTENSION
+        throw CaptureError.recordingUnavailable
+        #else
         try await RPScreenRecorder.shared().stopRecording(withOutput: url)
         return url
+        #endif
     }
 }
