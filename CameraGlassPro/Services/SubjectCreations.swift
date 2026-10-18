@@ -56,18 +56,9 @@ enum ParallaxVideo {
         let base = edited.transformed(by: fit).cropped(to: e)
         let m = mask.transformed(by: fit).cropped(to: e)
 
-        // Background plate: the subject's area is filled with a heavy blur, so moving the background
-        // never reveals a second copy of the subject.
-        let grown = m.clampedToExtent().applyingGaussianBlur(sigma: Double(e.width / 40)).cropped(to: e)
-            .applyingFilter("CIColorMatrix", parameters: [
-                "inputRVector": CIVector(x: 3, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 3, z: 0, w: 0),
-                "inputBVector": CIVector(x: 0, y: 0, z: 3, w: 0),
-            ])
-            .applyingFilter("CIColorClamp")
-        let fill = base.clampedToExtent().applyingGaussianBlur(sigma: Double(e.width / 25)).cropped(to: e)
-        let plate = fill.applyingFilter("CIBlendWithMask", parameters: [
-            kCIInputBackgroundImageKey: base, kCIInputMaskImageKey: grown,
-        ]).clampedToExtent()
+        // Background plate with the subject removed (filled from the surrounding background), so moving the
+        // background never reveals a second copy of the subject.
+        let plate = processor.subjectPlate(base, mask: m, extent: e).clampedToExtent()
         let soft = m.clampedToExtent().applyingGaussianBlur(sigma: Double(max(1, e.width / 500))).cropped(to: e)
         let subject = base.applyingFilter("CIBlendWithMask", parameters: [
             kCIInputBackgroundImageKey: CIImage(color: .clear).cropped(to: e), kCIInputMaskImageKey: soft,

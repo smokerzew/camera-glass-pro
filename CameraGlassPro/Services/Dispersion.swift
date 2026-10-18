@@ -99,16 +99,28 @@ extension ImageProcessingService {
         return output.cropped(to: e)
     }
 
-    /// The scene with the subject's area filled by a heavy blur, so moving or removing the subject never
-    /// shows a second copy of it.
+    /// The scene with the subject removed: its area is filled from the surrounding background only
+    /// (a normalized blur that ignores the subject's own pixels), so no smudge of the subject is left behind.
     func subjectPlate(_ image: CIImage, mask: CIImage, extent e: CGRect) -> CIImage {
-        let grown = mask.clampedToExtent().applyingGaussianBlur(sigma: Double(e.width / 40)).cropped(to: e)
+        // Slightly grown mask, so the subject's edge pixels don't bleed into the fill.
+        let grown = mask.clampedToExtent().applyingGaussianBlur(sigma: Double(max(1, e.width / 120))).cropped(to: e)
             .applyingFilter("CIColorMatrix", parameters: [
-                "inputRVector": CIVector(x: 3, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 3, z: 0, w: 0),
-                "inputBVector": CIVector(x: 0, y: 0, z: 3, w: 0),
+                "inputRVector": CIVector(x: 4, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 4, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: 4, w: 0),
             ])
             .applyingFilter("CIColorClamp")
-        let fill = image.clampedToExtent().applyingGaussianBlur(sigma: Double(e.width / 25)).cropped(to: e)
+            .cropped(to: e)
+        // Background only (transparent where the subject is), blurred, then divided by its coverage:
+        // the color matrix un-premultiplies (color / alpha) and makes it opaque again.
+        let background = CIImage(color: .clear).cropped(to: e).applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: image, kCIInputMaskImageKey: grown,
+        ]).cropped(to: e)
+        let fill = background.clampedToExtent()
+            .applyingGaussianBlur(sigma: Double(max(2, e.width / 15)))
+            .cropped(to: e)
+            .applyingFilter("CIColorMatrix", parameters: [
+                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0), "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+            ])
         return fill.applyingFilter("CIBlendWithMask", parameters: [
             kCIInputBackgroundImageKey: image, kCIInputMaskImageKey: grown,
         ]).cropped(to: e)
