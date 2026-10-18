@@ -107,7 +107,7 @@ struct LookRecipe {
         case .shadowBlue: LookRecipe("Shadow Blue", .moody, exposure: -0.1, curve: [(0.0, 0.0), (0.25, 0.215), (0.5, 0.5), (0.75, 0.795), (1.0, 1.0)], saturation: 0.9, shadows: (-0.01, 0.002, 0.02))
         case .freshFood: LookRecipe("Fresh", .food, exposure: 0.1, curve: [(0.0, 0.01), (0.25, 0.235), (0.5, 0.5), (0.75, 0.775), (1.0, 0.99)], saturation: 1.1, vibrance: 0.25, clarity: 0.1)
         case .warmBakery: LookRecipe("Warm Bakery", .food, temperature: 400.0, curve: [(0.0, 0.01), (0.25, 0.235), (0.5, 0.5), (0.75, 0.775), (1.0, 0.99)], saturation: 1.05, highlights: (0.012, 0.008, -0.004))
-        case .crispSalad: LookRecipe("Crisp", .food, curve: [(0.0, 0.0), (0.25, 0.215), (0.5, 0.5), (0.75, 0.795), (1.0, 1.0)], saturation: 1.12, vibrance: 0.3, clarity: 0.2)
+        case .crispSalad: LookRecipe("Crisp Greens", .food, curve: [(0.0, 0.0), (0.25, 0.215), (0.5, 0.5), (0.75, 0.795), (1.0, 1.0)], saturation: 1.12, vibrance: 0.3, clarity: 0.2)
         case .cafeLatte: LookRecipe("Café Latte", .food, temperature: 300.0, curve: [(0.0, 0.04), (0.25, 0.274), (0.5, 0.51), (0.75, 0.76), (1.0, 0.96)], saturation: 0.85, highlights: (0.012, 0.008, 0.0))
         case .juicy: LookRecipe("Juicy", .food, curve: [(0.0, 0.01), (0.25, 0.235), (0.5, 0.5), (0.75, 0.775), (1.0, 0.99)], saturation: 1.25, vibrance: 0.3)
         case .disposable: LookRecipe("Disposable", .y2k, exposure: 0.1, temperature: 200.0, curve: [(0.0, 0.04), (0.25, 0.25), (0.5, 0.52), (0.75, 0.8), (1.0, 0.97)], saturation: 1.1, shadows: (0.0, 0.006, 0.004), highlights: (0.012, 0.006, -0.004))

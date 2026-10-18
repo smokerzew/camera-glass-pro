@@ -37,7 +37,7 @@ final class DetailSkyTests: XCTestCase {
     }
 
     func testNoiseReductionRemovesSpeckleAndColorNoise() {
-        XCTAssertNotNil(ImageProcessingService.kernel("chromaDenoise"))
+        XCTAssertNotNil(ImageProcessingService.kernel("denoise"))
         var state = PhotoAdjustmentState()
         state.noiseReduction = 1
         let rect = CGRect(x: 64, y: 64, width: 128, height: 128)

@@ -50,12 +50,18 @@ using namespace metal;
     return float4(s.rgb + shadows * (1.0 - m) * min(1.0, m * 12.0) + highlights * m, s.a);
 }
 
-// Color noise reduction: keeps each pixel's own brightness (detail) but takes its color from a blurred
-// copy, which removes the red/green/blue speckle of night shots without softening edges.
-[[stitchable]] float4 chromaDenoise(coreimage::sample_t s, coreimage::sample_t blurred, float amount) {
+// Noise reduction. Brightness: averaged with a lightly blurred copy except where the difference is big
+// enough to be a real edge (judged on display values). Color: taken from a wider blur, which removes the
+// red/green/blue speckle of night shots. Average brightness is unchanged.
+[[stitchable]] float4 denoise(coreimage::sample_t s, coreimage::sample_t fine, coreimage::sample_t wide, float amount) {
     float3 w = float3(0.2126, 0.7152, 0.0722);
-    float3 smoothed = dot(s.rgb, w) + (blurred.rgb - dot(blurred.rgb, w));
-    return float4(mix(s.rgb, smoothed, amount), s.a);
+    float y = dot(s.rgb, w);
+    float yf = dot(fine.rgb, w);
+    float gap = abs(pow(max(y, 0.0), 1.0 / 2.2) - pow(max(yf, 0.0), 1.0 / 2.2));
+    float edge = smoothstep(0.03 + 0.09 * amount, 0.08 + 0.2 * amount, gap);
+    float yOut = mix(y, yf, amount * (1.0 - edge));
+    float3 color = mix(s.rgb - y, wide.rgb - dot(wide.rgb, w), amount);
+    return float4(yOut + color, s.a);
 }
 
 // How sky-like each pixel is (0...1): blue sky, bright overcast or dark night sky, smooth (no texture),

@@ -2,18 +2,14 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 
 extension ImageProcessingService {
-    /// Noise Reduction: Core Image luminance noise reduction plus color-noise removal (Metal kernel).
+    /// Noise Reduction: edge-aware brightness smoothing plus color-noise removal, in one Metal kernel.
     func reduceNoise(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
-        guard amount > 0 else { return image }
+        guard amount > 0, let kernel = Self.kernel("denoise") else { return image }
         let k = min(amount, 1)
-        let luma = image.applyingFilter("CINoiseReduction", parameters: [
-            "inputNoiseLevel": 0.01 + 0.05 * k, "inputSharpness": 0.4,
-        ]).cropped(to: extent)
-        guard let kernel = Self.kernel("chromaDenoise") else { return luma }
-        let blurred = luma.clampedToExtent()
-            .applyingGaussianBlur(sigma: Double(max(1, extent.width / 500)) * (0.5 + k))
-            .cropped(to: extent)
-        return kernel.apply(extent: extent, arguments: [luma, blurred, Float(k)])?.cropped(to: extent) ?? luma
+        let base = image.clampedToExtent()
+        let fine = base.applyingGaussianBlur(sigma: Double(max(1, extent.width / 800)) * (0.6 + k)).cropped(to: extent)
+        let wide = base.applyingGaussianBlur(sigma: Double(max(1, extent.width / 300)) * (0.5 + k)).cropped(to: extent)
+        return kernel.apply(extent: extent, arguments: [image, fine, wide, Float(k)])?.cropped(to: extent) ?? image
     }
 
     /// Sharpen: luminance-only sharpening sized to the picture, so preview and export match and colors don't fringe.
