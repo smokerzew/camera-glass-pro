@@ -26,8 +26,8 @@ enum CameraControl: String, CaseIterable, Identifiable {
     var group: PanelGroup {
         switch self {
         case .flash, .live, .aspect, .timer, .exposure, .nightMode, .format: .camera
-        case .adjust, .styles, .filter, .fx, .liquify, .remove, .crop, .depth, .subject, .effects: .edit
-        case .grid, .level, .scopes, .peaking, .zebras, .liveText, .trim, .frame: .tools
+        case .adjust, .styles, .filter, .fx, .liquify, .crop, .depth, .subject, .effects: .edit
+        case .remove, .grid, .level, .scopes, .peaking, .zebras, .liveText, .trim, .frame: .tools
         }
     }
 

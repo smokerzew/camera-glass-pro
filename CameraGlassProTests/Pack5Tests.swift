@@ -298,7 +298,13 @@ final class Pack5Tests: XCTestCase {
     func testInBetweenFrameMovesTheSquareHalfway() throws {
         XCTAssertNotNil(ImageProcessingService.interpolateKernel)
         let a = squareFrame(at: 100), b = squareFrame(at: 124) // moves 24 px right
-        let flow = try XCTUnwrap(FrameInterpolator.flow(from: a, to: b))
+        guard let flow = FrameInterpolator.flow(from: a, to: b) else {
+            #if targetEnvironment(simulator)
+            throw XCTSkip("Vision optical flow isn't available in this simulator; the effect then holds frames")
+            #else
+            return XCTFail("no optical flow")
+            #endif
+        }
         let direction = FrameInterpolator.calibrate(a: a, b: b, flow: flow, context: processor.context)
         let middle = FrameInterpolator.frame(between: a, and: b, flow: flow, t: 0.5, direction: direction)
         XCTAssertEqual(middle.extent, a.extent)
@@ -369,7 +375,7 @@ final class Pack5Tests: XCTestCase {
     }
 
     func testRemoveIsAPhotoControlAndDecodes() throws {
-        XCTAssertEqual(CameraControl.remove.group, .edit)
+        XCTAssertEqual(CameraControl.remove.group, .tools)
         let decoded = try JSONDecoder().decode(PhotoAdjustmentState.self, from: Data(#"{"removeStrokes":"junk"}"#.utf8))
         XCTAssertTrue(decoded.removeStrokes.isEmpty)
         var state = PhotoAdjustmentState()

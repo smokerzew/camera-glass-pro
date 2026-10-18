@@ -1,6 +1,5 @@
 import AVFoundation
 import CoreImage
-import Vision
 
 /// Real Night Mode for Live Photos and videos: several frames around the key moment are lined up and
 /// averaged, which cuts noise the way the Camera app's Night mode does, then the cleaner shadows are lifted.
@@ -38,14 +37,10 @@ enum NightStacker {
         ]).cropped(to: e)
     }
 
-    /// Translation that lines `frame` up with `reference` (Vision registration), in pixels.
+    /// Translation that lines `frame` up with `reference` (hand shake: up to 5% of the frame), in pixels.
     static func offset(of frame: CIImage, to reference: CIImage, context: CIContext) -> CGPoint? {
-        let request = VNTranslationalImageRegistrationRequest(targetedCIImage: frame, options: [:])
-        let handler = VNImageRequestHandler(ciImage: reference, options: [.ciContext: context])
-        guard (try? handler.perform([request])) != nil,
-              let observation = request.results?.first as? VNImageTranslationAlignmentObservation else { return nil }
-        let t = observation.alignmentTransform
-        return CGPoint(x: t.tx, y: t.ty)
+        Registration.translation(of: frame, to: reference, maxShift: CGSize(width: 0.05, height: 0.05),
+                                 minOverlap: 0.8, context: context)
     }
 
     /// `frame`, except where it differs clearly from the reference (something moved): there it's the reference.

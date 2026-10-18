@@ -15,7 +15,6 @@ enum FrameInterpolator {
     static func flow(from a: CIImage, to b: CIImage) -> CIImage? {
         let request = VNGenerateOpticalFlowRequest(targetedCIImage: b, options: [:])
         request.computationAccuracy = .medium
-        request.outputPixelFormat = kCVPixelFormatType_TwoComponent32Float
         let handler = VNImageRequestHandler(ciImage: a, options: [:])
         guard (try? handler.perform([request])) != nil, let buffer = request.results?.first?.pixelBuffer else { return nil }
         return CIImage(cvPixelBuffer: buffer)

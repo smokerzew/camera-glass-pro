@@ -38,7 +38,9 @@ enum PanoStitcher {
         var position = CGPoint.zero
         for index in 1..<images.count {
             let image = images[index]
-            guard let shift = NightStacker.offset(of: image, to: images[index - 1], context: context) else { continue }
+            guard let shift = Registration.translation(of: image, to: images[index - 1],
+                                                       maxShift: CGSize(width: 0.95, height: 0.15), context: context)
+            else { continue }
             let width = image.extent.width
             // A near-zero shift is a duplicate; more than 90% means they don't overlap.
             guard abs(shift.x) > width * 0.05, abs(shift.x) < width * 0.9, abs(shift.y) < height * 0.25 else { continue }
