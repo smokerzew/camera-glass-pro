@@ -131,7 +131,9 @@ final class ImageProcessingService: @unchecked Sendable {
             image = vignette(image, amount: a.vignette, extent: extent)
         }
         // Privacy last (before grain), so nothing after it can reveal what was hidden.
-        image = redact(image, faces: a.faceRedaction, strokes: a.redactionStrokes, strength: a.redactionStrength, extent: extent)
+        image = redact(image, faces: a.redactionTarget == .faces ? a.faceRedaction : .none,
+                       strokes: a.redactionTarget == .drawing ? a.redactionStrokes : [],
+                       strength: a.redactionStrength, extent: extent)
         if a.grain > 0 {
             image = filmGrain(image, amount: a.grain, size: a.grainSize, extent: extent)
         }

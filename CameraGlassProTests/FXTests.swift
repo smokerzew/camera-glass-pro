@@ -71,6 +71,7 @@ final class FXTests: XCTestCase {
         let input = checker()
         for mode in [Redaction.blur, .pixelate] {
             var state = PhotoAdjustmentState()
+            state.redactionTarget = .drawing
             // A thick stroke across the top-left quarter (normalized, top-left origin).
             state.redactionStrokes = [RedactionStroke(mode: mode, width: 0.2, points: [CGPoint(x: 0.05, y: 0.15), CGPoint(x: 0.45, y: 0.15)])]
             let output = processor.apply(state, to: input)
@@ -210,5 +211,51 @@ final class DispersionDirectionTests: XCTestCase {
         XCTAssertGreaterThan(redness(toLeft, left), redness(toLeft, right) + 8, "180° drifts left")
         let toRight = processor.dispersion(photo, mask: mask, amount: 1, size: 0.5, degrees: 0, extent: extent)
         XCTAssertGreaterThan(redness(toRight, right), redness(toRight, left) + 8, "0° drifts right")
+    }
+}
+
+final class RedactionTargetTests: XCTestCase {
+    private func centerPixels(_ image: CIImage) -> [UInt8] {
+        var pixels = [UInt8](repeating: 0, count: 20 * 20 * 4)
+        ImageProcessingService.shared.context.render(
+            image.cropped(to: CGRect(x: 140, y: 140, width: 20, height: 20))
+                .transformed(by: CGAffineTransform(translationX: -140, y: -140)),
+            toBitmap: &pixels, rowBytes: 80, bounds: CGRect(x: 0, y: 0, width: 20, height: 20),
+            format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        return pixels
+    }
+
+    func testOnlyTheChosenTargetIsHidden() {
+        let f = CIFilter.checkerboardGenerator()
+        f.color0 = .black
+        f.color1 = .white
+        f.width = 4
+        let input = (f.outputImage ?? CIImage(color: .gray)).cropped(to: CGRect(x: 0, y: 0, width: 300, height: 300))
+        var state = PhotoAdjustmentState()
+        state.redactionStrokes = [RedactionStroke(mode: .pixelate, width: 1, points: [CGPoint(x: 0.5, y: 0.5)])]
+        state.redactionTarget = .faces // strokes kept but not shown
+        let processor = ImageProcessingService.shared
+        XCTAssertEqual(centerPixels(processor.apply(state, to: input)), centerPixels(input), "Faces mode ignores the drawing")
+        state.redactionTarget = .drawing
+        XCTAssertNotEqual(centerPixels(processor.apply(state, to: input)), centerPixels(input), "Drawing mode hides it")
+    }
+
+    func testOldSavesWithStrokesOpenInDrawingMode() throws {
+        let json = #"{"redactionStrokes":[{"mode":"blur","width":0.1,"points":[[0.5,0.5]]}],"faceRedaction":"blur"}"#
+        let state = try JSONDecoder().decode(PhotoAdjustmentState.self, from: Data(json.utf8))
+        XCTAssertEqual(state.redactionTarget, .drawing)
+    }
+
+    @MainActor
+    func testSwitchingKeepsBothSettings() {
+        let vm = CameraWorkspaceViewModel(defaults: UserDefaults(suiteName: "Target-" + UUID().uuidString) ?? .standard)
+        vm.setFaceRedaction(.blur)
+        XCTAssertTrue(vm.isActive(.fx))
+        let stroke = RedactionStroke(mode: .blur, width: 0.1, points: [CGPoint(x: 0.5, y: 0.5)])
+        vm.setRedactionStrokes([stroke])
+        XCTAssertEqual(vm.adjustments.redactionTarget, .drawing, "drawing switches the target")
+        vm.setRedactionTarget(.faces)
+        XCTAssertEqual(vm.adjustments.redactionStrokes, [stroke], "strokes are kept")
+        XCTAssertEqual(vm.adjustments.faceRedaction, .blur, "face setting is kept")
     }
 }

@@ -1434,9 +1434,29 @@ final class CameraWorkspaceViewModel {
         adjustmentsChanged()
     }
 
+    /// Faces or Drawing. Choosing Drawing stops hiding faces right away (and Faces stops showing the strokes);
+    /// nothing is deleted, so switching back restores it.
+    func setRedactionTarget(_ target: RedactionTarget) {
+        guard target != adjustments.redactionTarget else { return }
+        recordUndoPoint(force: true)
+        adjustments.redactionTarget = target
+        adjustmentsChanged()
+    }
+
+    /// Replaces all strokes at once (the brush editor's undo / redo / clear), as one undoable edit.
+    func setRedactionStrokes(_ strokes: [RedactionStroke]) {
+        let limited = Array(strokes.prefix(RedactionStroke.limit))
+        guard limited != adjustments.redactionStrokes else { return }
+        recordUndoPoint(force: true)
+        adjustments.redactionStrokes = limited
+        adjustments.redactionTarget = .drawing
+        adjustmentsChanged()
+    }
+
     func addRedactionStroke(_ stroke: RedactionStroke) {
         guard !stroke.points.isEmpty, adjustments.redactionStrokes.count < RedactionStroke.limit else { return }
         recordUndoPoint(force: true)
+        adjustments.redactionTarget = .drawing
         adjustments.redactionStrokes.append(stroke)
         adjustmentsChanged()
     }

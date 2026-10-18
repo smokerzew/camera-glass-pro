@@ -61,6 +61,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var doubleExposure: Double = 0
     /// Hide every detected face, and painted areas (final framing).
     var faceRedaction: Redaction = .none
+    /// Faces or drawing: only the chosen one is hidden (the other's settings are kept for switching back).
+    var redactionTarget: RedactionTarget = .faces
     /// How strongly faces and painted areas are hidden: blur amount or pixel block size (0...1).
     var redactionStrength: Double = 0.5
     /// Dispersion: the subject breaks into particles (strength 0...1, particle size 0...1).
@@ -179,6 +181,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none
         redactionStrokes = Array(((try? c.decodeIfPresent([RedactionStroke].self, forKey: .redactionStrokes)) ?? [])
             .prefix(RedactionStroke.limit))
+        // Older saves had no choice: painted strokes mean Drawing.
+        redactionTarget = (try? c.decodeIfPresent(RedactionTarget.self, forKey: .redactionTarget))
+            ?? (redactionStrokes.isEmpty ? .faces : .drawing)
         localAdjustments = ((try? c.decodeIfPresent([LocalAdjustment].self, forKey: .localAdjustments)) ?? [])
             .prefix(LocalAdjustment.limit).map(\.clamped)
         nightLook = try c.decodeIfPresent(Bool.self, forKey: .nightLook) ?? false

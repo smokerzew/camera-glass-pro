@@ -8,6 +8,10 @@ struct RedactionEditorView: View {
     @State private var mode: Redaction = .blur
     @State private var brush = 0.08
     @State private var current: [CGPoint] = []
+    /// Earlier and undone versions of the strokes, so going back never throws work away.
+    @State private var history: [[RedactionStroke]] = []
+    @State private var future: [[RedactionStroke]] = []
+    @State private var confirmClear = false
 
     var body: some View {
         ZStack {
@@ -26,9 +30,15 @@ struct RedactionEditorView: View {
 
     private var topBar: some View {
         HStack {
-            Button("Undo") { vm.removeLastRedactionStroke() }
-                .foregroundStyle(vm.adjustments.redactionStrokes.isEmpty ? .white.opacity(0.4) : .white)
-                .disabled(vm.adjustments.redactionStrokes.isEmpty)
+            Button { undo() } label: { Image(systemName: "arrow.uturn.backward") }
+                .foregroundStyle(history.isEmpty ? .white.opacity(0.4) : .white)
+                .disabled(history.isEmpty)
+                .accessibilityLabel("Undo stroke")
+            Button { redo() } label: { Image(systemName: "arrow.uturn.forward") }
+                .foregroundStyle(future.isEmpty ? .white.opacity(0.4) : .white)
+                .disabled(future.isEmpty)
+                .accessibilityLabel("Redo stroke")
+                .padding(.leading, 18)
             Spacer()
             Text("BLUR & PIXELATE")
                 .font(.caption.weight(.semibold))
@@ -77,7 +87,8 @@ struct RedactionEditorView: View {
                         current.append(p)
                     }
                     .onEnded { _ in
-                        vm.addRedactionStroke(RedactionStroke(mode: mode, width: brush, points: current))
+                        guard !current.isEmpty else { return }
+                        change(to: vm.adjustments.redactionStrokes + [RedactionStroke(mode: mode, width: brush, points: current)])
                         current = []
                     }
             )
@@ -85,6 +96,25 @@ struct RedactionEditorView: View {
         } else {
             ProgressView().tint(.white).frame(width: size.width, height: size.height)
         }
+    }
+
+    /// Applies a new set of strokes and remembers the old one for Undo (a new change clears Redo).
+    private func change(to strokes: [RedactionStroke]) {
+        history.append(vm.adjustments.redactionStrokes)
+        future.removeAll()
+        vm.setRedactionStrokes(strokes)
+    }
+
+    private func undo() {
+        guard let previous = history.popLast() else { return }
+        future.append(vm.adjustments.redactionStrokes)
+        vm.setRedactionStrokes(previous)
+    }
+
+    private func redo() {
+        guard let next = future.popLast() else { return }
+        history.append(vm.adjustments.redactionStrokes)
+        vm.setRedactionStrokes(next)
     }
 
     private var controls: some View {
@@ -99,9 +129,14 @@ struct RedactionEditorView: View {
                 vm.setEffect(\.redactionStrength, to: min(max($0, 0), 1))
             }
             .padding(.horizontal, 20)
-            Button("Clear All", role: .destructive) { vm.clearRedactionStrokes() }
+            Button("Clear All", role: .destructive) { confirmClear = true }
                 .font(.subheadline.weight(.semibold))
                 .disabled(vm.adjustments.redactionStrokes.isEmpty)
+                .confirmationDialog("Clear every stroke?", isPresented: $confirmClear, titleVisibility: .visible) {
+                    Button("Clear All", role: .destructive) { change(to: []) }
+                } message: {
+                    Text("You can bring them back with Undo.")
+                }
         }
         .padding(.bottom, 16)
     }

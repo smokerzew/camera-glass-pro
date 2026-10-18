@@ -93,7 +93,7 @@ extension CameraWorkspaceViewModel {
         case .filter: adjustments.filter != .none
         case .adjust: false
         case .fx: adjustments.speedBlur > 0 || adjustments.tiltShift > 0 || adjustments.doubleExposure > 0
-            || adjustments.faceRedaction != .none || !adjustments.redactionStrokes.isEmpty
+            || (adjustments.redactionTarget == .faces ? adjustments.faceRedaction != .none : !adjustments.redactionStrokes.isEmpty)
         case .depth: depthEffect
         case .nightMode: adjustments.nightLook
         case .grid: gridStyle != .off

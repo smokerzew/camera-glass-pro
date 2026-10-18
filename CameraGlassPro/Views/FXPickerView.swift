@@ -101,37 +101,39 @@ struct FXPickerView: View {
     }
 
     private var privacyPage: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Text("FACES")
-                    .font(.caption2.weight(.semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.85))
-                    .frame(width: 60, alignment: .leading)
+        let target = vm.adjustments.redactionTarget
+        return VStack(alignment: .leading, spacing: 12) {
+            // Hide faces or what you draw, one or the other.
+            GlassTabs(tabs: RedactionTarget.allCases, selection: Binding(get: { vm.adjustments.redactionTarget },
+                                                                       set: { vm.setRedactionTarget($0) })) { $0.label }
+            if target == .faces {
                 GlassTabs(tabs: Redaction.allCases, selection: Binding(get: { vm.adjustments.faceRedaction },
                                                                      set: { vm.setFaceRedaction($0) })) { $0.label }
+            } else {
+                HStack(spacing: 8) {
+                    Button { vm.showRedactionEditor = true } label: {
+                        Label("Draw to Blur or Pixelate", systemImage: "scribble")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 36)
+                            .cameraGlass(.interactive, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    if !vm.adjustments.redactionStrokes.isEmpty {
+                        Text("\(vm.adjustments.redactionStrokes.count) painted")
+                            .font(.caption)
+                            .foregroundStyle(.yellow)
+                    }
+                }
             }
             GlassSliderRow(title: "Strength", value: vm.adjustments.redactionStrength) {
                 vm.setEffect(\.redactionStrength, to: min(max($0, 0), 1))
             }
-            .opacity(vm.adjustments.faceRedaction != .none || !vm.adjustments.redactionStrokes.isEmpty ? 1 : 0.4)
-            HStack(spacing: 8) {
-                Button { vm.showRedactionEditor = true } label: {
-                    Label("Draw to Blur or Pixelate", systemImage: "scribble")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 36)
-                        .cameraGlass(.interactive, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                if !vm.adjustments.redactionStrokes.isEmpty {
-                    Text("\(vm.adjustments.redactionStrokes.count) painted")
-                        .font(.caption)
-                        .foregroundStyle(.yellow)
-                }
-            }
-            note("Faces are found on-device and covered completely. Draw over anything else you want hidden, like plates, names or screens.")
+            .opacity(vm.isActive(.fx) ? 1 : 0.4)
+            note(target == .faces
+                 ? "Every face found on-device is covered completely. Switch to Drawing to hide only what you paint instead."
+                 : "Only what you paint is hidden; faces are left as they are. Your face setting comes back if you switch to Faces.")
         }
     }
 

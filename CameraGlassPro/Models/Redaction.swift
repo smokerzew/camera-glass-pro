@@ -9,6 +9,14 @@ enum Redaction: String, Codable, CaseIterable, Identifiable, Sendable {
     var label: String { self == .none ? "Off" : rawValue.capitalized }
 }
 
+/// What Blur & Pixelate hides: every detected face, or only what you draw. One at a time.
+enum RedactionTarget: String, Codable, CaseIterable, Identifiable, Sendable {
+    case faces, drawing
+
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+}
+
 /// One finger stroke painted in the Blur & Pixelate editor.
 struct RedactionStroke: Equatable, Codable, Sendable {
     var mode: Redaction
