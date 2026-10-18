@@ -60,7 +60,7 @@ struct EffectsPickerView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 6)
             } else {
-                Text("Import a video or a Live Photo to make a Loop, Bounce or Long Exposure.")
+                Text("Import a video or a Live Photo to make a Loop, Bounce, Night shot or Long Exposure.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
@@ -93,6 +93,7 @@ struct EffectsPickerView: View {
         case .loop: "Repeats the clip as a seamless loop"
         case .bounce: "Plays the clip forward and backward"
         case .longExposure: "Blends the frames into one photo, like a slow shutter"
+        case .night: "Lines up and averages frames around this moment for a clean, brighter night shot"
         case .reverse: "Plays the clip backward"
         case .speedRamp: "Fast at the start and end, slow motion in the middle"
         case .stopMotion: "Choppy, few pictures a second, like stop-motion animation"

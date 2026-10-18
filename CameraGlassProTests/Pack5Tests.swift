@@ -94,4 +94,81 @@ final class Pack5Tests: XCTestCase {
         let round = try JSONDecoder().decode(PhotoAdjustmentState.self, from: JSONEncoder().encode(state))
         XCTAssertEqual(round, state)
     }
+
+    // MARK: Night stacking
+
+    /// A soft checkerboard scene, 256 px.
+    private var scene: CIImage {
+        let e = CGRect(x: 0, y: 0, width: 256, height: 256)
+        let checker = CIFilter(name: "CICheckerboardGenerator", parameters: [
+            "inputColor0": CIColor(red: 0.2, green: 0.2, blue: 0.2), "inputColor1": CIColor(red: 0.6, green: 0.6, blue: 0.6),
+            "inputWidth": 24,
+        ])?.outputImage ?? CIImage(color: .gray)
+        return checker.applyingGaussianBlur(sigma: 2).cropped(to: e)
+    }
+
+    /// The scene plus its own monochrome noise (about ±0.1), different for each `seed`.
+    private func noisy(_ seed: Int) -> CIImage {
+        let e = scene.extent
+        let noise = (CIFilter(name: "CIRandomGenerator")?.outputImage ?? CIImage.empty())
+            .transformed(by: CGAffineTransform(translationX: CGFloat(seed * 97), y: CGFloat(seed * 61)))
+            .cropped(to: e)
+            .settingAlphaOne(in: e)
+            .applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: 0.2, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0.2, y: 0, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0.2, y: 0, z: 0, w: 0), "inputBiasVector": CIVector(x: -0.1, y: -0.1, z: -0.1, w: 0),
+            ])
+        return noise.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: scene])
+            .settingAlphaOne(in: e).cropped(to: e)
+    }
+
+    /// Root-mean-square difference from the clean scene, in 0...255 (green channel, middle 128 px).
+    private func error(_ image: CIImage, against clean: CIImage) -> Double {
+        let side = 128
+        let bounds = CGRect(x: 64, y: 64, width: side, height: side)
+        func render(_ i: CIImage) -> [UInt8] {
+            var p = [UInt8](repeating: 0, count: side * side * 4)
+            processor.context.render(i, toBitmap: &p, rowBytes: side * 4, bounds: bounds, format: .RGBA8,
+                                     colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            return p
+        }
+        let a = render(image), b = render(clean)
+        var sum = 0.0
+        for i in stride(from: 1, to: a.count, by: 4) { let d = Double(a[i]) - Double(b[i]); sum += d * d }
+        return (sum / Double(side * side)).squareRoot()
+    }
+
+    func testRegistrationFindsTheShift() throws {
+        let shifted = scene.clampedToExtent().transformed(by: CGAffineTransform(translationX: 6, y: 0)).cropped(to: scene.extent)
+        let offset = try XCTUnwrap(NightStacker.offset(of: shifted, to: scene, context: processor.context))
+        XCTAssertEqual(abs(offset.x), 6, accuracy: 1.5)
+        XCTAssertEqual(offset.y, 0, accuracy: 1.5)
+        let realigned = shifted.clampedToExtent().transformed(by: CGAffineTransform(translationX: offset.x, y: offset.y))
+            .cropped(to: scene.extent)
+        XCTAssertLessThan(error(realigned, against: scene), 6, "applying the offset lines the frame back up")
+    }
+
+    func testStackingCutsNoise() {
+        let frames = (0..<12).map { noisy($0) }
+        let single = error(frames[5], against: scene)
+        // Compare before the shadow lift: undo it by comparing against the scene lifted the same way.
+        let stacked = NightStacker.stack(frames, reference: 5, context: processor.context)
+        let lifted = scene.applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": 0.35, "inputHighlightAmount": 1])
+            .cropped(to: scene.extent)
+        XCTAssertEqual(stacked.extent, scene.extent)
+        XCTAssertLessThan(error(stacked, against: lifted), single * 0.6, "averaging 12 frames removes most of the noise")
+    }
+
+    func testDeghostKeepsTheReferenceWhereThingsMoved() {
+        let e = scene.extent
+        let moved = CIImage(color: .white).cropped(to: CGRect(x: 100, y: 100, width: 60, height: 60)).composited(over: scene)
+            .cropped(to: e)
+        let result = NightStacker.deghosted(moved, reference: scene, extent: e)
+        XCTAssertEqual(pixel(result, 130, 130).g, pixel(scene, 130, 130).g, accuracy: 6, "a moved object never ghosts in")
+    }
+
+    func testNightIsAnEffect() {
+        XCTAssertTrue(LiveEffect.allCases.contains(.night))
+        XCTAssertEqual(LiveEffect.night.title, "NIGHT")
+    }
 }

@@ -1048,6 +1048,16 @@ final class CameraWorkspaceViewModel {
                     let url = try LiveEffectsService.newURL("jpg")
                     try data.write(to: url)
                     self?.showEffectResult(url, toast: "Long Exposure created")
+                case .night:
+                    // Videos: around the frame on screen. Live Photos: around the middle, where the photo was taken.
+                    let middle = CMTime(seconds: available.start.seconds + available.duration.seconds / 2, preferredTimescale: 600)
+                    let key = isVideo ? CMTime(seconds: keySeconds, preferredTimescale: 600) : middle
+                    let data = try await LiveEffectsService.night(
+                        from: asset, around: key, range: available, adjustments: recipe, processor: processor)
+                    try Task.checkCancellation()
+                    let url = try LiveEffectsService.newURL("jpg")
+                    try data.write(to: url)
+                    self?.showEffectResult(url, toast: "Night shot created")
                 case .gif:
                     let data = try await LiveEffectsService.gif(from: asset, range: available, adjustments: recipe, processor: processor)
                     try Task.checkCancellation()

@@ -177,7 +177,7 @@ extension CameraWorkspaceViewModel {
         case .liquify: "Push and reshape parts of the photo with your finger"
         case .fx: "Blur, Blend, Ghost, Art, Light, Retro, Pop and Privacy effects"
         case .depth: "Blurs the background behind the subject; tap the f-number to change depth"
-        case .nightMode: "Lifts shadows and reduces noise"
+        case .nightMode: "Live Photos: stacks the motion frames into a clean night shot. Others: lifts shadows and reduces noise"
         case .grid: "Cycles off, rule of thirds and fine grid"
         case .level: "Shows a level that follows your phone's tilt"
         case .scopes: "Cycles Luminance, RGB and RGB Parade exposure scopes"
@@ -219,7 +219,9 @@ extension CameraWorkspaceViewModel {
         case .depth:
             // From the top bar, the f-number readout opens the aperture slider (as in the Camera app).
             if fromTopBar && depthEffect { isApertureDialVisible.toggle() } else { setDepth(!depthEffect) }
-        case .nightMode: setNightLook(!adjustments.nightLook)
+        case .nightMode:
+            // Live Photos get the real thing: their motion frames stacked into a clean night shot (a new item).
+            if photo?.pairedVideoURL != nil, !adjustments.nightLook { runEffect(.night) } else { setNightLook(!adjustments.nightLook) }
         case .grid: setGridStyle(gridStyle.next)
         case .level: setShowLevel(!showLevel)
         case .scopes: setScopeMode(scopeMode.next)
