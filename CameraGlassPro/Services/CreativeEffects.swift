@@ -66,12 +66,15 @@ extension ImageProcessingService {
     }
 
     /// Hides detected faces and painted strokes with a strong blur or pixelation, on the final framing.
-    func redact(_ image: CIImage, faces mode: Redaction, strokes: [RedactionStroke], extent e: CGRect) -> CIImage {
+    /// `strength` (0...1) sets the blur amount and the pixel block size.
+    func redact(_ image: CIImage, faces mode: Redaction, strokes: [RedactionStroke], strength: Double = 0.5,
+                extent e: CGRect) -> CIImage {
         guard mode != .none || !strokes.isEmpty else { return image }
         let longSide = max(e.width, e.height)
-        let blurred = image.clampedToExtent().applyingGaussianBlur(sigma: Double(longSide / 55)).cropped(to: e)
+        let s = CGFloat(min(max(strength, 0), 1))
+        let blurred = image.clampedToExtent().applyingGaussianBlur(sigma: Double(longSide * (0.006 + 0.03 * s))).cropped(to: e)
         let pixelated = image.clampedToExtent().applyingFilter("CIPixellate", parameters: [
-            kCIInputScaleKey: max(4, longSide / 45), kCIInputCenterKey: CIVector(x: e.minX, y: e.minY),
+            kCIInputScaleKey: max(4, longSide * (0.008 + 0.05 * s)), kCIInputCenterKey: CIVector(x: e.minX, y: e.minY),
         ]).cropped(to: e)
         func hidden(_ m: Redaction) -> CIImage { m == .pixelate ? pixelated : blurred }
         func apply(_ source: CIImage, through mask: CIImage, over base: CIImage) -> CIImage {

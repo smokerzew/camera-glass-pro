@@ -81,6 +81,45 @@ final class FXTests: XCTestCase {
         }
     }
 
+    func testRedactionStrengthControlsHowMuchIsHidden() {
+        let f = CIFilter.checkerboardGenerator()
+        f.color0 = .black
+        f.color1 = .white
+        f.width = 24
+        let input = (f.outputImage ?? CIImage(color: .gray)).cropped(to: CGRect(x: 0, y: 0, width: 300, height: 300))
+        let whole = [RedactionStroke(mode: .blur, width: 1, points: [CGPoint(x: 0.5, y: 0.5)])]
+        let rect = CGRect(x: 100, y: 100, width: 100, height: 100)
+        let light = processor.redact(input, faces: .none, strokes: whole, strength: 0, extent: input.extent)
+        let heavy = processor.redact(input, faces: .none, strokes: whole, strength: 1, extent: input.extent)
+        XCTAssertGreaterThan(spread(light, in: rect), spread(heavy, in: rect) + 10)
+    }
+
+    func testDispersionBreaksTheSubjectIntoParticles() {
+        let extent = CGRect(x: 0, y: 0, width: 300, height: 300)
+        let subjectRect = CGRect(x: 80, y: 60, width: 100, height: 180)
+        let photo = CIImage(color: CIColor(red: 0.9, green: 0.1, blue: 0.1)).cropped(to: subjectRect)
+            .composited(over: CIImage(color: CIColor(red: 0.3, green: 0.3, blue: 0.3)).cropped(to: extent))
+        let mask = CIImage(color: .white).cropped(to: subjectRect).composited(over: CIImage(color: .black).cropped(to: extent))
+        var state = PhotoAdjustmentState()
+        state.dispersion = 1
+        state.dispersionSize = 0.5
+        XCTAssertTrue(state.needsSubject)
+        let output = processor.apply(state, to: photo, subjectMask: mask)
+        XCTAssertEqual(output.extent, extent)
+        func redness(_ image: CIImage, _ rect: CGRect) -> Int {
+            let averaged = image.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: rect)])
+            var pixel = [UInt8](repeating: 0, count: 4)
+            processor.context.render(averaged, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                     format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            return Int(pixel[0]) - Int(pixel[1])
+        }
+        let beside = CGRect(x: 185, y: 80, width: 100, height: 160) // right of the subject
+        XCTAssertGreaterThan(redness(output, beside), redness(photo, beside) + 8, "red particles drift out to the right")
+        let rightEdge = CGRect(x: 150, y: 80, width: 28, height: 140)
+        XCTAssertLessThan(redness(output, rightEdge), redness(photo, rightEdge) - 8, "the subject's right side breaks up")
+        XCTAssertEqual(state.withoutSubjectEdits.dispersion, 0)
+    }
+
     func testFaceRedactionWithoutFacesChangesNothing() {
         let input = checker()
         var state = PhotoAdjustmentState()

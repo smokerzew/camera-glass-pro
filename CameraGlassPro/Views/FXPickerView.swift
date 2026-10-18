@@ -111,6 +111,10 @@ struct FXPickerView: View {
                 GlassTabs(tabs: Redaction.allCases, selection: Binding(get: { vm.adjustments.faceRedaction },
                                                                      set: { vm.setFaceRedaction($0) })) { $0.label }
             }
+            GlassSliderRow(title: "Strength", value: vm.adjustments.redactionStrength) {
+                vm.setEffect(\.redactionStrength, to: min(max($0, 0), 1))
+            }
+            .opacity(vm.adjustments.faceRedaction != .none || !vm.adjustments.redactionStrokes.isEmpty ? 1 : 0.4)
             HStack(spacing: 8) {
                 Button { vm.showRedactionEditor = true } label: {
                     Label("Draw to Blur or Pixelate", systemImage: "scribble")

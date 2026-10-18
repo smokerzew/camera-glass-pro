@@ -115,7 +115,16 @@ struct SubjectPickerView: View {
             }
             .disabled(vm.photo == nil)
             .opacity(vm.photo == nil ? 0.45 : 1)
-            Text("Sticker saves a see-through PNG to Photos and copies it for Messages. 3D Video opens as a new item you can save.")
+            GlassSliderRow(title: "Dispersion", value: vm.adjustments.dispersion) {
+                vm.setEffect(\.dispersion, to: min(max($0, 0), 1))
+            }
+            GlassSliderRow(title: "Particle Size", value: vm.adjustments.dispersionSize) {
+                vm.setEffect(\.dispersionSize, to: min(max($0, 0), 1))
+            }
+            .opacity(vm.adjustments.dispersion > 0 ? 1 : 0.4)
+            .disabled(vm.adjustments.dispersion == 0)
+            Text("Sticker saves a see-through PNG to Photos and copies it for Messages. 3D Video opens as a new item you can save. "
+                 + "Dispersion breaks the right side of the subject into drifting particles.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.65))
                 .multilineTextAlignment(.center)

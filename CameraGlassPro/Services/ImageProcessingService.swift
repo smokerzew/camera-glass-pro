@@ -22,6 +22,10 @@ final class ImageProcessingService: @unchecked Sendable {
         let mask = a.needsSubject ? (subjectMask ?? SubjectMasker.mask(for: input, fast: fastMask)) : nil
         if let mask {
             image = composeSubject(a, to: image, mask: mask, backgroundPhoto: backgroundPhoto)
+            if a.dispersion > 0 {
+                image = dispersion(image, mask: mask.cropped(to: input.extent), amount: a.dispersion,
+                                   size: a.dispersionSize, extent: input.extent)
+            }
         }
         if a.doubleExposure > 0, let second = backgroundPhoto {
             image = doubleExposure(image, second: second, mask: mask, amount: a.doubleExposure, extent: input.extent)
@@ -127,7 +131,7 @@ final class ImageProcessingService: @unchecked Sendable {
             image = vignette(image, amount: a.vignette, extent: extent)
         }
         // Privacy last (before grain), so nothing after it can reveal what was hidden.
-        image = redact(image, faces: a.faceRedaction, strokes: a.redactionStrokes, extent: extent)
+        image = redact(image, faces: a.faceRedaction, strokes: a.redactionStrokes, strength: a.redactionStrength, extent: extent)
         if a.grain > 0 {
             image = filmGrain(image, amount: a.grain, size: a.grainSize, extent: extent)
         }

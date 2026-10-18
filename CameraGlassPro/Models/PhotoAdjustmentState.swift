@@ -61,6 +61,11 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var doubleExposure: Double = 0
     /// Hide every detected face, and painted areas (final framing).
     var faceRedaction: Redaction = .none
+    /// How strongly faces and painted areas are hidden: blur amount or pixel block size (0...1).
+    var redactionStrength: Double = 0.5
+    /// Dispersion: the subject breaks into particles (strength 0...1, particle size 0...1).
+    var dispersion: Double = 0
+    var dispersionSize: Double = 0.4
     var redactionStrokes: [RedactionStroke] = []
     /// Graduated and radial filters, applied on the final framing.
     var localAdjustments: [LocalAdjustment] = []
@@ -97,7 +102,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Any edit that needs the subject mask.
     var needsSubject: Bool {
         portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
-            || speedBlur > 0 || doubleExposure > 0
+            || speedBlur > 0 || doubleExposure > 0 || dispersion > 0
     }
 
     /// Same edit with everything that needs a subject switched off (what renders when none is found).
@@ -109,6 +114,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         copy.subjectEdit = RegionEdit()
         copy.backgroundEdit = RegionEdit()
         copy.speedBlur = 0 // double exposure still works without a subject
+        copy.dispersion = 0
         return copy
     }
 
@@ -164,6 +170,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         tiltShift = unit(.tiltShift)
         tiltShiftPosition = unit(.tiltShiftPosition, 0.55)
         doubleExposure = unit(.doubleExposure)
+        redactionStrength = unit(.redactionStrength, 0.5)
+        dispersion = unit(.dispersion)
+        dispersionSize = unit(.dispersionSize, 0.4)
         faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none
         redactionStrokes = Array(((try? c.decodeIfPresent([RedactionStroke].self, forKey: .redactionStrokes)) ?? [])
             .prefix(RedactionStroke.limit))

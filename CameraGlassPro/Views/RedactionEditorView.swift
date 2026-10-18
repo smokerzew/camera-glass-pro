@@ -94,6 +94,11 @@ struct RedactionEditorView: View {
             GlassSliderRow(title: "Brush", value: brush, range: 0.02...0.25,
                            display: { "\(Int(($0 * 100).rounded()))" }) { brush = $0 }
                 .padding(.horizontal, 20)
+            // Blur amount / pixel block size for everything hidden (faces and painted areas).
+            GlassSliderRow(title: mode == .pixelate ? "Pixel Size" : "Blur Strength", value: vm.adjustments.redactionStrength) {
+                vm.setEffect(\.redactionStrength, to: min(max($0, 0), 1))
+            }
+            .padding(.horizontal, 20)
             Button("Clear All", role: .destructive) { vm.clearRedactionStrokes() }
                 .font(.subheadline.weight(.semibold))
                 .disabled(vm.adjustments.redactionStrokes.isEmpty)
