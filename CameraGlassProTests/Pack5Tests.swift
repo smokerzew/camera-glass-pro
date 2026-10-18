@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreImage
+import Photos
 import XCTest
 @testable import CameraGlassPro
 
@@ -368,6 +369,24 @@ final class Pack5Tests: XCTestCase {
         state.removeStrokes = [dot(0.5, 0.5, width: 0.1)]
         XCTAssertTrue(state.isHeavy)
         XCTAssertEqual(try JSONDecoder().decode(PhotoAdjustmentState.self, from: JSONEncoder().encode(state)), state)
+    }
+
+    // MARK: Photos editing extension
+
+    func testPhotosEditRecipeRoundTripsAndIgnoresOtherApps() throws {
+        var state = PhotoAdjustmentState()
+        state.filter = .portra
+        state.exposure = 0.4
+        state.style = .amber
+        let data = try PhotosEditFormat.encode(state)
+        XCTAssertEqual(data.formatIdentifier, "com.cameraglass.edit")
+        XCTAssertTrue(PhotosEditFormat.canHandle(data))
+        XCTAssertEqual(PhotosEditFormat.decode(data), state.clamped())
+        let other = PHAdjustmentData(formatIdentifier: "com.other.app", formatVersion: "1", data: Data("{}".utf8))
+        XCTAssertFalse(PhotosEditFormat.canHandle(other))
+        XCTAssertNil(PhotosEditFormat.decode(other))
+        let broken = PHAdjustmentData(formatIdentifier: "com.cameraglass.edit", formatVersion: "1", data: Data("nope".utf8))
+        XCTAssertNil(PhotosEditFormat.decode(broken), "a damaged recipe starts fresh instead of crashing")
     }
 
     func testNightIsAnEffect() {
