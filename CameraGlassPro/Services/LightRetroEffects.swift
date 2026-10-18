@@ -108,6 +108,52 @@ extension ImageProcessingService {
         return filmGrain(taped, amount: 0.45 * k, size: .medium, extent: e)
     }
 
+    /// 2005 laptop webcam: soft low-resolution detail, a greenish washed-out color with blown highlights,
+    /// visible color banding, speckled color noise in the shadows and dark corners. Blended by `amount`.
+    func webcam(_ image: CIImage, amount: Double, extent e: CGRect) -> CIImage {
+        guard amount > 0 else { return image }
+        let k = min(amount, 1)
+        // Low resolution (about 480 px across), smoothly blown back up: mushy, soft detail.
+        let s = min(1, 480 / max(e.width, e.height))
+        let origin = CGAffineTransform(translationX: -e.minX, y: -e.minY)
+        let lowRes = image.clampedToExtent()
+            .transformed(by: origin.concatenating(CGAffineTransform(scaleX: s, y: s)))
+            .applyingGaussianBlur(sigma: 0.6)
+            .transformed(by: CGAffineTransform(scaleX: 1 / s, y: 1 / s).concatenating(origin.inverted()))
+            .cropped(to: e)
+        // Webcam color: green-cyan cast, low saturation, flat contrast, auto-exposure that blows highlights.
+        let graded = lowRes.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: 0.9, y: 0.08, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0.04, y: 1.0, z: 0.04, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0.12, z: 0.8, w: 0),
+            "inputBiasVector": CIVector(x: 0.006, y: 0.02, z: 0.012, w: 0),
+        ]).applyingFilter("CIColorControls", parameters: [
+            kCIInputSaturationKey: 0.72, kCIInputContrastKey: 0.9, kCIInputBrightnessKey: 0.02,
+        ]).applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: 0.25])
+        // Banding: too few tones (in display values).
+        let banded = graded.applyingFilter("CILinearToSRGBToneCurve")
+            .applyingFilter("CIColorPosterize", parameters: ["inputLevels": 26])
+            .applyingFilter("CISRGBToneCurveToLinear")
+            .cropped(to: e)
+        // Colored sensor speckle, about the size of the webcam's pixels.
+        var noisy = banded
+        if let kernel = Self.kernel("webcamNoise") {
+            let cell = max(1, 1 / s)
+            let cells = CGRect(x: 0, y: 0, width: ceil(e.width / cell) + 2, height: ceil(e.height / cell) + 2)
+            let noise = (CIFilter.randomGenerator().outputImage ?? CIImage(color: .gray))
+                .cropped(to: cells)
+                .settingAlphaOne(in: cells) // the generator's alpha is random too
+                .samplingNearest()
+                .transformed(by: CGAffineTransform(scaleX: cell, y: cell).concatenating(CGAffineTransform(translationX: e.minX, y: e.minY)))
+                .cropped(to: e)
+            noisy = kernel.apply(extent: e, arguments: [banded, noise, Float(k)])?.cropped(to: e) ?? banded
+        }
+        let finished = vignette(noisy, amount: 0.4, extent: e)
+        return image.applyingFilter("CIDissolveTransition", parameters: [
+            kCIInputTargetImageKey: finished, kCIInputTimeKey: k,
+        ]).cropped(to: e)
+    }
+
     /// Halftone print. `balance` -1 shows more black ink, +1 more white paper; `dot` sets the dot size.
     /// Color uses CMYK dots, otherwise black dots on white. `amount` blends with the photo.
     func halftone(_ image: CIImage, amount: Double, dot: Double, balance: Double, color: Bool, extent e: CGRect) -> CIImage {

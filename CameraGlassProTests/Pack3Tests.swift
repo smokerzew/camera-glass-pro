@@ -172,4 +172,29 @@ final class Pack3Tests: XCTestCase {
         XCTAssertEqual(state.resetting(.fxArt).depthMap, 0)
         XCTAssertEqual(state.resetting(.fxLight).vhs, 0.5, "only its own page")
     }
+
+    func testWebcamLooksLikeAnOldWebcam() {
+        // Fine detail (checkerboard) on the left, mid gray on the right.
+        let f = CIFilter.checkerboardGenerator()
+        f.color0 = .black
+        f.color1 = .white
+        f.width = 2
+        let detail = (f.outputImage ?? flat(0.5, 0.5, 0.5)).cropped(to: CGRect(x: 0, y: 0, width: 150, height: 300))
+        let input = detail.composited(over: flat(0.5, 0.5, 0.5))
+        var state = PhotoAdjustmentState()
+        state.webcam = 1
+        let output = processor.apply(state, to: input)
+        XCTAssertEqual(output.extent, extent)
+        let gray = average(output, CGRect(x: 200, y: 120, width: 60, height: 60))
+        XCTAssertGreaterThan(gray[1], gray[0] + 2, "greenish cast")
+        XCTAssertGreaterThan(gray[1], gray[2] + 2)
+        // Detail is mushed: neighbouring checker pixels end up close in value.
+        var row = [UInt8](repeating: 0, count: 40 * 4)
+        processor.context.render(output, toBitmap: &row, rowBytes: 160, bounds: CGRect(x: 40, y: 150, width: 40, height: 1),
+                                 format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        let greens: [Int] = stride(from: 0, to: row.count, by: 4).map { (i: Int) -> Int in Int(row[i + 1]) }
+        XCTAssertLessThan((greens.max() ?? 0) - (greens.min() ?? 0), 120, "soft, low-res detail")
+        XCTAssertNotNil(ImageProcessingService.kernel("webcamNoise"))
+        XCTAssertEqual(state.resetting(.fxRetro).webcam, 0)
+    }
 }

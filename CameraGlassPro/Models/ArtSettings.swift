@@ -55,12 +55,13 @@ enum LightEffect: String, CaseIterable, Identifiable, Sendable {
 
 /// Pages inside FX > Retro.
 enum RetroEffect: String, CaseIterable, Identifiable, Sendable {
-    case vhs, halftone, chroma
+    case vhs, webcam, halftone, chroma
 
     var id: String { rawValue }
     var label: String {
         switch self {
         case .vhs: "VHS"
+        case .webcam: "Webcam"
         case .halftone: "Halftone"
         case .chroma: "Chroma"
         }

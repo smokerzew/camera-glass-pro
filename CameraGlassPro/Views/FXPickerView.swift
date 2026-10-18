@@ -284,6 +284,9 @@ struct FXPickerView: View {
                     case .vhs:
                         GlassSliderRow(title: "VHS", value: a.vhs) { vm.setEffect(\.vhs, to: min(max($0, 0), 1)) }
                         note("Tape color bleed, scan lines, a soft picture and tape noise.")
+                    case .webcam:
+                        GlassSliderRow(title: "Webcam", value: a.webcam) { vm.setEffect(\.webcam, to: min(max($0, 0), 1)) }
+                        note("A 2005 laptop webcam: soft low-res detail, a greenish washed-out color, banding and speckled noise in the shadows.")
                     case .halftone:
                         GlassSliderRow(title: "Halftone", value: a.halftone) { vm.setEffect(\.halftone, to: min(max($0, 0), 1)) }
                         Group {

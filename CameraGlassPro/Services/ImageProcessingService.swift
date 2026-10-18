@@ -205,6 +205,7 @@ final class ImageProcessingService: @unchecked Sendable {
         }
         if a.depthMap > 0 { image = depthMap(image, mask: framedMask, amount: a.depthMap, heat: a.depthHeat, extent: extent) }
         if a.vhs > 0 { image = vhs(image, amount: a.vhs, extent: extent) }
+        if a.webcam > 0 { image = webcam(image, amount: a.webcam, extent: extent) }
         if a.halftone > 0 {
             image = halftone(image, amount: a.halftone, dot: a.halftoneDot, balance: a.halftoneBalance,
                              color: a.halftoneColor, extent: extent)

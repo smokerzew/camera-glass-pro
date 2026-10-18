@@ -127,3 +127,10 @@ using namespace metal;
 [[stitchable]] float4 combineChannels(coreimage::sample_t r, coreimage::sample_t g, coreimage::sample_t b) {
     return float4(r.r, g.g, b.b, g.a);
 }
+
+// Webcam sensor noise: colored speckle, strongest in the shadows (cheap sensors in low light).
+[[stitchable]] float4 webcamNoise(coreimage::sample_t s, coreimage::sample_t noise, float amount) {
+    float y = clamp(dot(s.rgb, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+    float3 speckle = (noise.rgb - 0.5) * 0.09 * amount * (1.0 - y) * (1.0 - y);
+    return float4(max(s.rgb + speckle, 0.0), s.a);
+}

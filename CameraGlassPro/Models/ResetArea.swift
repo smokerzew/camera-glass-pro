@@ -113,6 +113,7 @@ extension PhotoAdjustmentState {
             next.sparkle = d.sparkle
         case .fxRetro:
             next.vhs = d.vhs
+            next.webcam = d.webcam
             next.halftone = d.halftone
             next.halftoneDot = d.halftoneDot
             next.halftoneBalance = d.halftoneBalance

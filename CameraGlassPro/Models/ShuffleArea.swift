@@ -110,6 +110,7 @@ extension PhotoAdjustmentState {
             next = resetting(.fxRetro)
             switch RetroEffect.allCases.randomElement(using: &rng) ?? .vhs {
             case .vhs: next.vhs = random(0.5...1)
+            case .webcam: next.webcam = random(0.6...1)
             case .halftone:
                 next.halftone = random(0.6...1)
                 next.halftoneDot = random(0.2...0.7)

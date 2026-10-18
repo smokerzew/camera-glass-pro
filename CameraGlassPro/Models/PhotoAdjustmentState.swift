@@ -116,6 +116,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var sparkle: Double = 0
     /// Retro FX: VHS, halftone (mix, dot size, black-white balance, color), chroma fringe.
     var vhs: Double = 0
+    /// 2005 laptop webcam look (0 = off).
+    var webcam: Double = 0
     var halftone: Double = 0
     var halftoneDot: Double = 0.4
     var halftoneBalance: Double = 0
@@ -281,6 +283,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         glow = unit(.glow)
         sparkle = unit(.sparkle)
         vhs = unit(.vhs)
+        webcam = unit(.webcam)
         halftone = unit(.halftone)
         halftoneDot = unit(.halftoneDot, 0.4)
         halftoneBalance = min(max((try? c.decodeIfPresent(Double.self, forKey: .halftoneBalance)) ?? 0, -1), 1)
