@@ -26,14 +26,17 @@ final class DetailSkyTests: XCTestCase {
 
     /// Mid-gray with colored speckle, like a high-ISO night shot.
     private var noisy: CIImage {
-        // Random RGB scaled to ±0.06 around 0.3 in one matrix (opaque, no blending of alpha).
-        (CIFilter.randomGenerator().outputImage ?? CIImage(color: .gray))
+        // Random RGB scaled to ±0.06 around 0.3. The generator's alpha is random too, so make it opaque
+        // first; otherwise the color matrix un-premultiplies and blows pixels far past white.
+        let extent = CGRect(x: 0, y: 0, width: 256, height: 256)
+        return (CIFilter.randomGenerator().outputImage ?? CIImage(color: .gray))
+            .settingAlphaOne(in: extent)
             .applyingFilter("CIColorMatrix", parameters: [
                 "inputRVector": CIVector(x: 0.12, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 0.12, z: 0, w: 0),
                 "inputBVector": CIVector(x: 0, y: 0, z: 0.12, w: 0), "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
                 "inputBiasVector": CIVector(x: 0.24, y: 0.24, z: 0.24, w: 1),
             ])
-            .cropped(to: CGRect(x: 0, y: 0, width: 256, height: 256))
+            .cropped(to: extent)
     }
 
     func testNoiseReductionRemovesSpeckleAndColorNoise() {
