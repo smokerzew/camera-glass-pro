@@ -62,6 +62,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Sky Replace: a new sky in the detected sky area (none = off) and how much of it.
     var skyReplace: SkyReplacement = .none
     var skyReplaceAmount: Double = 1
+    /// CINEMATIC mode focus points for videos (with Portrait on): what is sharp from each moment on.
+    var cinematicFocus: [CinematicFocus] = []
     /// Motion blur behind the subject (0...1) and its direction in degrees (0 = horizontal).
     var speedBlur: Double = 0
     var speedAngle: Double = 0
@@ -263,6 +265,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         redactionStrength = unit(.redactionStrength, 0.5)
         dispersion = unit(.dispersion)
         skyReplaceAmount = unit(.skyReplaceAmount, 1)
+        cinematicFocus = Array(((try? c.decodeIfPresent([CinematicFocus].self, forKey: .cinematicFocus)) ?? [])
+            .prefix(CinematicFocus.limit))
         dispersionSize = unit(.dispersionSize, 0.4)
         ghostOpacity = unit(.ghostOpacity)
         ghostDistance = unit(.ghostDistance, 0.25)

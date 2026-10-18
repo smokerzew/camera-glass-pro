@@ -694,6 +694,41 @@ final class CameraWorkspaceViewModel {
     /// 1× normally; ¼× in SLO-MO and 8× in TIME-LAPSE.
     var playbackRate: Float { mode.playbackRate }
 
+    // MARK: Cinematic
+
+    /// CINEMATIC with a video: a tap moves the focus to what was tapped (a subject, or the background)
+    /// from this moment on, with a rack focus. `mediaPoint` is normalized, top-left origin.
+    func addCinematicFocus(at mediaPoint: CGPoint, viewPoint: CGPoint) {
+        guard let video, mode == .cinematic else { return }
+        focusPoint = viewPoint // the yellow box, without metering exposure
+        focusPulse += 1
+        scheduleFocusDim()
+        let time = player?.currentTime() ?? .zero
+        Task { [weak self] in
+            // Decide on the frame as it looks now (without edits) whether the tap was on a subject.
+            let frame = try? await VideoService.frame(of: video.asset, at: time, composition: nil)
+            let onSubject = await Task.detached {
+                frame.map { SubjectMasker.hasSubject(in: CIImage(cgImage: $0), x: mediaPoint.x, y: mediaPoint.y) } ?? true
+            }.value
+            guard let self, self.video?.id == video.id else { return }
+            var keys = self.adjustments.cinematicFocus.filter { abs($0.time - time.seconds) > 0.05 }
+            keys.append(CinematicFocus(time: max(time.seconds, 0), x: mediaPoint.x, y: mediaPoint.y, background: !onSubject))
+            keys.sort { $0.time < $1.time }
+            self.recordUndoPoint(force: true)
+            self.adjustments.cinematicFocus = Array(keys.suffix(CinematicFocus.limit))
+            if !self.adjustments.portrait { self.adjustments.portrait = true }
+            self.adjustmentsChanged()
+            self.showToast(onSubject ? "Focus on subject" : "Focus on background")
+        }
+    }
+
+    func clearCinematicFocus() {
+        guard !adjustments.cinematicFocus.isEmpty else { return }
+        recordUndoPoint(force: true)
+        adjustments.cinematicFocus = []
+        adjustmentsChanged()
+    }
+
     // MARK: Panorama
 
     /// PANO mode with two or more photos picked: the shutter stitches them (touch and hold still imports).
@@ -743,6 +778,7 @@ final class CameraWorkspaceViewModel {
     /// Re-applies the speed when the mode changes during playback.
     func modeChanged() {
         if mode == .portrait, hasMedia, !adjustments.portrait { setDepth(true) }
+        if mode == .cinematic, video != nil, !adjustments.portrait { setDepth(true) }
         guard let player, isPlaying else { return }
         player.rate = playbackRate
     }

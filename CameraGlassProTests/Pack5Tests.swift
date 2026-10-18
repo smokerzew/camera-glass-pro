@@ -231,6 +231,53 @@ final class Pack5Tests: XCTestCase {
         XCTAssertTrue(vm.showPhotosPicker, "with nothing picked the shutter still opens the picker")
     }
 
+    // MARK: Cinematic
+
+    func testCinematicFocusStateRacksBetweenPoints() throws {
+        let keys = [CinematicFocus(time: 2, x: 0.8, y: 0.5), CinematicFocus(time: 0, x: 0.2, y: 0.5)]
+        let start = try XCTUnwrap(CinematicFocus.state(keys, at: 1))
+        XCTAssertEqual(start.current.x, 0.2)
+        XCTAssertNil(start.previous)
+        XCTAssertEqual(start.progress, 1)
+        let racking = try XCTUnwrap(CinematicFocus.state(keys, at: 2.2))
+        XCTAssertEqual(racking.current.x, 0.8)
+        XCTAssertEqual(racking.previous?.x, 0.2)
+        XCTAssertEqual(racking.progress, 0.5, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(CinematicFocus.state(keys, at: 5)).progress, 1)
+        XCTAssertNil(CinematicFocus.state([], at: 1))
+        let before = try XCTUnwrap(CinematicFocus.state([CinematicFocus(time: 3, x: 0.1, y: 0.1)], at: 0))
+        XCTAssertEqual(before.current.time, 3, "before the first point, the first point holds")
+    }
+
+    func testCinematicFocusDecodesTolerantlyAndResets() throws {
+        let decoded = try JSONDecoder().decode(PhotoAdjustmentState.self, from: Data(
+            #"{"cinematicFocus":[{"time":-3,"x":9,"y":"bad"},{"time":1,"x":0.3,"y":0.4,"background":true}]}"#.utf8))
+        XCTAssertEqual(decoded.cinematicFocus.count, 2)
+        XCTAssertEqual(decoded.cinematicFocus[0].time, 0)
+        XCTAssertEqual(decoded.cinematicFocus[0].x, 1)
+        XCTAssertEqual(decoded.cinematicFocus[0].y, 0.5)
+        XCTAssertTrue(decoded.cinematicFocus[1].background)
+        XCTAssertTrue(decoded.resetting(.subjectStyle).cinematicFocus.isEmpty)
+    }
+
+    func testCompositionTimeMapsToTheOriginalVideo() {
+        let box = AdjustmentBox()
+        XCTAssertEqual(box.sourceTime(2), 2)
+        box.timeMapping = (start: 3, speed: 0.25) // trimmed from 3 s, SLO-MO
+        XCTAssertEqual(box.sourceTime(4), 4, "4 s into a quarter-speed export is 1 s past the trim start")
+    }
+
+    @MainActor
+    func testCinematicModeTurnsOnDepthForVideosOnly() {
+        let vm = CameraWorkspaceViewModel(defaults: UserDefaults(suiteName: "Cine-\(UUID().uuidString)") ?? .standard)
+        vm.mode = .cinematic
+        vm.modeChanged()
+        XCTAssertFalse(vm.adjustments.portrait, "no video loaded: nothing to blur")
+        vm.addCinematicFocus(at: CGPoint(x: 0.5, y: 0.5), viewPoint: .zero)
+        XCTAssertTrue(vm.adjustments.cinematicFocus.isEmpty)
+        XCTAssertTrue(CameraMode.cinematic.explanation.contains("tap"))
+    }
+
     func testNightIsAnEffect() {
         XCTAssertTrue(LiveEffect.allCases.contains(.night))
         XCTAssertEqual(LiveEffect.night.title, "NIGHT")

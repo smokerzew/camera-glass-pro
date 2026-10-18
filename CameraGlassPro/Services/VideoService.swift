@@ -43,6 +43,7 @@ final class AdjustmentBox: @unchecked Sendable {
     private var storedZebras = false
     private var storedBackground: CIImage?
     private var storedPlayback = false
+    private var storedTimeMapping: (start: Double, speed: Double) = (0, 1)
     private var lastMask: (time: Double, scale: CGFloat, mask: CIImage?)?
     private var lastFaces: (time: Double, scale: CGFloat, faces: [CGRect])?
 
@@ -90,6 +91,18 @@ final class AdjustmentBox: @unchecked Sendable {
 
     func storeFaces(_ faces: [CGRect], at time: Double, scale: CGFloat) {
         lock.withLock { lastFaces = (time, scale, faces) }
+    }
+
+    /// How composition time maps to the original video's time (an export can be trimmed and re-timed),
+    /// so CINEMATIC focus points land on the right frames.
+    var timeMapping: (start: Double, speed: Double) {
+        get { lock.withLock { storedTimeMapping } }
+        set { lock.withLock { storedTimeMapping = newValue } }
+    }
+
+    func sourceTime(_ compositionTime: Double) -> Double {
+        let map = timeMapping
+        return map.start + compositionTime * map.speed
     }
 
     /// Custom Background Swap photo (nil = none).
@@ -215,7 +228,10 @@ enum VideoService {
                 if recipe.playback, let cached = recipe.cachedMask(at: time, scale: scale) {
                     mask = cached
                 } else {
-                    mask = SubjectMasker.mask(for: source, fast: true)
+                    // CINEMATIC: the focus point's subject (or the background), racking between points.
+                    mask = edit.portrait && !edit.cinematicFocus.isEmpty
+                        ? SubjectMasker.cinematicMask(for: source, keys: edit.cinematicFocus, at: recipe.sourceTime(time))
+                        : SubjectMasker.mask(for: source, fast: true)
                     if recipe.playback { recipe.storeMask(mask, at: time, scale: scale) }
                 }
             }
@@ -274,6 +290,7 @@ enum VideoService {
         let recipe = AdjustmentBox()
         recipe.value = adjustments
         recipe.backgroundPhoto = backgroundPhoto
+        recipe.timeMapping = (timeRange?.start.seconds ?? 0, speed)
         let composition = try await composition(for: asset, recipe: recipe, processor: processor)
         guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
             throw PhotoExportError.renderFailed

@@ -129,7 +129,29 @@ struct SubjectPickerView: View {
                 .padding(.horizontal, 6)
             }
             skyReplaceRow
+            if vm.video != nil { cinematicRow }
         }
+    }
+
+    /// CINEMATIC focus points made by tapping the video in CINEMATIC mode.
+    private var cinematicRow: some View {
+        let count = vm.adjustments.cinematicFocus.count
+        return HStack(spacing: 8) {
+            Text("CINEMATIC FOCUS")
+                .font(.caption2.weight(.semibold))
+                .tracking(1)
+                .foregroundStyle(.white.opacity(0.7))
+            Text(count == 0 ? "Tap the video in CINEMATIC mode" : "\(count) point\(count == 1 ? "" : "s")")
+                .font(.caption)
+                .foregroundStyle(count == 0 ? .white.opacity(0.6) : .yellow)
+            Spacer()
+            if count > 0 {
+                Button("Clear") { vm.clearCinematicFocus() }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.yellow)
+            }
+        }
+        .padding(.horizontal, 6)
     }
 
     /// Sky Replace: a new sky where the sky is found, with matching light on the land.

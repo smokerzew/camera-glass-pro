@@ -145,6 +145,11 @@ struct PhotoPreviewView: View {
                 }
                 return
             }
+            let point = FramingGeometry.mediaPoint(tap: location, frame: frame, media: mediaSize, zoom: vm.zoom, pan: vm.pan)
+            if vm.mode == .cinematic, vm.video != nil, let point {
+                vm.addCinematicFocus(at: point, viewPoint: location)
+                return
+            }
             // Tap to focus/expose.
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
                 vm.focus(atView: location, mediaPoint: FramingGeometry.mediaPoint(
