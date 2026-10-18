@@ -73,7 +73,7 @@ final class LibraryAndSessionTests: XCTestCase {
         let vm = CameraWorkspaceViewModel(defaults: makeDefaults(), sessionStore: store)
         vm.importFromFiles(.success([try writePNG(.green)]))
         try await waitUntil { vm.photo != nil && !vm.isImporting }
-        try await Task.sleep(for: .milliseconds(500)) // let the background media copy finish
+        try await waitUntil { store.loadState() != nil } // the background media copy has finished
         vm.setAdjustment(.contrast, to: 1.3)
         vm.setZoom(2)
         vm.saveSessionState()

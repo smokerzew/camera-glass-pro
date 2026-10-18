@@ -169,7 +169,7 @@ final class ArtTests: XCTestCase {
     }
 
     func testNewTabsHaveTheirLooks() {
-        XCTAssertEqual(FilterCategory.creative.filters.count, 8)
+        XCTAssertEqual(FilterCategory.creative.filters.count, 10)
         XCTAssertEqual(FilterCategory.seasons.filters.count, 4)
         XCTAssertEqual(PhotoFilter.aerochrome.label, "Aerochrome")
     }

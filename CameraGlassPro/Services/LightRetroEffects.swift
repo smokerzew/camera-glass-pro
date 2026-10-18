@@ -22,7 +22,7 @@ extension ImageProcessingService {
                 .concatenating(CGAffineTransform(translationX: center.x, y: center.y)))
             .applyingGaussianBlur(sigma: Double(bar * 0.3)) // soft shadow edges
             .cropped(to: e)
-        let shade = image.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: -1.7 * k])
+        let shade = image.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: -2.0 * k])
         let lit = image.applyingFilter("CITemperatureAndTint", parameters: [
             "inputNeutral": CIVector(x: 6500, y: 0), "inputTargetNeutral": CIVector(x: 6500 - 900 * k, y: 0),
         ]).applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: 0.2 * k])

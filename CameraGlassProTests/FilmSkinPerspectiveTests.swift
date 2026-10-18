@@ -5,7 +5,7 @@ import XCTest
 final class FilmStockTests: XCTestCase {
     func testFilmTabHasTheStocks() {
         XCTAssertEqual(Array(FilterCategory.film.filters.prefix(6)), [.portra, .ektar, .gold, .fuji400h, .cinestill, .trix])
-        XCTAssertEqual(FilterCategory.film.filters.count, 14)
+        XCTAssertEqual(FilterCategory.film.filters.count, 16)
         XCTAssertEqual(PhotoFilter.cinestill.label, "CineStill 800T")
     }
 
@@ -119,7 +119,8 @@ final class RecipeLookTests: XCTestCase {
     func testRecipeLooksKeepBlackNeutral() {
         let processor = ImageProcessingService.shared
         let black = CIImage(color: .black).cropped(to: CGRect(x: 0, y: 0, width: 64, height: 64))
-        for filter in PhotoFilter.allCases where LookRecipe.recipe(filter) != nil {
+        // Duotone looks (Game Boy) map black to their dark color on purpose.
+        for filter in PhotoFilter.allCases where LookRecipe.recipe(filter) != nil && LookRecipe.recipe(filter)?.duotone == nil {
             var state = PhotoAdjustmentState()
             state.filter = filter
             guard let average = CIFilter(name: "CIAreaAverage", parameters: [
