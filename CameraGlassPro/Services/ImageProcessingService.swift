@@ -192,10 +192,10 @@ final class ImageProcessingService: @unchecked Sendable {
         guard let kernels = Self.halationKernels,
               let source = kernels.source.apply(extent: image.extent.isInfinite ? extent : image.extent, arguments: [image])
         else { return image }
-        let wide = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 90)).cropped(to: extent)
+        let wide = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 70)).cropped(to: extent)
         let tight = source.clampedToExtent().applyingGaussianBlur(sigma: Double(extent.width / 300)).cropped(to: extent)
         // Added in the kernel: Core Image's addition blend also adds alpha, which brightened whole images.
-        return kernels.add.apply(extent: extent, arguments: [image, wide, tight, Float(0.6 * k)])?.cropped(to: extent) ?? image
+        return kernels.add.apply(extent: extent, arguments: [image, wide, tight, Float(0.9 * k)])?.cropped(to: extent) ?? image
     }
 
     /// Darkens (+) or lightens (−) toward the corners with a soft radial falloff, framed on the
@@ -229,44 +229,19 @@ final class ImageProcessingService: @unchecked Sendable {
         return filter.outputImage ?? image
     }
 
-    /// Halation kernels. `source`: linear luminance above ~0.45 (about 70% on screen) ramps up to full
-    /// at 0.8, tinted red-orange; darker pixels give exactly nothing. `add`: photo + blurred glow, alpha kept.
+    /// Kernels from Kernels.metal, compiled into the app's default.metallib at build time.
+    private static func kernel(_ name: String) -> CIColorKernel? {
+        guard let url = Bundle(for: ImageProcessingService.self).url(forResource: "default", withExtension: "metallib"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? CIColorKernel(functionName: name, fromMetalLibraryData: data)
+    }
+
+    static let grainKernel = kernel("filmGrain")
+
     static let halationKernels: (source: CIColorKernel, add: CIColorKernel)? = {
-        let kernels = (try? CIKernel.kernels(withMetalString: """
-            #include <CoreImage/CoreImage.h>
-            using namespace metal;
-
-            [[stitchable]] float4 halationSource(coreimage::sample_t s) {
-                float y = dot(s.rgb, float3(0.2126, 0.7152, 0.0722));
-                float h = clamp((y - 0.45) / 0.35, 0.0, 1.0);
-                return float4(h, h * 0.28, h * 0.06, 1.0);
-            }
-
-            [[stitchable]] float4 halationAdd(coreimage::sample_t s, coreimage::sample_t wide,
-                                              coreimage::sample_t tight, float strength) {
-                return float4(s.rgb + (wide.rgb + tight.rgb) * strength, s.a);
-            }
-            """)) ?? []
-        guard let source = kernels.first(where: { $0.name == "halationSource" }) as? CIColorKernel,
-              let add = kernels.first(where: { $0.name == "halationAdd" }) as? CIColorKernel else { return nil }
+        guard let source = kernel("halationSource"), let add = kernel("halationAdd") else { return nil }
         return (source, add)
     }()
-
-    /// Metal Core Image kernel, compiled once at first use (no build-time -fcikernel setup needed).
-    /// `s` is sRGB encoded; `fine`/`coarse` are blurred random noise whose RGB average has
-    /// std ≈ 0.068 around 0.5, so `n` has unit std.
-    static let grainKernel: CIColorKernel? = try? CIKernel.kernels(withMetalString: """
-        #include <CoreImage/CoreImage.h>
-        using namespace metal;
-
-        [[stitchable]] float4 filmGrain(coreimage::sample_t s, coreimage::sample_t fine,
-                                        coreimage::sample_t coarse, float strength) {
-            float n = ((dot(fine.rgb, float3(1.0 / 3.0)) - 0.5) + 0.6 * (dot(coarse.rgb, float3(1.0 / 3.0)) - 0.5)) * 12.6;
-            float y = clamp(dot(s.rgb, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
-            float w = (0.35 + 2.6 * y * (1.0 - y)) * (1.0 - y * y * y * y);
-            return float4(clamp(s.rgb + strength * n * w, 0.0, 1.0), s.a);
-        }
-        """).first as? CIColorKernel
 
     /// One-tap Auto: picks exposure, contrast, highlights, shadows, saturation and warmth from the
     /// photo's own histogram and color cast. Returns `current` with only those values replaced.

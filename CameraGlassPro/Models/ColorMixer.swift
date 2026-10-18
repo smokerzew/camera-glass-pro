@@ -95,7 +95,8 @@ struct ColorMixer: Equatable, Codable, Sendable {
         if h < 0 { h += 360 }
 
         let w = Self.weights(hue: h)
-        let colorful = min(1, chroma * 3)
+        // Full effect from modest color up; fades only toward true grays (iOS photos are rarely very saturated).
+        let colorful = min(1, chroma / 0.12)
         var hueShift = 0.0, satChange = 0.0, lumChange = 0.0
         for i in 0..<8 {
             hueShift += w[i] * hue[i]
