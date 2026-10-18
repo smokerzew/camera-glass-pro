@@ -10,11 +10,15 @@ final class ImageProcessingService: @unchecked Sendable {
     let context = CIContext(options: [.cacheIntermediates: false])
     private let mixerLock = NSLock()
     private var mixerCache: (mixer: ColorMixer, data: Data)?
+    /// Painted-stroke masks, kept until the strokes change (every video frame reuses them).
+    private let strokeCacheLock = NSLock()
+    private var strokeCache: [(strokes: [RedactionStroke], extent: CGRect, mask: CIImage)] = []
 
     /// `subjectMask` lets callers reuse a precomputed Portrait mask (the photo preview);
     /// without one, Portrait finds the subject itself (exports, video frames).
+    /// `faces` lets live video reuse face boxes found for a nearby frame (nil = find them here).
     func apply(_ adjustments: PhotoAdjustmentState, to input: CIImage, subjectMask: CIImage? = nil,
-               fastMask: Bool = false, backgroundPhoto: CIImage? = nil) -> CIImage {
+               fastMask: Bool = false, backgroundPhoto: CIImage? = nil, faces: [CGRect]? = nil) -> CIImage {
         let a = adjustments.clamped()
         guard !a.isIdentity else { return input }
         var image = input
@@ -60,7 +64,7 @@ final class ImageProcessingService: @unchecked Sendable {
         }
 
         if a.skinSmoothing > 0 {
-            image = smoothSkin(image, amount: a.skinSmoothing, extent: input.extent)
+            image = smoothSkin(image, amount: a.skinSmoothing, extent: input.extent, knownFaces: faces)
         }
 
         if a.exposure != 0 {
@@ -217,7 +221,7 @@ final class ImageProcessingService: @unchecked Sendable {
         // Privacy last (before grain), so nothing after it can reveal what was hidden.
         image = redact(image, faces: a.redactionTarget == .faces ? a.faceRedaction : .none,
                        strokes: a.redactionTarget == .drawing ? a.redactionStrokes : [],
-                       strength: a.redactionStrength, extent: extent)
+                       strength: a.redactionStrength, knownFaces: a.hasGeometry ? nil : faces, extent: extent)
         if a.grain > 0 {
             image = filmGrain(image, amount: a.grain, size: a.grainSize, extent: extent)
         }
@@ -411,12 +415,35 @@ final class ImageProcessingService: @unchecked Sendable {
         return filter.outputImage ?? image
     }
 
-    /// Kernels from Kernels.metal, compiled into the app's default.metallib at build time.
-    static func kernel(_ name: String) -> CIColorKernel? {
-        guard let url = Bundle(for: ImageProcessingService.self).url(forResource: "default", withExtension: "metallib"),
-              let data = try? Data(contentsOf: url) else { return nil }
-        return try? CIColorKernel(functionName: name, fromMetalLibraryData: data)
+    /// `strokeMask`, remembered for the last few stroke sets (rendering it is the slow part of painted blur).
+    func cachedStrokeMask(_ strokes: [RedactionStroke], extent: CGRect) -> CIImage? {
+        if let hit = strokeCacheLock.withLock({ strokeCache.first { $0.strokes == strokes && $0.extent == extent } }) {
+            return hit.mask
+        }
+        guard let mask = Self.strokeMask(strokes, extent: extent) else { return nil }
+        strokeCacheLock.withLock {
+            strokeCache.insert((strokes, extent, mask), at: 0)
+            if strokeCache.count > 4 { strokeCache.removeLast() }
+        }
+        return mask
     }
+
+    /// Kernels from Kernels.metal, compiled into the app's default.metallib at build time.
+    /// Loaded once per name and kept: effects ask for their kernel on every render (every video frame).
+    static func kernel(_ name: String) -> CIColorKernel? {
+        kernelLock.withLock {
+            if let cached = kernelCache[name] { return cached }
+            guard let data = metalLibrary,
+                  let loaded = try? CIColorKernel(functionName: name, fromMetalLibraryData: data) else { return nil }
+            kernelCache[name] = loaded
+            return loaded
+        }
+    }
+
+    private static let metalLibrary: Data? = Bundle(for: ImageProcessingService.self)
+        .url(forResource: "default", withExtension: "metallib").flatMap { try? Data(contentsOf: $0) }
+    private static let kernelLock = NSLock()
+    nonisolated(unsafe) private static var kernelCache: [String: CIColorKernel] = [:]
 
     static let grainKernel = kernel("filmGrain")
 

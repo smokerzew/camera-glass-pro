@@ -192,11 +192,17 @@ final class CameraWorkspaceViewModel {
     private let processor: ImageProcessingService
     private let exporter: PhotoExportService
     private let defaults: UserDefaults
-    private let recipe = AdjustmentBox()
+    private let recipe: AdjustmentBox = {
+        let box = AdjustmentBox()
+        box.playback = true // the live player renders lighter; exports use their own full-quality box
+        return box
+    }()
     @ObservationIgnored private var importTask: Task<Void, Never>?
     @ObservationIgnored private var renderTask: Task<Void, Never>?
     /// Set when the edit changed since the last preview render started.
     @ObservationIgnored private var renderNeeded = false
+    /// The export in progress should go straight to Photos when it's ready.
+    @ObservationIgnored private var saveWhenReady = false
     /// The next picked second photo is for Double Exposure rather than Background Swap.
     @ObservationIgnored private var pendingDoubleExposure = false
     @ObservationIgnored private var countdownTask: Task<Void, Never>?
@@ -2020,6 +2026,12 @@ final class CameraWorkspaceViewModel {
 
     // MARK: Export
 
+    /// Renders the edited (or original) photo or video with the chosen options and saves it straight to Photos.
+    func saveToPhotos(options: ExportOptions, overlays: OverlayBurnIn) {
+        saveWhenReady = true
+        prepareExport(options: options, overlays: overlays)
+    }
+
     func prepareExport(options: ExportOptions, overlays: OverlayBurnIn) {
         guard hasMedia else { return }
         exportTask?.cancel()
@@ -2067,11 +2079,21 @@ final class CameraWorkspaceViewModel {
             return
         }
 
+        let saving = saveWhenReady
+        saveWhenReady = false
         exportTask = Task { [weak self] in
             do {
                 let url = try await work()
                 guard !Task.isCancelled else { return }
                 self?.exportedFile = url
+                if saving {
+                    if VideoService.isVideo(UTType(filenameExtension: url.pathExtension)) {
+                        try await ScreenCapture.saveVideoToPhotos(url)
+                    } else {
+                        try await ScreenCapture.saveImageDataToPhotos(try Data(contentsOf: url))
+                    }
+                    self?.showToast("Saved to Photos")
+                }
             } catch {
                 guard !Task.isCancelled else { return }
                 let message = (error as? LocalizedError)?.errorDescription ?? "The file couldn't be exported."

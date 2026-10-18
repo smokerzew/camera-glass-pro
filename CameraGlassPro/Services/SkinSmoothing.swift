@@ -5,9 +5,9 @@ import Vision
 extension ImageProcessingService {
     /// Smooths skin only: inside soft areas around detected faces, on skin-colored pixels, and never
     /// across edges (eyes, brows, lips, hair keep their detail). Photos without faces are unchanged.
-    func smoothSkin(_ image: CIImage, amount: Double, extent: CGRect) -> CIImage {
+    func smoothSkin(_ image: CIImage, amount: Double, extent: CGRect, knownFaces: [CGRect]? = nil) -> CIImage {
         guard amount > 0, let kernel = Self.kernel("skinSmooth") else { return image }
-        let faces = Self.faceRects(in: image, extent: extent)
+        let faces = knownFaces ?? Self.faceRects(in: image, extent: extent)
         guard !faces.isEmpty else { return image }
 
         // Soft round areas covering each face, forehead and cheeks.

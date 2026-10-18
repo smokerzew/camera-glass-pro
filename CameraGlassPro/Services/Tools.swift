@@ -37,7 +37,7 @@ extension ImageProcessingService {
                 run.append(RedactionStroke(mode: .blur, width: strokes[index].width, points: strokes[index].points))
                 index += 1
             }
-            guard let painted = Self.strokeMask(run, extent: e) else { continue }
+            guard let painted = cachedStrokeMask(run, extent: e) else { continue }
             refined = add
                 ? painted.applyingFilter("CIMaximumCompositing", parameters: [kCIInputBackgroundImageKey: refined])
                 : painted.applyingFilter("CIColorInvert").applyingFilter("CIMinimumCompositing", parameters: [kCIInputBackgroundImageKey: refined])

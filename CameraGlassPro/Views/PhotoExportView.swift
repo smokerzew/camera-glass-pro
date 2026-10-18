@@ -66,6 +66,21 @@ struct PhotoExportView: View {
                     }
                 }
 
+                // One tap: render with every edit and effect (no camera controls) and save to Photos.
+                Section {
+                    Button {
+                        vm.saveToPhotos(options: options, overlays: overlays)
+                    } label: {
+                        Label(isVideo ? "Save Video to Photos" : "Save Photo to Photos", systemImage: "square.and.arrow.down")
+                            .font(.body.weight(.semibold))
+                    }
+                    .disabled(!vm.hasMedia || vm.isExporting)
+                } footer: {
+                    Text(content == .adjusted
+                         ? "Saves the \(isVideo ? "video" : "photo") with all your edits and effects, without the camera controls."
+                         : "Saves an untouched copy of the original.")
+                }
+
                 Section {
                     if vm.isExporting {
                         HStack(spacing: 12) {

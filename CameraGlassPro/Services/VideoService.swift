@@ -42,6 +42,9 @@ final class AdjustmentBox: @unchecked Sendable {
     private var storedPeaking = false
     private var storedZebras = false
     private var storedBackground: CIImage?
+    private var storedPlayback = false
+    private var lastMask: (time: Double, scale: CGFloat, mask: CIImage?)?
+    private var lastFaces: (time: Double, scale: CGFloat, faces: [CGRect])?
 
     var value: PhotoAdjustmentState {
         get { lock.withLock { stored } }
@@ -56,6 +59,37 @@ final class AdjustmentBox: @unchecked Sendable {
     var zebras: Bool {
         get { lock.withLock { storedZebras } }
         set { lock.withLock { storedZebras = newValue } }
+    }
+
+    /// True for the live player: frames render at a lighter resolution and reuse the subject mask briefly,
+    /// so playback stays smooth. Exports leave it off and render every frame at full quality.
+    var playback: Bool {
+        get { lock.withLock { storedPlayback } }
+        set { lock.withLock { storedPlayback = newValue } }
+    }
+
+    /// The subject mask found for a nearby frame (playback only), or nil when a new one is needed.
+    func cachedMask(at time: Double, scale: CGFloat) -> CIImage?? {
+        lock.withLock {
+            guard let last = lastMask, last.scale == scale, abs(last.time - time) < 0.12 else { return nil }
+            return .some(last.mask)
+        }
+    }
+
+    func storeMask(_ mask: CIImage?, at time: Double, scale: CGFloat) {
+        lock.withLock { lastMask = (time, scale, mask) }
+    }
+
+    /// Face boxes found for a nearby frame (playback only), or nil when they need finding again.
+    func cachedFaces(at time: Double, scale: CGFloat) -> [CGRect]? {
+        lock.withLock {
+            guard let last = lastFaces, last.scale == scale, abs(last.time - time) < 0.12 else { return nil }
+            return last.faces
+        }
+    }
+
+    func storeFaces(_ faces: [CGRect], at time: Double, scale: CGFloat) {
+        lock.withLock { lastFaces = (time, scale, faces) }
     }
 
     /// Custom Background Swap photo (nil = none).
@@ -161,8 +195,50 @@ enum VideoService {
         processor: ImageProcessingService
     ) async throws -> AVVideoComposition {
         try await AVMutableVideoComposition.videoComposition(with: asset) { request in
-            var output = processor.apply(recipe.value.withoutGeometry, to: request.sourceImage, fastMask: true,
-                                         backgroundPhoto: recipe.backgroundPhoto)
+            let edit = recipe.value.withoutGeometry
+            let full = request.sourceImage.extent
+            // Live playback renders at a lighter size (lighter still for heavy effects) and scales back up;
+            // exports render every frame at full size.
+            var scale: CGFloat = 1
+            if recipe.playback, !edit.isIdentity {
+                let limit: CGFloat = edit.isHeavy ? 900 : 1280
+                scale = min(1, limit / max(full.width, full.height, 1))
+            }
+            let source = scale < 1
+                ? request.sourceImage.transformed(by: CGAffineTransform(translationX: -full.minX, y: -full.minY)
+                    .concatenating(CGAffineTransform(scaleX: scale, y: scale)))
+                : request.sourceImage
+            // Subject mask: found once and reused for neighbouring frames while playing (it barely moves in 0.1 s).
+            var mask: CIImage?
+            if edit.needsSubject {
+                let time = request.compositionTime.seconds
+                if recipe.playback, let cached = recipe.cachedMask(at: time, scale: scale) {
+                    mask = cached
+                } else {
+                    mask = SubjectMasker.mask(for: source, fast: true)
+                    if recipe.playback { recipe.storeMask(mask, at: time, scale: scale) }
+                }
+            }
+            // Face boxes (face blur / pixelate, skin smoothing): found once and reused for nearby frames while playing.
+            var faces: [CGRect]?
+            let wantsFaces = (edit.redactionTarget == .faces && edit.faceRedaction != .none) || edit.skinSmoothing > 0
+            if recipe.playback, wantsFaces {
+                let time = request.compositionTime.seconds
+                if let cached = recipe.cachedFaces(at: time, scale: scale) {
+                    faces = cached
+                } else {
+                    let found = ImageProcessingService.faceRects(in: source, extent: source.extent)
+                    recipe.storeFaces(found, at: time, scale: scale)
+                    faces = found
+                }
+            }
+            let recipeForFrame = edit.needsSubject && mask == nil ? edit.withoutSubjectEdits : edit
+            var output = processor.apply(recipeForFrame, to: source, subjectMask: mask, fastMask: true,
+                                         backgroundPhoto: recipe.backgroundPhoto, faces: faces)
+            if scale < 1 {
+                output = output.transformed(by: CGAffineTransform(scaleX: 1 / scale, y: 1 / scale)
+                    .concatenating(CGAffineTransform(translationX: full.minX, y: full.minY))).cropped(to: full)
+            }
             let peaking = recipe.peaking, zebras = recipe.zebras
             if peaking || zebras {
                 output = processor.analysisOverlay(for: output, peaking: peaking, zebras: zebras).composited(over: output)

@@ -205,6 +205,12 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
 
     var isIdentity: Bool { self == PhotoAdjustmentState() }
 
+    /// Effects that work pixel by pixel or per subject: live video previews them at a lighter size.
+    var isHeavy: Bool {
+        needsSubject || dispersion > 0 || melt > 0 || pixelSort > 0 || littlePlanet > 0 || !liquifyStrokes.isEmpty
+            || skinSmoothing > 0 || faceRedaction != .none || !redactionStrokes.isEmpty || halation > 0 || noiseReduction > 0
+    }
+
     init() {}
 
     /// Missing keys fall back to defaults, so presets saved by older versions keep loading.

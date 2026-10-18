@@ -68,7 +68,7 @@ extension ImageProcessingService {
     /// Hides detected faces and painted strokes with a strong blur or pixelation, on the final framing.
     /// `strength` (0...1) sets the blur amount and the pixel block size.
     func redact(_ image: CIImage, faces mode: Redaction, strokes: [RedactionStroke], strength: Double = 0.5,
-                extent e: CGRect) -> CIImage {
+                knownFaces: [CGRect]? = nil, extent e: CGRect) -> CIImage {
         guard mode != .none || !strokes.isEmpty else { return image }
         let longSide = max(e.width, e.height)
         let s = CGFloat(min(max(strength, 0), 1))
@@ -91,7 +91,7 @@ extension ImageProcessingService {
 
         var output = image
         if mode != .none {
-            let faces = Self.faceRects(in: image, extent: e)
+            let faces = knownFaces ?? Self.faceRects(in: image, extent: e)
             var mask = CIImage(color: .black).cropped(to: e)
             for face in faces {
                 // Covers the whole head (hair, ears), with only a thin soft edge so nothing shows through.
@@ -110,7 +110,7 @@ extension ImageProcessingService {
         }
         for m in [Redaction.blur, .pixelate] {
             let painted = strokes.filter { $0.mode == m }
-            if !painted.isEmpty, let mask = Self.strokeMask(painted, extent: e) {
+            if !painted.isEmpty, let mask = cachedStrokeMask(painted, extent: e) {
                 output = apply(hidden(m), through: mask, over: output)
             }
         }

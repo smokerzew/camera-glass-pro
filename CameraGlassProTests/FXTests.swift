@@ -489,3 +489,26 @@ final class GhostBehindTests: XCTestCase {
         XCTAssertEqual(render(), render(), "preview and export see the same pieces")
     }
 }
+
+final class VideoSpeedTests: XCTestCase {
+    func testStrokeMaskIsReused() {
+        let processor = ImageProcessingService.shared
+        let extent = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let strokes = [RedactionStroke(mode: .blur, width: 0.2, points: [CGPoint(x: 0.5, y: 0.5)])]
+        let first = processor.cachedStrokeMask(strokes, extent: extent)
+        let second = processor.cachedStrokeMask(strokes, extent: extent)
+        XCTAssertNotNil(first)
+        XCTAssertTrue(first === second, "drawn once, then reused")
+    }
+
+    func testKernelsAreLoadedOnce() {
+        XCTAssertTrue(ImageProcessingService.kernel("denoise") === ImageProcessingService.kernel("denoise"))
+    }
+
+    func testHeavyEffectsAreFlagged() {
+        var state = PhotoAdjustmentState()
+        XCTAssertFalse(state.isHeavy)
+        state.redactionStrokes = [RedactionStroke(mode: .pixelate, width: 0.1, points: [.zero])]
+        XCTAssertTrue(state.isHeavy)
+    }
+}
