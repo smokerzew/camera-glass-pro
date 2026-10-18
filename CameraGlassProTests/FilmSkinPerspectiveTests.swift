@@ -4,7 +4,8 @@ import XCTest
 
 final class FilmStockTests: XCTestCase {
     func testFilmTabHasTheStocks() {
-        XCTAssertEqual(FilterCategory.film.filters, [.portra, .ektar, .gold, .fuji400h, .cinestill, .trix])
+        XCTAssertEqual(Array(FilterCategory.film.filters.prefix(6)), [.portra, .ektar, .gold, .fuji400h, .cinestill, .trix])
+        XCTAssertEqual(FilterCategory.film.filters.count, 14)
         XCTAssertEqual(PhotoFilter.cinestill.label, "CineStill 800T")
     }
 
@@ -106,5 +107,29 @@ final class PerspectiveTests: XCTestCase {
         let decoded = try JSONDecoder().decode(PhotoAdjustmentState.self, from: Data(json.utf8))
         XCTAssertEqual(decoded.perspectiveVertical, 1)
         XCTAssertEqual(decoded.skinSmoothing, 0)
+    }
+}
+
+final class RecipeLookTests: XCTestCase {
+    func testSplitToneKernelShipsWithTheApp() {
+        XCTAssertNotNil(ImageProcessingService.kernel("lookSplitTone"))
+    }
+
+    /// Recipe looks must keep pure black black (no colored night skies).
+    func testRecipeLooksKeepBlackNeutral() {
+        let processor = ImageProcessingService.shared
+        let black = CIImage(color: .black).cropped(to: CGRect(x: 0, y: 0, width: 64, height: 64))
+        for filter in PhotoFilter.allCases where LookRecipe.recipe(filter) != nil {
+            var state = PhotoAdjustmentState()
+            state.filter = filter
+            guard let average = CIFilter(name: "CIAreaAverage", parameters: [
+                kCIInputImageKey: processor.apply(state, to: black), kCIInputExtentKey: CIVector(cgRect: black.extent),
+            ])?.outputImage else { return XCTFail("no average") }
+            var pixel = [UInt8](repeating: 0, count: 4)
+            processor.context.render(average, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                     format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+            let spread = Int(max(pixel[0], pixel[1], pixel[2])) - Int(min(pixel[0], pixel[1], pixel[2]))
+            XCTAssertLessThan(spread, 12, "\(filter) tints black")
+        }
     }
 }

@@ -3,7 +3,7 @@ import CoreImage.CIFilterBuiltins
 
 /// Filter groups shown as tabs in the filter picker.
 enum FilterCategory: String, CaseIterable, Identifiable {
-    case classic, film, y2k, quality, digicam
+    case classic, film, cinematic, portrait, nature, blackWhite, vintage, moody, food, y2k, quality, digicam
 
     var id: String { rawValue }
 
@@ -11,6 +11,13 @@ enum FilterCategory: String, CaseIterable, Identifiable {
         switch self {
         case .classic: "Classic"
         case .film: "Film"
+        case .cinematic: "Cinematic"
+        case .portrait: "Portrait"
+        case .nature: "Nature"
+        case .blackWhite: "B&W"
+        case .vintage: "Vintage"
+        case .moody: "Moody"
+        case .food: "Food"
         case .y2k: "Y2K"
         case .quality: "Quality"
         case .digicam: "DigiCam FX"
@@ -28,6 +35,7 @@ extension PhotoFilter {
         case .hd, .clarity, .hdr, .crisp: .quality
         case .digicam, .ccd, .retro: .digicam
         case .portra, .ektar, .gold, .fuji400h, .cinestill, .trix: .film
+        default: LookRecipe.recipe(self)?.category ?? .classic
         }
     }
 }
@@ -42,6 +50,7 @@ extension PhotoFilter {
 /// - Every radius scales with the image, so the preview matches the full-resolution export.
 extension ImageProcessingService {
     func applyLook(_ look: PhotoFilter, to image: CIImage, extent: CGRect) -> CIImage {
+        if let recipe = LookRecipe.recipe(look) { return recipeLook(recipe, to: image, extent: extent) }
         let w = extent.width
         switch look {
         case .none:
@@ -138,6 +147,33 @@ extension ImageProcessingService {
             let toned = splitTone(saturation(flat, 0.94), shadows: (0.004, 0, 0.01), highlights: (0.016, 0.004, 0.006), amount: 1)
             return vignette(toned, intensity: 0.3, radius: 2)
         }
+    }
+
+    /// Renders a `LookRecipe`: white balance, optional black and white, tone curve, color, split toning,
+    /// then optional bloom and local contrast. Same building blocks and rules as the hand-built looks.
+    func recipeLook(_ r: LookRecipe, to image: CIImage, extent: CGRect) -> CIImage {
+        var x = image
+        if r.exposure != 0 { x = exposure(x, r.exposure) }
+        if r.temperature != 0 { x = temperature(x, shift: r.temperature) }
+        if let w = r.mono {
+            let weights = CIVector(x: w.0, y: w.1, z: w.2, w: 0)
+            x = x.applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": weights, "inputGVector": weights, "inputBVector": weights,
+            ])
+        }
+        x = curve(x, r.curve)
+        x = saturation(x, r.saturation)
+        if r.vibrance != 0 { x = vibrance(x, r.vibrance) }
+        if r.shadows != (0, 0, 0) || r.highlights != (0, 0, 0), let kernel = Self.kernel("lookSplitTone"),
+           let toned = kernel.apply(extent: x.extent.isInfinite ? extent : x.extent, arguments: [
+               x, CIVector(x: r.shadows.0, y: r.shadows.1, z: r.shadows.2),
+               CIVector(x: r.highlights.0, y: r.highlights.1, z: r.highlights.2),
+           ]) {
+            x = toned
+        }
+        if r.glow > 0 { x = softGlow(x.cropped(to: extent), radius: extent.width / 260, amount: r.glow) }
+        if r.clarity > 0 { x = unsharp(x, radius: extent.width / 90, intensity: r.clarity) }
+        return x
     }
 
     // MARK: Building blocks

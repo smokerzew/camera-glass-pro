@@ -10,9 +10,13 @@ final class FilterCatalogTests: XCTestCase {
         XCTAssertEqual(Set(grouped), Set(PhotoFilter.allCases.filter { $0 != .none }), "each filter appears in one tab")
         XCTAssertEqual(grouped.count, Set(grouped).count, "no filter appears twice")
         for filter in PhotoFilter.allCases { XCTAssertFalse(filter.label.isEmpty) }
-        XCTAssertEqual(FilterCategory.y2k.filters.count, 4)
+        XCTAssertEqual(FilterCategory.y2k.filters.count, 8)
         XCTAssertEqual(FilterCategory.digicam.title, "DigiCam FX")
-        XCTAssertEqual(FilterCategory.digicam.filters, [.digicam, .ccd, .retro])
+        XCTAssertEqual(FilterCategory.digicam.filters, [.pointShoot, .nightFlash, .coolCCD, .y2006, .digicam, .ccd, .retro])
+        XCTAssertEqual(grouped.count, 100, "100 filters")
+        XCTAssertEqual(FilterCategory.allCases.count, 12)
+        for category in FilterCategory.allCases { XCTAssertFalse(category.filters.isEmpty, "\(category) is empty") }
+        XCTAssertEqual(Set(PhotoFilter.allCases.map(\.label)).count, PhotoFilter.allCases.count, "names are unique")
     }
 
     func testEveryFilterRendersWithSameExtent() throws {

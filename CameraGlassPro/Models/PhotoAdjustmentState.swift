@@ -266,11 +266,25 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
 enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case none, vivid, mono, noir, chrome, fade, instant
     case portra, ektar, gold, fuji400h, cinestill, trix
+    // Recipe looks (LookRecipes.swift)
+    case vividWarm, vividCool, dramatic, dramaticCool
+    case portra160, superia400, ektachrome, velvia50, kodachrome, hp5, provia100f, ultramax400
+    case tealOrange, blockbuster, moodyNight, bleachBypass, neonNoir, matrixGreen, desertHeat, vintageHollywood, arcticBlue, sunsetDrama
+    case studioClean, goldenGlow, rosy, mattePortrait, brightAiry, warmSkin, softPeach, editorial
+    case vividGreen, deepSky, autumn, alpineCool, desertGold, ocean, forestMood, springBloom
+    case silver, softMatte, highContrast, selenium, sepia, infrared, platinum, cyanotype, redFilter
+    case seventies, eighties, polaroidFade, kodakMoment, oldPostcard, sunbleached, retroTeal, lomo
+    case darkAcademia, rainyDay, midnight, foggy, emberGlow, stormy, shadowBlue
+    case freshFood, warmBakery, crispSalad, cafeLatte, juicy
+    case disposable, bloomPop, frosted, cyberPink
+    case cleanPro, vividHDR
+    case pointShoot, nightFlash, coolCCD, y2006
     case y2kGlow, flashPop, cyber, pastel
     case hd, clarity, hdr, crisp
     case digicam, ccd, retro
 
     var label: String {
+        if let recipe = LookRecipe.recipe(self) { return recipe.label }
         switch self {
         case .none: "Off"
         case .y2kGlow: "Y2K Glow"

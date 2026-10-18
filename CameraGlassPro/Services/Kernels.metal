@@ -42,3 +42,10 @@ using namespace metal;
     float w = area.r * skin * edge * amount * 0.85; // keep a little texture so skin never looks plastic
     return float4(mix(s.rgb, blurred.rgb, w), s.a);
 }
+
+// Split toning for the recipe filters: tints shadows and highlights by luminance. The shadow tint fades
+// out toward pure black, so night skies and deep shadows stay neutral instead of turning a color.
+[[stitchable]] float4 lookSplitTone(coreimage::sample_t s, float3 shadows, float3 highlights) {
+    float m = clamp(dot(s.rgb, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+    return float4(s.rgb + shadows * (1.0 - m) * min(1.0, m * 12.0) + highlights * m, s.a);
+}

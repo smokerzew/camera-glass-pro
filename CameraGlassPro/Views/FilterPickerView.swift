@@ -153,37 +153,47 @@ struct FilterPickerView: View {
 
     /// Category tabs styled like the mode selector: a glass pill behind the selected name.
     private var tabs: some View {
-        HStack(spacing: 4) {
-            ForEach(FilterCategory.allCases) { tab in
-                let isSelected = tab == category
-                Button {
-                    withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.12)) { category = tab }
-                } label: {
-                    Text(tab.title.uppercased())
-                        .font(.system(size: largeLabels ? 14 : 12, weight: .semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(isSelected ? Color.yellow : .white.opacity(0.85))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 34)
-                        .background {
-                            if isSelected {
-                                Capsule()
-                                    .fill(.black.opacity(0.35))
-                                    .cameraGlass(.selected, in: Capsule())
-                                    .matchedGeometryEffect(id: "tab", in: tabSelection)
-                            }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(FilterCategory.allCases) { tab in
+                        let isSelected = tab == category
+                        Button {
+                            withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.12)) { category = tab }
+                        } label: {
+                            Text(tab.title.uppercased())
+                                .font(.system(size: largeLabels ? 14 : 12, weight: .semibold))
+                                .tracking(0.8)
+                                .foregroundStyle(isSelected ? Color.yellow : .white.opacity(0.85))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .padding(.horizontal, 12)
+                                .frame(minHeight: 34)
+                                .background {
+                                    if isSelected {
+                                        Capsule()
+                                            .fill(.black.opacity(0.35))
+                                            .cameraGlass(.selected, in: Capsule())
+                                            .matchedGeometryEffect(id: "tab", in: tabSelection)
+                                    }
+                                }
+                                .contentShape(Capsule())
                         }
-                        .contentShape(Capsule())
+                        .buttonStyle(PressableButtonStyle())
+                        .accessibilityLabel(tab.title)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                        .id(tab)
+                    }
                 }
-                .buttonStyle(PressableButtonStyle())
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .padding(4)
+            }
+            .background(Capsule().fill(.black.opacity(0.25)))
+            .clipShape(Capsule())
+            .onAppear { proxy.scrollTo(category, anchor: .center) }
+            .onChange(of: category) { _, tab in
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { proxy.scrollTo(tab, anchor: .center) }
             }
         }
-        .padding(4)
-        .background(Capsule().fill(.black.opacity(0.25)))
     }
 
     private func tile(_ filter: PhotoFilter) -> some View {
