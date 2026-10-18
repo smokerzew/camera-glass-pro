@@ -146,6 +146,9 @@ extension ImageProcessingService {
             let flat = curve(image, [(0, 0.05), (0.25, 0.28), (0.5, 0.52), (0.75, 0.76), (1, 0.94)])
             let toned = splitTone(saturation(flat, 0.94), shadows: (0.004, 0, 0.01), highlights: (0.016, 0.004, 0.006), amount: 1)
             return vignette(toned, intensity: 0.3, radius: 2)
+
+        default: // recipe looks return above
+            return image
         }
     }
 
