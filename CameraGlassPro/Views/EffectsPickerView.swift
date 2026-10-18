@@ -94,6 +94,7 @@ struct EffectsPickerView: View {
         case .bounce: "Plays the clip forward and backward"
         case .longExposure: "Blends the frames into one photo, like a slow shutter"
         case .night: "Lines up and averages frames around this moment for a clean, brighter night shot"
+        case .smoothSlowMo: "4× slower without stutter: new frames are made between the real ones (up to 5 seconds of the clip)"
         case .reverse: "Plays the clip backward"
         case .speedRamp: "Fast at the start and end, slow motion in the middle"
         case .stopMotion: "Choppy, few pictures a second, like stop-motion animation"

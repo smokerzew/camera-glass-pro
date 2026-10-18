@@ -460,6 +460,11 @@ final class ImageProcessingService: @unchecked Sendable {
         try? CIWarpKernel(functionName: "cylinderWarp", fromMetalLibraryData: $0)
     }
 
+    /// Smooth slow motion's in-between frames (a sampler kernel).
+    static let interpolateKernel: CIKernel? = metalLibrary.flatMap {
+        try? CIKernel(functionName: "interpolateFrames", fromMetalLibraryData: $0)
+    }
+
     static let halationKernels: (source: CIColorKernel, add: CIColorKernel)? = {
         guard let source = kernel("halationSource"), let add = kernel("halationAdd") else { return nil }
         return (source, add)

@@ -142,3 +142,14 @@ using namespace metal;
     float theta = (d.x - cx) / focal;
     return float2(focal * tan(theta) + cx, (d.y - cy) / cos(theta) + cy);
 }
+
+// Smooth slow motion: an in-between frame at `t` (0 = a, 1 = b). `flow` holds each pixel's motion from a
+// to b; `scale` turns its values into output pixels (and fixes the direction convention).
+[[stitchable]] float4 interpolateFrames(coreimage::sampler a, coreimage::sampler b, coreimage::sampler flow,
+                                        float t, float2 scale, coreimage::destination dest) {
+    float2 p = dest.coord();
+    float2 f = flow.sample(flow.transform(p)).rg * scale;
+    float4 ca = a.sample(a.transform(p - t * f));
+    float4 cb = b.sample(b.transform(p + (1.0 - t) * f));
+    return mix(ca, cb, t);
+}

@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 /// Live Photo-style effects made from a video or a Live Photo's motion: Loop, Bounce and
 /// Long Exposure (as in Photos), plus turning a video into a real Live Photo.
 enum LiveEffect: String, CaseIterable, Identifiable {
-    case livePhoto, loop, bounce, longExposure, night, reverse, speedRamp, stopMotion, echo, gif
+    case livePhoto, loop, bounce, longExposure, night, smoothSlowMo, reverse, speedRamp, stopMotion, echo, gif
 
     var id: String { rawValue }
 
@@ -19,6 +19,7 @@ enum LiveEffect: String, CaseIterable, Identifiable {
         case .bounce: "BOUNCE"
         case .longExposure: "LONG EXPOSURE"
         case .night: "NIGHT"
+        case .smoothSlowMo: "SMOOTH SLO-MO"
         case .reverse: "REVERSE"
         case .speedRamp: "SPEED RAMP"
         case .stopMotion: "STOP MOTION"
@@ -34,6 +35,7 @@ enum LiveEffect: String, CaseIterable, Identifiable {
         case .bounce: "arrow.left.arrow.right"
         case .longExposure: "camera.aperture"
         case .night: "moon.stars"
+        case .smoothSlowMo: "slowmo"
         case .reverse: "backward.fill"
         case .speedRamp: "speedometer"
         case .stopMotion: "film.stack"
@@ -81,7 +83,7 @@ enum LiveEffectsService {
         case .speedRamp: return speedRamp(in: range)
         // Each picture held for 4 frames: about 7.5 pictures a second, like stop motion.
         case .stopMotion: return forward.indices.map { forward[$0 - $0 % 4] }
-        case .livePhoto, .longExposure, .night, .echo, .gif: return forward
+        case .livePhoto, .longExposure, .night, .smoothSlowMo, .echo, .gif: return forward
         }
     }
 

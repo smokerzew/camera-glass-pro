@@ -1141,6 +1141,12 @@ final class CameraWorkspaceViewModel {
                     let url = try LiveEffectsService.newURL("jpg")
                     try data.write(to: url)
                     self?.showEffectResult(url, toast: "Night shot created")
+                case .smoothSlowMo:
+                    let url = try LiveEffectsService.newURL("mov")
+                    try await LiveEffectsService.smoothSlowMotion(from: asset, range: available, adjustments: recipe,
+                                                                  processor: processor, to: url)
+                    try Task.checkCancellation()
+                    self?.showEffectResult(url, toast: "Smooth slow motion created")
                 case .gif:
                     let data = try await LiveEffectsService.gif(from: asset, range: available, adjustments: recipe, processor: processor)
                     try Task.checkCancellation()

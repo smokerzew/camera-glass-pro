@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreImage
 import XCTest
 @testable import CameraGlassPro
@@ -276,6 +277,38 @@ final class Pack5Tests: XCTestCase {
         vm.addCinematicFocus(at: CGPoint(x: 0.5, y: 0.5), viewPoint: .zero)
         XCTAssertTrue(vm.adjustments.cinematicFocus.isEmpty)
         XCTAssertTrue(CameraMode.cinematic.explanation.contains("tap"))
+    }
+
+    // MARK: Smooth slow motion
+
+    private func squareFrame(at x: CGFloat) -> CIImage {
+        let e = CGRect(x: 0, y: 0, width: 256, height: 192)
+        return CIImage(color: .white).cropped(to: CGRect(x: x, y: 76, width: 40, height: 40))
+            .composited(over: solid(0.3, 0.3, 0.3, 256, 192)).cropped(to: e)
+    }
+
+    func testInBetweenFrameMovesTheSquareHalfway() throws {
+        XCTAssertNotNil(ImageProcessingService.interpolateKernel)
+        let a = squareFrame(at: 100), b = squareFrame(at: 124) // moves 24 px right
+        let flow = try XCTUnwrap(FrameInterpolator.flow(from: a, to: b))
+        let direction = FrameInterpolator.calibrate(a: a, b: b, flow: flow, context: processor.context)
+        let middle = FrameInterpolator.frame(between: a, and: b, flow: flow, t: 0.5, direction: direction)
+        XCTAssertEqual(middle.extent, a.extent)
+        XCTAssertGreaterThan(pixel(middle, 115, 96).g, 220, "the square's left edge has moved to ~112")
+        XCTAssertGreaterThan(pixel(middle, 150, 96).g, 220, "and its right edge to ~152")
+        XCTAssertLessThan(pixel(middle, 104, 96).g, 170, "not left where it started")
+        // A plain cross-fade would leave both squares half bright instead.
+    }
+
+    func testSmoothSlowMotionWritesFourTimesTheFrames() async throws {
+        let source = try await VideoPipelineTests.makeTestMovie(frames: 10)
+        let url = try LiveEffectsService.newURL("mov")
+        try await LiveEffectsService.smoothSlowMotion(
+            from: AVURLAsset(url: source), range: CMTimeRange(start: .zero, duration: CMTime(value: 10, timescale: 30)),
+            adjustments: PhotoAdjustmentState(), processor: .shared, to: url)
+        let duration = try await AVURLAsset(url: url).load(.duration).seconds
+        XCTAssertEqual(duration, Double(9 * 4 + 1) / 30, accuracy: 0.1, "9 gaps × 4 + the last frame")
+        XCTAssertTrue(LiveEffect.allCases.contains(.smoothSlowMo))
     }
 
     func testNightIsAnEffect() {
