@@ -128,6 +128,8 @@ extension PhotoAdjustmentState {
             next.background = d.background
             next.backgroundBlurKind = d.backgroundBlurKind
             next.backgroundBlurAmount = d.backgroundBlurAmount
+            next.skyReplace = d.skyReplace
+            next.skyReplaceAmount = d.skyReplaceAmount
         case .subjectCreate:
             next.dispersion = d.dispersion
             next.dispersionSize = d.dispersionSize

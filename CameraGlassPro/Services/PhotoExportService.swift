@@ -82,6 +82,8 @@ struct ExportOptions: Equatable, Sendable {
     var cropToFraming = false
     /// Draws the visible composition guides into the edited copy.
     var burnOverlays = false
+    /// Fits the edited photo into a 9:16 frame over a blurred, darkened copy of itself (photos only).
+    var storyFill = false
 }
 
 struct OverlayBurnIn: Equatable, Sendable {
@@ -179,6 +181,7 @@ struct PhotoExportService: Sendable {
             image = Self.crop(image, normalized: crop)
         }
         image = Self.burnOverlays(request.overlays, into: image)
+        if request.options.storyFill { image = Self.storyFill(image) }
         image = Self.resized(image, longEdge: request.options.size.photoLongEdge)
         return try processor.encode(image, as: request.options.format)
     }
@@ -197,6 +200,36 @@ struct PhotoExportService: Sendable {
                             width: (extent.width * scale).rounded(), height: (extent.height * scale).rounded())
         // Clamped: Lanczos can leave the last row a fraction short of the rounded size.
         return output.clampedToExtent().cropped(to: target).transformed(by: CGAffineTransform(translationX: -target.minX, y: -target.minY))
+    }
+
+    /// 9:16 canvas: the whole photo centered over a blurred, slightly darker copy that fills the frame.
+    /// No bars, text or borders; a photo already at 9:16 comes back unchanged.
+    static func storyFill(_ image: CIImage) -> CIImage {
+        let e = image.extent
+        guard e.width > 0, e.height > 0 else { return image }
+        let ratio: CGFloat = 9.0 / 16.0
+        guard abs(e.width / e.height - ratio) > 0.005 else { return image }
+        let canvas = e.width / e.height > ratio
+            ? CGSize(width: e.width.rounded(), height: (e.width / ratio).rounded())
+            : CGSize(width: (e.height * ratio).rounded(), height: e.height.rounded())
+        let frame = CGRect(origin: .zero, size: canvas)
+        let photo = image.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY))
+
+        // Blur a small copy (fast at any size), then scale it up to cover the canvas.
+        let small: CGFloat = 360 / max(e.width, e.height)
+        let cover = max(canvas.width / e.width, canvas.height / e.height)
+        let blurred = photo.transformed(by: CGAffineTransform(scaleX: small, y: small))
+            .clampedToExtent()
+            .applyingGaussianBlur(sigma: 14)
+            .applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: -0.6])
+            .transformed(by: CGAffineTransform(scaleX: cover / small, y: cover / small))
+        let backdrop = blurred.transformed(by: CGAffineTransform(
+            translationX: (canvas.width - e.width * cover) / 2, y: (canvas.height - e.height * cover) / 2))
+            .cropped(to: frame)
+
+        let centered = photo.transformed(by: CGAffineTransform(
+            translationX: ((canvas.width - e.width) / 2).rounded(), y: ((canvas.height - e.height) / 2).rounded()))
+        return centered.composited(over: backdrop).cropped(to: frame)
     }
 
     /// Crops with a top-left-origin normalized rect and moves the result to the origin.

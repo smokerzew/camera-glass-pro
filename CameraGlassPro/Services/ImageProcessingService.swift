@@ -53,7 +53,11 @@ final class ImageProcessingService: @unchecked Sendable {
         }
 
         // Sky found on the untouched photo, so edits never change what counts as sky.
-        let sky = a.skyEdit.isNeutral ? nil : skyMask(for: input, extent: input.extent)
+        let sky = a.skyEdit.isNeutral && a.skyReplace == .none ? nil : skyMask(for: input, extent: input.extent)
+        if a.skyReplace != .none, let sky {
+            image = replaceSky(image, with: a.skyReplace, amount: a.skyReplaceAmount, mask: sky,
+                               photo: backgroundPhoto, extent: input.extent)
+        }
 
         if a.noiseReduction > 0 {
             image = reduceNoise(image, amount: a.noiseReduction, extent: input.extent)
@@ -139,7 +143,7 @@ final class ImageProcessingService: @unchecked Sendable {
             image = filter.outputImage ?? image
         }
 
-        if let sky {
+        if let sky, !a.skyEdit.isNeutral {
             image = applySkyEdit(a.skyEdit, to: image, mask: sky, extent: input.extent)
         }
 

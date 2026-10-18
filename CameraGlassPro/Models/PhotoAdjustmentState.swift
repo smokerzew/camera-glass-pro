@@ -59,6 +59,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var backgroundEdit = RegionEdit()
     /// Light and color for the detected sky only.
     var skyEdit = RegionEdit()
+    /// Sky Replace: a new sky in the detected sky area (none = off) and how much of it.
+    var skyReplace: SkyReplacement = .none
+    var skyReplaceAmount: Double = 1
     /// Motion blur behind the subject (0...1) and its direction in degrees (0 = horizontal).
     var speedBlur: Double = 0
     var speedAngle: Double = 0
@@ -214,7 +217,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Effects that work pixel by pixel or per subject: live video previews them at a lighter size.
     var isHeavy: Bool {
         needsSubject || dispersion > 0 || melt > 0 || pixelSort > 0 || littlePlanet > 0 || !liquifyStrokes.isEmpty
-            || skinSmoothing > 0 || faceRedaction != .none || !redactionStrokes.isEmpty || halation > 0 || noiseReduction > 0
+            || skinSmoothing > 0 || skyReplace != .none || faceRedaction != .none || !redactionStrokes.isEmpty || halation > 0 || noiseReduction > 0
     }
 
     init() {}
@@ -246,6 +249,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         subjectEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .subjectEdit)) ?? RegionEdit()
         backgroundEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .backgroundEdit)) ?? RegionEdit()
         skyEdit = (try? c.decodeIfPresent(RegionEdit.self, forKey: .skyEdit)) ?? RegionEdit()
+        skyReplace = (try? c.decodeIfPresent(SkyReplacement.self, forKey: .skyReplace)) ?? .none
         func unit(_ key: CodingKeys, _ fallback: Double = 0) -> Double {
             let v = (try? c.decodeIfPresent(Double.self, forKey: key)) ?? fallback
             return v.isFinite ? min(max(v, 0), 1) : fallback
@@ -258,6 +262,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         lookMatch = (try? c.decodeIfPresent(LookMatch.self, forKey: .lookMatch)).flatMap { $0.isUsable ? $0 : nil }
         redactionStrength = unit(.redactionStrength, 0.5)
         dispersion = unit(.dispersion)
+        skyReplaceAmount = unit(.skyReplaceAmount, 1)
         dispersionSize = unit(.dispersionSize, 0.4)
         ghostOpacity = unit(.ghostOpacity)
         ghostDistance = unit(.ghostDistance, 0.25)

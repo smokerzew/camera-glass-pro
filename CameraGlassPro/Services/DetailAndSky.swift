@@ -52,3 +52,91 @@ extension ImageProcessingService {
         return (blend.outputImage ?? image).cropped(to: extent)
     }
 }
+
+/// New skies for Sky Replace. Gradients are smooth photographic skies (nothing drawn, no text);
+/// `.photo` uses the second photo shared with Background Swap and Double Exposure.
+enum SkyReplacement: String, CaseIterable, Codable, Sendable, Identifiable {
+    case none, blue, golden, sunset, overcast, photo
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: "Off"
+        default: rawValue.capitalized
+        }
+    }
+
+    /// sRGB colors at the top of the frame and at the horizon.
+    var colors: (top: CIColor, horizon: CIColor)? {
+        switch self {
+        case .blue: (CIColor(red: 0.16, green: 0.38, blue: 0.78), CIColor(red: 0.64, green: 0.79, blue: 0.95))
+        case .golden: (CIColor(red: 0.42, green: 0.60, blue: 0.86), CIColor(red: 1.0, green: 0.84, blue: 0.60))
+        case .sunset: (CIColor(red: 0.30, green: 0.28, blue: 0.55), CIColor(red: 1.0, green: 0.60, blue: 0.36))
+        case .overcast: (CIColor(red: 0.68, green: 0.70, blue: 0.74), CIColor(red: 0.88, green: 0.89, blue: 0.90))
+        case .none, .photo: nil
+        }
+    }
+
+    /// The light the new sky casts on the land.
+    var groundLight: RegionEdit {
+        var edit = RegionEdit()
+        switch self {
+        case .golden: edit.warmth = 0.22
+        case .sunset: edit.warmth = 0.32; edit.exposure = -0.06
+        case .blue: edit.warmth = -0.05
+        case .overcast: edit.saturation = -0.15; edit.exposure = -0.04
+        case .none, .photo: break
+        }
+        return edit
+    }
+}
+
+extension ImageProcessingService {
+    /// Puts a new sky into the sky area, then lights the land to match. `amount` 0...1 blends with the original.
+    func replaceSky(_ image: CIImage, with kind: SkyReplacement, amount: Double, mask: CIImage,
+                    photo: CIImage?, extent e: CGRect) -> CIImage {
+        let k = min(max(amount, 0), 1)
+        guard kind != .none, k > 0 else { return image }
+        let newSky: CIImage
+        if let colors = kind.colors {
+            let gradient = CIFilter.smoothLinearGradient()
+            gradient.point0 = CGPoint(x: e.midX, y: e.maxY)
+            gradient.point1 = CGPoint(x: e.midX, y: e.maxY - e.height * 0.6)
+            gradient.color0 = colors.top
+            gradient.color1 = colors.horizon
+            guard let output = gradient.outputImage else { return image }
+            newSky = output.cropped(to: e)
+        } else if let photo, photo.extent.width > 0, photo.extent.height > 0 {
+            // Cover the frame, anchored to the top so the photo's own sky lands in ours.
+            let p = photo.extent
+            let scale = max(e.width / p.width, e.height / p.height)
+            newSky = photo.transformed(by: CGAffineTransform(translationX: -p.minX, y: -p.minY)
+                .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+                .concatenating(CGAffineTransform(translationX: e.minX + (e.width - p.width * scale) / 2,
+                                                 y: e.maxY - p.height * scale)))
+                .cropped(to: e)
+        } else {
+            return image
+        }
+        // Tighter edge than the feathered sky-edit mask, so trees and rooftops get no halo.
+        let edge = mask.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.6]).cropped(to: e)
+        let strength = CIImage(color: CIColor(red: k, green: k, blue: k)).cropped(to: e)
+        let skyMask = edge.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: strength])
+        let lit = kind.groundLight.isNeutral ? image : regionEdit(kind.groundLight.scaled(k), to: image)
+        return newSky.applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: lit, kCIInputMaskImageKey: skyMask,
+        ]).cropped(to: e)
+    }
+}
+
+extension RegionEdit {
+    /// Every value times `k` (0...1).
+    func scaled(_ k: Double) -> RegionEdit {
+        var copy = self
+        copy.exposure *= k
+        copy.saturation *= k
+        copy.warmth *= k
+        return copy
+    }
+}

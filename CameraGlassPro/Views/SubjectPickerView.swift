@@ -128,7 +128,31 @@ struct SubjectPickerView: View {
                 }
                 .padding(.horizontal, 6)
             }
+            skyReplaceRow
         }
+    }
+
+    /// Sky Replace: a new sky where the sky is found, with matching light on the land.
+    private var skyReplaceRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("SKY")
+                .font(.caption2.weight(.semibold))
+                .tracking(1)
+                .foregroundStyle(.white.opacity(0.7))
+            GlassTabs(tabs: SkyReplacement.allCases, selection: Binding(get: { vm.adjustments.skyReplace },
+                                                                      set: { vm.setSkyReplace($0) })) { $0.label }
+            if vm.adjustments.skyReplace != .none {
+                GlassSliderRow(title: "Sky Amount", value: vm.adjustments.skyReplaceAmount) {
+                    vm.setEffect(\.skyReplaceAmount, to: min(max($0, 0), 1))
+                }
+                if vm.adjustments.skyReplace == .photo {
+                    Button("Change Sky Photo") { vm.chooseSkyPhoto() }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.yellow)
+                }
+            }
+        }
+        .padding(.horizontal, 6)
     }
 
     /// Stickers and 3D video made from the subject.

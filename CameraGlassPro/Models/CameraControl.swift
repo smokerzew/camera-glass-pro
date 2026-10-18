@@ -114,7 +114,7 @@ extension CameraWorkspaceViewModel {
         case .frame: false
         case .liveText: liveTextEnabled
         case .effects: false
-        case .subject: adjustments.colorSplash || adjustments.background != .original
+        case .subject: adjustments.colorSplash || adjustments.background != .original || adjustments.skyReplace != .none
         case .crop: adjustments.hasGeometry
         case .format: false
         }
@@ -157,7 +157,8 @@ extension CameraWorkspaceViewModel {
         case .effects: canMakeEffects ? "Loop, Bounce, Reverse, Echo, GIF and more" : "Needs a video or Live Photo"
         case .crop: adjustments.hasGeometry ? "Edited" : "Original framing"
         case .subject: [adjustments.colorSplash ? "Color Splash" : nil,
-                        adjustments.background != .original ? "Background \(adjustments.background.label.capitalized)" : nil]
+                        adjustments.background != .original ? "Background \(adjustments.background.label.capitalized)" : nil,
+                        adjustments.skyReplace != .none ? "\(adjustments.skyReplace.label) Sky" : nil]
             .compactMap { $0 }.joined(separator: ", ").ifEmpty("Off")
         case .format: exportFormat.label
         }
@@ -171,10 +172,10 @@ extension CameraWorkspaceViewModel {
         case .timer: "Delays opening the photo picker"
         case .exposure: "Shows the exposure slider"
         case .styles: "Opens Photographic Styles: style, tone and color pad, palette"
-        case .filter: "Opens the filter picker: 100 filters in 12 tabs"
+        case .filter: "Opens the filter picker: 174 filters in 20 tabs"
         case .adjust: "Opens Adjust: light, color, detail, effects, local filters and AI"
         case .liquify: "Push and reshape parts of the photo with your finger"
-        case .fx: "Speed blur, tilt-shift, double exposure, match look, ghost, blur or pixelate, and shuffle"
+        case .fx: "Blur, Blend, Ghost, Art, Light, Retro, Pop and Privacy effects"
         case .depth: "Blurs the background behind the subject; tap the f-number to change depth"
         case .nightMode: "Lifts shadows and reduces noise"
         case .grid: "Cycles off, rule of thirds and fine grid"
@@ -186,7 +187,7 @@ extension CameraWorkspaceViewModel {
         case .frame: "Step to the exact frame, then save it as a photo with or without the camera UI"
         case .liveText: "Finds text you can copy or translate (pauses videos)"
         case .effects: "Makes a Loop, Bounce, Reverse, Speed Ramp, Stop Motion, Echo, GIF or Long Exposure, or a Live Photo"
-        case .subject: "Color Splash and Background Swap for people, pets and objects"
+        case .subject: "Color Splash, Background Swap and Sky Replace"
         case .crop: "Crop, rotate, flip and straighten the photo"
         case .format: "Cycles the export format: JPEG, HEIF, PNG"
         }

@@ -11,9 +11,11 @@ struct PhotoExportView: View {
     @AppStorage(SettingsKey.exportSize) private var size = ExportSize.full
     @State private var cropToFraming = false
     @State private var burnOverlays = false
+    @AppStorage("exportStoryFill") private var storyFill = false
 
     private var options: ExportOptions {
-        ExportOptions(content: content, format: vm.exportFormat, size: size, cropToFraming: cropToFraming, burnOverlays: burnOverlays)
+        ExportOptions(content: content, format: vm.exportFormat, size: size, cropToFraming: cropToFraming, burnOverlays: burnOverlays,
+                      storyFill: storyFill && !isVideo)
     }
 
     private var overlays: OverlayBurnIn {
@@ -51,14 +53,19 @@ struct PhotoExportView: View {
                         Toggle("Crop to Preview Framing", isOn: $cropToFraming)
                         Toggle("Include Composition Guides", isOn: $burnOverlays)
                             .disabled(overlays.isEmpty)
+                        Toggle("9:16 Story, Blurred Fill", isOn: $storyFill)
                     }
-                    if cropToFraming || burnOverlays {
+                    if cropToFraming || burnOverlays || storyFill {
                         Section {
                             if cropToFraming {
                                 Label("Crops to the current zoom and aspect framing.", systemImage: "crop")
                             }
                             if burnOverlays {
                                 Label("Draws the visible grid and center guide into the image.", systemImage: "squareshape.split.3x3")
+                            }
+                            if storyFill {
+                                Label("Fits the whole photo into a 9:16 frame over a blurred copy of itself, for Stories and Reels.",
+                                      systemImage: "rectangle.portrait")
                             }
                         }
                         .font(.footnote)

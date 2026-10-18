@@ -207,6 +207,8 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var saveWhenReady = false
     /// The next picked second photo is for Double Exposure rather than Background Swap.
     @ObservationIgnored private var pendingDoubleExposure = false
+    /// The next picked second photo is for Sky Replace.
+    @ObservationIgnored private var pendingSkyPhoto = false
     @ObservationIgnored private var countdownTask: Task<Void, Never>?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
     @ObservationIgnored private var depthTagTask: Task<Void, Never>?
@@ -1196,6 +1198,9 @@ final class CameraWorkspaceViewModel {
                     // Picked for Double Exposure, not as a new background.
                     self.pendingDoubleExposure = false
                     self.adjustments.doubleExposure = max(self.adjustments.doubleExposure, 0.7)
+                } else if self.pendingSkyPhoto {
+                    self.pendingSkyPhoto = false
+                    self.adjustments.skyReplace = .photo
                 } else {
                     self.adjustments.background = .photo
                 }
@@ -1669,6 +1674,25 @@ final class CameraWorkspaceViewModel {
 
     func chooseDoubleExposurePhoto() {
         pendingDoubleExposure = true
+        showBackgroundPhotoPicker = true
+    }
+
+    /// Sky Replace. Photo without a second photo yet opens the picker first (the photo is shared
+    /// with Background Swap and Double Exposure).
+    func setSkyReplace(_ kind: SkyReplacement) {
+        if kind == .photo && customBackground == nil {
+            chooseSkyPhoto()
+            return
+        }
+        guard kind != adjustments.skyReplace else { return }
+        recordUndoPoint(force: true)
+        adjustments.skyReplace = kind
+        adjustmentsChanged()
+    }
+
+    func chooseSkyPhoto() {
+        pendingDoubleExposure = false
+        pendingSkyPhoto = true
         showBackgroundPhotoPicker = true
     }
 
