@@ -455,6 +455,11 @@ final class ImageProcessingService: @unchecked Sendable {
 
     static let grainKernel = kernel("filmGrain")
 
+    /// Panorama cylinder projection (a warp kernel, so it isn't in the color-kernel cache).
+    static let cylinderWarpKernel: CIWarpKernel? = metalLibrary.flatMap {
+        try? CIWarpKernel(functionName: "cylinderWarp", fromMetalLibraryData: $0)
+    }
+
     static let halationKernels: (source: CIColorKernel, add: CIColorKernel)? = {
         guard let source = kernel("halationSource"), let add = kernel("halationAdd") else { return nil }
         return (source, add)

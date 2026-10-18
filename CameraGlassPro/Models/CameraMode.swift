@@ -1,7 +1,8 @@
 import Foundation
 
 /// Modes in the camera-style selector. PHOTO edits photos; VIDEO, SLO-MO and TIME-LAPSE play
-/// imported videos (at 1×, ¼× and 8×) and export at that speed. The rest are preview looks and say so.
+/// imported videos (at 1×, ¼× and 8×) and export at that speed. CINEMATIC blurs a video's background;
+/// PANO stitches picked photos.
 enum CameraMode: String, CaseIterable, Identifiable {
     case timeLapse, sloMo, cinematic, video, photo, portrait, pano
 
@@ -15,8 +16,6 @@ enum CameraMode: String, CaseIterable, Identifiable {
         }
     }
 
-    var isPreviewOnly: Bool { self == .cinematic || self == .pano }
-
     var explanation: String {
         switch self {
         case .photo: "Import, frame, adjust and export a photo."
@@ -24,8 +23,8 @@ enum CameraMode: String, CaseIterable, Identifiable {
         case .video: "Plays imported videos. This app does not record video."
         case .sloMo: "Plays imported videos at ¼ speed; the edited copy exports slowed down."
         case .timeLapse: "Plays imported videos 8× faster; the edited copy exports sped up."
-        case .cinematic: "Preview only: plays imported videos. No video or depth capture."
-        case .pano: "Preview only. No panorama capture."
+        case .cinematic: "Plays imported videos with the background blurred behind the subject; tap a subject to focus on it."
+        case .pano: "Pick 2 to 8 overlapping photos in order, then tap the shutter to stitch them into a panorama."
         }
     }
 

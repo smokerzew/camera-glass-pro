@@ -66,7 +66,7 @@ struct CameraModeSelector: View {
         .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.12), value: isInteracting)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Mode")
-        .accessibilityValue(selection.title.capitalized + (selection.isPreviewOnly ? ", preview only" : ""))
+        .accessibilityValue(selection.title.capitalized)
         .accessibilityHint(selection.explanation)
         .accessibilityAdjustableAction { direction in
             let index = modes.firstIndex(of: selection) ?? 0

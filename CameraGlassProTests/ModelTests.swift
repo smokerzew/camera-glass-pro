@@ -128,13 +128,8 @@ final class FramingTests: XCTestCase {
     }
 
     func testModesAreHonest() {
-        XCTAssertFalse(CameraMode.photo.isPreviewOnly)
         XCTAssertTrue(CameraMode.video.explanation.contains("does not record"))
-        XCTAssertFalse(CameraMode.sloMo.isPreviewOnly)
-        XCTAssertFalse(CameraMode.timeLapse.isPreviewOnly)
-        for mode in CameraMode.allCases where mode.isPreviewOnly {
-            XCTAssertTrue(mode.explanation.hasPrefix("Preview only"), "\(mode) must say it is preview-only")
-        }
+        XCTAssertTrue(CameraMode.pano.explanation.contains("stitch"), "PANO is real now: it stitches picked photos")
         XCTAssertEqual(CameraMode.sloMo.playbackRate, 0.25)
         XCTAssertEqual(CameraMode.timeLapse.playbackRate, 8)
         XCTAssertEqual(CameraMode.photo.playbackRate, 1)

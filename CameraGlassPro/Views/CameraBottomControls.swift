@@ -126,6 +126,13 @@ struct CameraShutterControls: View {
                 CameraTag(text: "FINDING SUBJECT…", isOff: true).transition(.opacity)
             }
 
+            if vm.mode == .pano {
+                CameraTag(text: vm.canStitchPanorama ? "TAP SHUTTER TO STITCH \(min(vm.library.count, PanoStitcher.maxPhotos)) PHOTOS"
+                                                     : "PICK 2–8 OVERLAPPING PHOTOS IN ORDER",
+                          isOff: !vm.canStitchPanorama)
+                    .transition(.opacity)
+            }
+
             if vm.hasMedia {
                 if vm.depthEffect && vm.isLightingPickerVisible {
                     LightingPicker(vm: vm).transition(.opacity)
@@ -393,6 +400,7 @@ struct ImportControl: View {
         if vm.isRecordingUI { return "Stop recording and save" }
         if vm.centerControlPlaysVideo { return vm.isPlaying ? "Pause video" : "Play video" }
         if vm.countdown != nil { return "Cancel timer" }
+        if vm.canStitchPanorama { return "Stitch panorama" }
         return vm.hasMedia ? "Replace" : "Import photo or video"
     }
 }

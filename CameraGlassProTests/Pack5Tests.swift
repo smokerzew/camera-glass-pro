@@ -167,6 +167,70 @@ final class Pack5Tests: XCTestCase {
         XCTAssertEqual(pixel(result, 130, 130).g, pixel(scene, 130, 130).g, accuracy: 6, "a moved object never ghosts in")
     }
 
+    // MARK: Panorama
+
+    /// A wide scene with blotchy detail everywhere, so neighbors can be lined up.
+    private var wideScene: CIImage {
+        let e = CGRect(x: 0, y: 0, width: 720, height: 240)
+        return (CIFilter(name: "CIRandomGenerator")?.outputImage ?? CIImage.empty())
+            .cropped(to: e.insetBy(dx: -40, dy: -40))
+            .settingAlphaOne(in: e.insetBy(dx: -40, dy: -40))
+            .applyingGaussianBlur(sigma: 4)
+            .applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 4])
+            .cropped(to: e)
+    }
+
+    private func window(_ x: CGFloat) -> CIImage {
+        wideScene.cropped(to: CGRect(x: x, y: 0, width: 320, height: 240))
+            .transformed(by: CGAffineTransform(translationX: -x, y: 0))
+    }
+
+    func testFlatPanoramaRebuildsTheScene() throws {
+        let pano = try PanoStitcher.stitch([window(0), window(200), window(400)], focalScale: nil, context: processor.context)
+        XCTAssertEqual(pano.extent.origin, .zero)
+        XCTAssertEqual(pano.extent.width, 720, accuracy: 8, "three 320 px photos, 200 px apart")
+        XCTAssertEqual(pano.extent.height, 240, accuracy: 8)
+        // The stitched middle matches the scene there.
+        let middle = CGRect(x: 300, y: 60, width: 120, height: 120)
+        let scene = wideScene
+        var diff = 0.0
+        for x in stride(from: middle.minX, to: middle.maxX, by: 10) {
+            for y in stride(from: middle.minY, to: middle.maxY, by: 10) {
+                diff += abs(pixel(pano, x, y).g - pixel(scene, x, y).g)
+            }
+        }
+        XCTAssertLessThan(diff / 144, 12, "seams line up")
+    }
+
+    func testPanoramaOrderCanGoRightToLeft() throws {
+        let pano = try PanoStitcher.stitch([window(400), window(200), window(0)], focalScale: nil, context: processor.context)
+        XCTAssertEqual(pano.extent.width, 720, accuracy: 8)
+    }
+
+    func testPanoramaNeedsTwoOverlappingPhotos() {
+        XCTAssertThrowsError(try PanoStitcher.stitch([window(0)], context: processor.context))
+        let unrelated = solid(0.5, 0.5, 0.5, 320, 240)
+        XCTAssertThrowsError(try PanoStitcher.stitch([window(0), unrelated], focalScale: nil, context: processor.context))
+    }
+
+    func testCylinderKeepsHeightAndNarrowsWidth() {
+        XCTAssertNotNil(ImageProcessingService.cylinderWarpKernel)
+        let warped = PanoStitcher.cylinder(window(0), focal: 0.75 * 320)
+        XCTAssertEqual(warped.extent.origin, .zero)
+        XCTAssertEqual(warped.extent.height, 240)
+        XCTAssertLessThan(warped.extent.width, 320)
+        XCTAssertGreaterThan(warped.extent.width, 280)
+    }
+
+    @MainActor
+    func testPanoModeStitchesOnlyWithTwoOrMore() {
+        let vm = CameraWorkspaceViewModel(defaults: UserDefaults(suiteName: "Pano-\(UUID().uuidString)") ?? .standard)
+        vm.mode = .pano
+        XCTAssertFalse(vm.canStitchPanorama)
+        vm.primaryAction()
+        XCTAssertTrue(vm.showPhotosPicker, "with nothing picked the shutter still opens the picker")
+    }
+
     func testNightIsAnEffect() {
         XCTAssertTrue(LiveEffect.allCases.contains(.night))
         XCTAssertEqual(LiveEffect.night.title, "NIGHT")

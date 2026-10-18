@@ -134,3 +134,11 @@ using namespace metal;
     float3 speckle = (noise.rgb - 0.5) * 0.09 * amount * (1.0 - y) * (1.0 - y);
     return float4(max(s.rgb + speckle, 0.0), s.a);
 }
+
+// Panorama: maps each output point on a cylinder (radius `focal`, centered on cx, cy) back to the flat
+// photo, so photos taken by turning in place line up with a simple sideways shift.
+[[stitchable]] float2 cylinderWarp(float cx, float cy, float focal, coreimage::destination dest) {
+    float2 d = dest.coord();
+    float theta = (d.x - cx) / focal;
+    return float2(focal * tan(theta) + cx, (d.y - cy) / cos(theta) + cy);
+}

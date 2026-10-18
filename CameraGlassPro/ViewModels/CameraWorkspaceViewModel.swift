@@ -335,6 +335,7 @@ final class CameraWorkspaceViewModel {
         if isRecordingUI { stopRecordingRequested = true; return }
         if centerControlPlaysVideo { togglePlayback(); return }
         guard countdown == nil else { cancelCountdown(); return }
+        if canStitchPanorama { stitchPanorama(); return }
         if flash == .on { flashPulse += 1 }
         guard timer != .off else { showPhotosPicker = true; return }
         let seconds = timer.rawValue
@@ -692,6 +693,52 @@ final class CameraWorkspaceViewModel {
 
     /// 1× normally; ¼× in SLO-MO and 8× in TIME-LAPSE.
     var playbackRate: Float { mode.playbackRate }
+
+    // MARK: Panorama
+
+    /// PANO mode with two or more photos picked: the shutter stitches them (touch and hold still imports).
+    var canStitchPanorama: Bool { mode == .pano && library.count >= 2 && video == nil }
+
+    /// Loads every picked photo (videos are skipped), stitches them in the order picked, and opens the
+    /// panorama as a new item.
+    func stitchPanorama() {
+        guard canStitchPanorama else { return }
+        effectTask?.cancel()
+        isRenderingEffect = true
+        effectMessage = "Stitching panorama…"
+        let entries = Array(library.prefix(PanoStitcher.maxPhotos))
+        let importer = self.importer
+        let processor = self.processor
+        effectTask = Task { [weak self] in
+            do {
+                var photos: [CGImage] = []
+                for entry in entries {
+                    switch entry.source {
+                    case .library(let item):
+                        if item.supportedContentTypes.contains(where: { VideoService.isVideo($0) }) { continue }
+                        photos.append(try await importer.loadImage(from: item).preview)
+                    case .file(let url):
+                        if VideoService.isVideo(UTType(filenameExtension: url.pathExtension)) { continue }
+                        photos.append(try await importer.loadImage(from: url).preview)
+                    }
+                    try Task.checkCancellation()
+                }
+                let data = try await Task.detached(priority: .userInitiated) {
+                    let pano = try PanoStitcher.stitch(photos.map { CIImage(cgImage: $0) }, context: processor.context)
+                    return try processor.encode(pano, as: .jpeg)
+                }.value
+                try Task.checkCancellation()
+                let url = try LiveEffectsService.newURL("jpg")
+                try data.write(to: url)
+                self?.showEffectResult(url, toast: "Panorama created")
+            } catch is CancellationError {
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? "The panorama couldn't be stitched."
+                self?.alert = AppAlert(title: "Couldn't Stitch Panorama", message: message)
+            }
+            self?.isRenderingEffect = false
+        }
+    }
 
     /// Re-applies the speed when the mode changes during playback.
     func modeChanged() {
