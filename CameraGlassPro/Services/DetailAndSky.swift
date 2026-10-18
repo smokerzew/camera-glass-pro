@@ -120,7 +120,9 @@ extension ImageProcessingService {
             return image
         }
         // Tighter edge than the feathered sky-edit mask, so trees and rooftops get no halo.
-        let edge = mask.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.6]).cropped(to: e)
+        // Clamped: contrast around 0.5 pushes the ground below 0, which would push it away from the new sky's color.
+        let edge = mask.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.6])
+            .applyingFilter("CIColorClamp").cropped(to: e)
         let strength = CIImage(color: CIColor(red: k, green: k, blue: k)).cropped(to: e)
         let skyMask = edge.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: strength])
         let lit = kind.groundLight.isNeutral ? image : regionEdit(kind.groundLight.scaled(k), to: image)
