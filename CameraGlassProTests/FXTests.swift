@@ -330,7 +330,15 @@ final class ResetAreaTests: XCTestCase {
 
 final class MatchLookTests: XCTestCase {
     private func pixels(_ r: UInt8, _ g: UInt8, _ b: UInt8, count: Int = 200) -> [UInt8] {
-        (0..<count).flatMap { i in [UInt8(min(255, Int(r) + i % 20)), UInt8(min(255, Int(g) + i % 20)), UInt8(min(255, Int(b) + i % 20)), 255] }
+        var result: [UInt8] = []
+        for i in 0..<count {
+            let step: Int = i % 20 // a little variation so the spread isn't zero
+            result.append(UInt8(min(255, Int(r) + step)))
+            result.append(UInt8(min(255, Int(g) + step)))
+            result.append(UInt8(min(255, Int(b) + step)))
+            result.append(255)
+        }
+        return result
     }
 
     func testMatchingAPhotoToItselfChangesNothing() {
