@@ -34,32 +34,55 @@ enum PortraitLighting: String, CaseIterable, Codable, Sendable, Identifiable {
 /// Finds the subject (people first, then any salient foreground: pets, objects) with on-device Vision.
 enum SubjectMasker {
     /// Soft mask (white = subject) matching `image.extent`, or nil if no subject is found.
-    /// `fast` uses quick person segmentation only (for video frames).
+    /// Photos: the main subject (small far-off objects left out), with people's finer person mask merged in for
+    /// hair, pinholes closed and the edge fitted to the photo. `fast` (video frames) uses quick person
+    /// segmentation, also edge-fitted.
     static func mask(for image: CIImage, fast: Bool = false) -> CIImage? {
         let extent = image.extent
         guard extent.width > 1, extent.height > 1, !extent.isInfinite else { return nil }
         let handler = VNImageRequestHandler(ciImage: image, options: [:])
+        // A "subject" covering (nearly) the whole frame is no subject (the simulator returns that for every photo).
+        func usable(_ mask: CIImage) -> CIImage? {
+            let share = coverage(of: mask)
+            return share > 0.01 && share < 0.97 ? mask : nil
+        }
 
+        var objects: CIImage?
         if !fast {
             let foreground = VNGenerateForegroundInstanceMaskRequest()
             if (try? handler.perform([foreground])) != nil,
                let observation = foreground.results?.first,
-               !observation.allInstances.isEmpty,
-               let buffer = try? observation.generateScaledMaskForImage(forInstances: observation.allInstances, from: handler) {
-                // A "subject" covering the whole frame is no subject (the simulator returns that for every photo).
-                let mask = fitted(CIImage(cvPixelBuffer: buffer), to: extent)
-                let share = coverage(of: mask)
-                if share > 0.01, share < 0.97 { return mask }
+               !observation.allInstances.isEmpty {
+                let labels = labelCounts(observation.instanceMask)
+                let main = keptInstances(counts: labels.counts, total: labels.total)
+                let instances = main.isEmpty ? observation.allInstances : main
+                if let buffer = try? observation.generateScaledMaskForImage(forInstances: instances, from: handler) {
+                    objects = usable(fitted(CIImage(cvPixelBuffer: buffer), to: extent))
+                }
             }
         }
 
         let person = VNGeneratePersonSegmentationRequest()
         person.qualityLevel = fast ? .fast : .accurate
         person.outputPixelFormat = kCVPixelFormatType_OneComponent8
-        guard (try? handler.perform([person])) != nil, let buffer = person.results?.first?.pixelBuffer else { return nil }
-        let mask = fitted(CIImage(cvPixelBuffer: buffer), to: extent)
-        let share = coverage(of: mask)
-        return share > 0.01 && share < 0.97 ? mask : nil
+        var people: CIImage?
+        if (try? handler.perform([person])) != nil, let buffer = person.results?.first?.pixelBuffer {
+            people = usable(fitted(CIImage(cvPixelBuffer: buffer), to: extent))
+        }
+
+        let raw: CIImage
+        switch (objects, people) {
+        case let (objects?, people?):
+            // People's mask is finer around hair; keep only the people that belong to the main subject.
+            let near = objects.applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: max(2, extent.width / 40)])
+                .cropped(to: extent)
+            let ownPeople = people.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: near])
+            raw = ownPeople.applyingFilter("CIMaximumCompositing", parameters: [kCIInputBackgroundImageKey: objects]).cropped(to: extent)
+        case let (objects?, nil): raw = objects
+        case let (nil, people?): raw = people
+        case (nil, nil): return nil
+        }
+        return refine(raw, guide: image, extent: extent)
     }
 
     /// Scales a mask to cover `extent` exactly.
@@ -99,11 +122,15 @@ extension ImageProcessingService {
     func composeSubject(_ a: PhotoAdjustmentState, to image: CIImage, mask rawMask: CIImage,
                         backgroundPhoto: CIImage?) -> CIImage {
         let extent = image.extent
-        let feather = max(1, extent.width / 400)
+        // The mask's edge is already fitted to the photo; only a light feather is needed.
+        let feather = max(0.7, extent.width / 1200)
         let mask = rawMask.clampedToExtent()
             .applyingGaussianBlur(sigma: Double(feather))
             .cropped(to: extent)
-        var subject = image
+        // When the background changes, clean the old background's color out of the subject's edge.
+        let changesBackground = a.background != .original || a.colorSplash || a.portrait || a.speedBlur > 0
+            || !a.backgroundEdit.isNeutral
+        var subject = changesBackground ? decontaminated(image, mask: mask, extent: extent) : image
         var background = replacementBackground(a, for: image, mask: rawMask, photo: backgroundPhoto) ?? image
 
         if a.portrait {

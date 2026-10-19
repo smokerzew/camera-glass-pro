@@ -193,3 +193,42 @@ using namespace metal;
     float3 white = mix(float3(y), c, 0.35) + 0.06;
     return float4(pow(clamp(mix(c, white, teeth), 0.0, 1.0), float3(2.2)), s.a);
 }
+
+// Subject mask refinement (guided filter, He et al.): fits a rough mask to the photo's real edges.
+// Pack: brightness I (display), mask p, I*p, and I*I for the local averages.
+[[stitchable]] float4 guidedPackA(coreimage::sample_t s, coreimage::sample_t m) {
+    float i = dot(pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2)), float3(0.299, 0.587, 0.114));
+    float p = clamp(m.r, 0.0, 1.0);
+    return float4(i, p, i * p, 1.0);
+}
+
+[[stitchable]] float4 guidedPackB(coreimage::sample_t s) {
+    float i = dot(pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2)), float3(0.299, 0.587, 0.114));
+    return float4(i * i, 0.0, 0.0, 1.0);
+}
+
+// Local linear model q = a*I + b from the box-averaged packs.
+[[stitchable]] float4 guidedCoeffs(coreimage::sample_t x, coreimage::sample_t y, float eps) {
+    float meanI = x.r, meanP = x.g;
+    float variance = max(y.r - meanI * meanI, 0.0);
+    float covariance = x.b - meanI * meanP;
+    float a = covariance / (variance + eps);
+    return float4(a, meanP - a * meanI, 0.0, 1.0);
+}
+
+[[stitchable]] float4 guidedApply(coreimage::sample_t s, coreimage::sample_t ab) {
+    float i = dot(pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2)), float3(0.299, 0.587, 0.114));
+    float q = clamp(ab.r * i + ab.g, 0.0, 1.0);
+    return float4(q, q, q, 1.0);
+}
+
+// Edge color clean-up: along the subject's edge, pixels are a mix of subject and old background. Remove the
+// background's share (estimated from nearby background, premultiplied by how much background it saw), so a new
+// background doesn't show a fringe of the old one.
+[[stitchable]] float4 decontaminate(coreimage::sample_t s, coreimage::sample_t bg, coreimage::sample_t m) {
+    float a = clamp(m.r, 0.0, 1.0);
+    float edge = smoothstep(0.02, 0.2, a) * (1.0 - smoothstep(0.8, 0.98, a));
+    float3 b = bg.rgb / max(bg.a, 0.001);
+    float3 f = clamp((s.rgb - (1.0 - a) * b) / max(a, 0.15), 0.0, 1.0);
+    return float4(mix(s.rgb, f, edge * step(0.01, bg.a)), s.a);
+}
