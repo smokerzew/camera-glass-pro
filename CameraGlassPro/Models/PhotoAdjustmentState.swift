@@ -88,6 +88,16 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var dispersionSize: Double = 0.4
     /// Which way the particles drift, in degrees: 0 right, 90 up, 180 left, 270 down.
     var dispersionAngle: Double = 0
+    /// Which dispersion renders: the original pieces, or Particle Dissolve (each keeps its own settings).
+    var dispersionStyle: DispersionStyle = .pieces
+    /// Particle Dissolve: how much dissolves (0 = off), particle size, how many fly off, how far, which way
+    /// (degrees, 0 right), and how gradual the change from intact to particles is.
+    var dissolveAmount: Double = 0
+    var dissolveSize: Double = 0.3
+    var dissolveDensity: Double = 0.75
+    var dissolveSpread: Double = 0.45
+    var dissolveAngle: Double = 0
+    var dissolveSoftness: Double = 0.5
     /// Ghost: a translucent copy of the subject or whole photo, moved (opacity 0 = off).
     var ghostOpacity: Double = 0
     var ghostDistance: Double = 0.25
@@ -178,10 +188,15 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         return copy
     }
 
+    /// The dispersion style that's selected is on (the other style's settings are kept but don't render).
+    var dispersionActive: Bool {
+        dispersionStyle == .pieces ? dispersion > 0 : dissolveAmount > 0
+    }
+
     /// Any edit that needs the subject mask.
     var needsSubject: Bool {
         portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
-            || speedBlur > 0 || doubleExposure > 0 || dispersion > 0 || ghostOpacity > 0 // the subject goes back on top of the ghost
+            || speedBlur > 0 || doubleExposure > 0 || dispersionActive || ghostOpacity > 0 // the subject goes back on top of the ghost
             || hologram > 0 || melt > 0 || orbitClones > 0 || (pixelSort > 0 && pixelSortSubjectOnly)
             || (filter != .none && filterTarget != .all) || spotlight > 0 || depthMap > 0
     }
@@ -196,6 +211,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         copy.backgroundEdit = RegionEdit()
         copy.speedBlur = 0 // double exposure still works without a subject
         copy.dispersion = 0
+        copy.dissolveAmount = 0
         if copy.ghostTarget == .subject { copy.ghostOpacity = 0 }
         copy.hologram = 0
         copy.melt = 0
@@ -226,7 +242,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
 
     /// Effects that work pixel by pixel or per subject: live video previews them at a lighter size.
     var isHeavy: Bool {
-        needsSubject || dispersion > 0 || melt > 0 || pixelSort > 0 || littlePlanet > 0 || !liquifyStrokes.isEmpty || !removeStrokes.isEmpty || !focusStrokes.isEmpty
+        needsSubject || dispersion > 0 || dissolveAmount > 0 || melt > 0 || pixelSort > 0 || littlePlanet > 0 || !liquifyStrokes.isEmpty || !removeStrokes.isEmpty || !focusStrokes.isEmpty
             || eyeBrighten > 0 || teethWhiten > 0
             || skinSmoothing > 0 || skyReplace != .none || faceRedaction != .none || !redactionStrokes.isEmpty || halation > 0 || noiseReduction > 0
     }
@@ -274,6 +290,13 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         redactionStrength = unit(.redactionStrength, 0.75)
         dispersion = unit(.dispersion)
         skyReplaceAmount = unit(.skyReplaceAmount, 1)
+        dispersionStyle = (try? c.decodeIfPresent(DispersionStyle.self, forKey: .dispersionStyle)) ?? .pieces
+        dissolveAmount = unit(.dissolveAmount)
+        dissolveSize = unit(.dissolveSize, 0.3)
+        dissolveDensity = unit(.dissolveDensity, 0.75)
+        dissolveSpread = unit(.dissolveSpread, 0.45)
+        dissolveAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dissolveAngle)) ?? 0, 0), 360)
+        dissolveSoftness = unit(.dissolveSoftness, 0.5)
         focusBlur = unit(.focusBlur, 0.6)
         eyeBrighten = unit(.eyeBrighten)
         teethWhiten = unit(.teethWhiten)

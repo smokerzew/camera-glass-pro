@@ -34,7 +34,12 @@ final class ImageProcessingService: @unchecked Sendable {
         }
         if let mask {
             image = composeSubject(a, to: image, mask: mask, backgroundPhoto: backgroundPhoto)
-            if a.dispersion > 0 {
+            if a.dispersionStyle == .particleDissolve, a.dissolveAmount > 0 {
+                image = particleDissolve(image, mask: mask.cropped(to: input.extent), amount: a.dissolveAmount,
+                                         size: a.dissolveSize, density: a.dissolveDensity, spread: a.dissolveSpread,
+                                         degrees: a.dissolveAngle, softness: a.dissolveSoftness, extent: input.extent)
+            }
+            if a.dispersionStyle == .pieces, a.dispersion > 0 {
                 image = dispersion(image, mask: mask.cropped(to: input.extent), amount: a.dispersion,
                                    size: a.dispersionSize, degrees: a.dispersionAngle, extent: input.extent)
             }
@@ -469,6 +474,11 @@ final class ImageProcessingService: @unchecked Sendable {
     /// Panorama cylinder projection (a warp kernel, so it isn't in the color-kernel cache).
     static let cylinderWarpKernel: CIWarpKernel? = metalLibrary.flatMap {
         try? CIWarpKernel(functionName: "cylinderWarp", fromMetalLibraryData: $0)
+    }
+
+    /// Particle Dissolve (a sampler kernel: particles are gathered from where they left).
+    static let particleDissolveKernel: CIKernel? = metalLibrary.flatMap {
+        try? CIKernel(functionName: "particleDissolve", fromMetalLibraryData: $0)
     }
 
     /// Smooth slow motion's in-between frames (a sampler kernel).

@@ -142,6 +142,86 @@ final class LookTests: XCTestCase {
         sheet("looks-pack6", tiles)
     }
 
+    /// A hand-made mask of the woman in portrait.jpg (the simulator can't detect people), for subject effects.
+    private func portraitMask(_ image: CIImage) -> CIImage {
+        let e = image.extent
+        func disc(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat) -> CIImage {
+            (CIFilter(name: "CIRadialGradient", parameters: [
+                "inputCenter": CIVector(x: e.width * x, y: e.height * (1 - y)), "inputRadius0": e.width * r * 0.97,
+                "inputRadius1": e.width * r, "inputColor0": CIColor.white, "inputColor1": CIColor.black,
+            ])?.outputImage ?? CIImage.empty()).cropped(to: e)
+        }
+        let body = CIImage(color: .white).cropped(to: CGRect(x: e.width * 0.42, y: 0, width: e.width * 0.36, height: e.height * 0.4))
+        return [disc(0.57, 0.42, 0.2), disc(0.66, 0.27, 0.2), disc(0.76, 0.42, 0.13), body]
+            .reduce(CIImage(color: .black).cropped(to: e)) { $1.applyingFilter("CIMaximumCompositing", parameters: [kCIInputBackgroundImageKey: $0]) }
+            .cropped(to: e)
+    }
+
+    /// Particle Dissolve next to the reference look, plus its controls, and the original Pieces style.
+    func testParticleDissolveSheet() throws {
+        let image = try photo("portrait")
+        let mask = portraitMask(image)
+        func dissolve(_ change: (inout PhotoAdjustmentState) -> Void) -> CIImage {
+            var state = PhotoAdjustmentState()
+            state.dispersionStyle = .particleDissolve
+            state.dissolveAmount = 0.55
+            change(&state)
+            return processor.apply(state, to: image, subjectMask: mask).cropped(to: image.extent)
+        }
+        var pieces = PhotoAdjustmentState()
+        pieces.dispersion = 0.8
+        sheet("looks-particle-dissolve", [
+            ("Original", image), ("Mask (test)", mask),
+            ("Default", dissolve { _ in }), ("Dissolve 85", dissolve { $0.dissolveAmount = 0.85 }),
+            ("Dissolve 25", dissolve { $0.dissolveAmount = 0.25 }), ("Size 80", dissolve { $0.dissolveSize = 0.8 }),
+            ("Spread 90", dissolve { $0.dissolveSpread = 0.9 }), ("Spread 10", dissolve { $0.dissolveSpread = 0.1 }),
+            ("Density 20", dissolve { $0.dissolveDensity = 0.2 }), ("Softness 5", dissolve { $0.dissolveSoftness = 0.05 }),
+            ("Softness 100", dissolve { $0.dissolveSoftness = 1 }), ("Direction 180", dissolve { $0.dissolveAngle = 180 }),
+            ("Direction 90", dissolve { $0.dissolveAngle = 90 }), ("Pieces (old)", processor.apply(pieces, to: image, subjectMask: mask)),
+        ])
+        // Full size crop of the default, to judge particle detail.
+        let large = try XCTUnwrap(CIImage(contentsOf: try XCTUnwrap(Bundle(for: LookTests.self).url(forResource: "portrait", withExtension: "jpg")),
+                                          options: [.applyOrientationProperty: true]))
+        var state = PhotoAdjustmentState()
+        state.dispersionStyle = .particleDissolve
+        state.dissolveAmount = 0.55
+        let scale = large.extent.width / image.extent.width
+        let bigMask = mask.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let full = processor.apply(state, to: large, subjectMask: bigMask)
+        let crop = CGRect(x: large.extent.width * 0.45, y: large.extent.height * 0.3, width: 400, height: large.extent.height * 0.45)
+        sheet("looks-particle-dissolve-detail", [("Default, full size (crop)", full.cropped(to: crop)
+            .transformed(by: CGAffineTransform(translationX: -crop.minX, y: -crop.minY))
+            .transformed(by: CGAffineTransform(scaleX: 1, y: 1)))])
+    }
+
+    /// Background blur and privacy at low to high strength.
+    func testStrengthSheets() throws {
+        let image = try photo("portrait")
+        let mask = portraitMask(image)
+        var tiles: [(String, CIImage)] = []
+        for kind in [BackgroundBlurKind.soft, .zoom, .lens] {
+            for amount in [0.0, 0.1, 0.3, 0.6, 1.0] {
+                var state = PhotoAdjustmentState()
+                state.background = .blur
+                state.backgroundBlurKind = kind
+                state.backgroundBlurAmount = amount
+                tiles.append(("\(kind.label) \(Int(amount * 100))", processor.apply(state, to: image, subjectMask: mask)))
+            }
+            tiles.append(("", image))
+        }
+        for mode in [Redaction.blur, .pixelate] {
+            for strength in [0.0, 0.25, 0.5, 0.75, 1.0] {
+                var state = PhotoAdjustmentState()
+                state.redactionTarget = .drawing
+                state.redactionStrength = strength
+                state.redactionStrokes = [RedactionStroke(mode: mode, width: 0.3, points: [CGPoint(x: 0.6, y: 0.4)])]
+                tiles.append(("\(mode.label) \(Int(strength * 100))", processor.apply(state, to: image)))
+            }
+            tiles.append(("", image))
+        }
+        sheet("looks-strengths", tiles)
+    }
+
     /// The raw masks everything subject- and sky-based is built on (white = subject / sky), next to each photo.
     func testMaskSheet() throws {
         var tiles: [(String, CIImage)] = []

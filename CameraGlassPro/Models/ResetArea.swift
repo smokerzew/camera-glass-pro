@@ -137,6 +137,13 @@ extension PhotoAdjustmentState {
             next.dispersion = d.dispersion
             next.dispersionSize = d.dispersionSize
             next.dispersionAngle = d.dispersionAngle
+            next.dispersionStyle = d.dispersionStyle
+            next.dissolveAmount = d.dissolveAmount
+            next.dissolveSize = d.dissolveSize
+            next.dissolveDensity = d.dissolveDensity
+            next.dissolveSpread = d.dissolveSpread
+            next.dissolveAngle = d.dissolveAngle
+            next.dissolveSoftness = d.dissolveSoftness
         }
         return next
     }

@@ -232,3 +232,81 @@ using namespace metal;
     float3 f = clamp((s.rgb - (1.0 - a) * b) / max(a, 0.15), 0.0, 1.0);
     return float4(mix(s.rgb, f, edge * step(0.01, bg.a)), s.a);
 }
+
+// MARK: Particle Dissolve
+// The subject breaks into fine, irregular particles along a direction. `dir` is the unit direction, `span` =
+// (start, length) of the subject along it, `edge` where dissolving begins (0...1 along the subject, lower =
+// more dissolved), `soft` how gradual the change is, `cell` particle size in pixels, `density` how many
+// particles fly off, `travel` the farthest flight in pixels, `seed` keeps the pattern stable.
+
+static uint pdHash(int x, int y, int k) {
+    uint h = uint(x) * 73856093u ^ uint(y) * 19349663u ^ uint(k) * 83492791u;
+    h ^= h >> 13; h *= 1274126177u; h ^= h >> 16;
+    return h;
+}
+static float pdRand(int x, int y, int k) { return float(pdHash(x, y, k) & 0xFFFFFFu) / 16777216.0; }
+
+// Smooth value noise, for an organic, uneven dissolving edge.
+static float pdNoise(float2 p, int k) {
+    float2 i = floor(p), f = fract(p);
+    float2 u = f * f * (3.0 - 2.0 * f);
+    int x = int(i.x), y = int(i.y);
+    float a = pdRand(x, y, k), b = pdRand(x + 1, y, k), c = pdRand(x, y + 1, k), d = pdRand(x + 1, y + 1, k);
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+// How dissolved a point is (0 intact ... 1 fully particles).
+static float pdDissolve(float2 p, float2 dir, float2 span, float edge, float soft, float noiseScale) {
+    float s = (dot(p, dir) - span.x) / max(span.y, 1.0);
+    float wobble = (pdNoise(p / noiseScale, 7) - 0.5) * 0.35 + (pdNoise(p / (noiseScale * 0.35), 9) - 0.5) * 0.15;
+    return smoothstep(edge - soft, edge + soft, s + wobble);
+}
+
+[[stitchable]] float4 particleDissolve(coreimage::sampler image, coreimage::sampler plate, coreimage::sampler mask,
+                                       float2 dir, float2 span, float edge, float soft, float cell, float density,
+                                       float travel, float noiseScale, coreimage::destination dest) {
+    float2 q = dest.coord();
+    float4 here = image.sample(image.transform(q));
+    float4 behind = plate.sample(plate.transform(q));
+    float m = mask.sample(mask.transform(q)).r;
+    float2 side = float2(-dir.y, dir.x);
+
+    // 1. In place: the subject crumbles into particles where it dissolves; gaps show what's behind it.
+    float2 cq = floor(q / cell);
+    int cx = int(cq.x), cy = int(cq.y);
+    float d = pdDissolve(q, dir, span, edge, soft, noiseScale);
+    float4 base = here;
+    if (m > 0.02 && d > 0.0) {
+        float2 jitter = float2(pdRand(cx, cy, 1), pdRand(cx, cy, 2)) - 0.5;
+        float2 center = (cq + 0.5 + jitter * 0.5) * cell;
+        float radius = cell * (0.35 + 0.35 * pdRand(cx, cy, 3)) * mix(2.2, 1.0, d); // fill the cell when barely dissolved
+        bool inside = distance(q, center) < radius;
+        bool stays = pdRand(cx, cy, 4) >= d * d * 0.97 + d * 0.03; // fewer particles remain the more it dissolves
+        float gone = (inside && stays) ? 0.0 : 1.0;          // 1 where this spot's particle has left
+        float show = 1.0 - m * gone * smoothstep(0.1, 0.35, d); // gaps open gradually: no hard line
+        base = mix(behind, here, show);
+    }
+
+    // 2. In flight: particles carried from dissolving parts of the subject, densest near where they left.
+    for (int k = 0; k < 8; k++) {
+        float2 c2 = floor(q / cell);
+        int gx = int(c2.x), gy = int(c2.y);
+        float t = pdRand(gx, gy, 20 + k);
+        t = t * t;                                        // most travel a short way
+        float along = travel * t;
+        float across = (pdRand(gx, gy, 40 + k) - 0.5) * along * 0.35;
+        float2 center = (c2 + 0.5) * cell;
+        float2 from = center - dir * along - side * across;
+        float ms = mask.sample(mask.transform(from)).r;
+        if (ms < 0.5) { continue; }
+        float df = pdDissolve(from, dir, span, edge, soft, noiseScale);
+        if (pdRand(gx, gy, 60 + k) > df * density) { continue; }
+        float size = cell * (0.25 + 0.4 * pdRand(gx, gy, 80 + k)) * (1.0 - 0.45 * t);
+        float2 offset = q - center;
+        if (length(offset) > size) { continue; }
+        float4 color = image.sample(image.transform(from + offset));
+        float alpha = (1.0 - 0.6 * t) * smoothstep(size, size * 0.6, length(offset));
+        return float4(mix(base.rgb, color.rgb, alpha), 1.0);
+    }
+    return float4(base.rgb, 1.0);
+}

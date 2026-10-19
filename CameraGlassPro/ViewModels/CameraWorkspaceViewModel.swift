@@ -732,6 +732,15 @@ final class CameraWorkspaceViewModel {
         }
     }
 
+    /// Switches the dispersion style. Particle Dissolve starts at a reference-like setting the first time.
+    func setDispersionStyle(_ style: DispersionStyle) {
+        guard style != adjustments.dispersionStyle else { return }
+        recordUndoPoint(force: true)
+        adjustments.dispersionStyle = style
+        if style == .particleDissolve, adjustments.dissolveAmount == 0 { adjustments.dissolveAmount = 0.55 }
+        adjustmentsChanged()
+    }
+
     func clearCinematicFocus() {
         guard !adjustments.cinematicFocus.isEmpty else { return }
         recordUndoPoint(force: true)

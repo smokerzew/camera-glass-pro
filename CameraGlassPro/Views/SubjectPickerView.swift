@@ -8,6 +8,7 @@ struct SubjectPickerView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var region: PhotoRegion = .subject
     @State private var page: Page = .style
+    @State private var showMoreDissolve = false
 
     /// Three short pages instead of one long card.
     enum Page: String, CaseIterable { case style, adjust, create }
@@ -194,27 +195,65 @@ struct SubjectPickerView: View {
             }
             .disabled(vm.photo == nil)
             .opacity(vm.photo == nil ? 0.45 : 1)
-            GlassSliderRow(title: "Dispersion", value: vm.adjustments.dispersion) {
-                vm.setEffect(\.dispersion, to: min(max($0, 0), 1))
-            }
-            GlassSliderRow(title: "Particle Size", value: vm.adjustments.dispersionSize) {
-                vm.setEffect(\.dispersionSize, to: min(max($0, 0), 1))
-            }
-            .opacity(vm.adjustments.dispersion > 0 ? 1 : 0.4)
-            .disabled(vm.adjustments.dispersion == 0)
-            GlassSliderRow(title: "Direction", value: vm.adjustments.dispersionAngle, range: 0...360,
-                           display: { "\(Int($0.rounded()))°" }) {
-                vm.setEffect(\.dispersionAngle, to: min(max($0, 0), 360))
-            }
-            .opacity(vm.adjustments.dispersion > 0 ? 1 : 0.4)
-            .disabled(vm.adjustments.dispersion == 0)
+            GlassTabs(tabs: DispersionStyle.allCases, selection: Binding(get: { vm.adjustments.dispersionStyle },
+                                                                       set: { vm.setDispersionStyle($0) })) { $0.label }
+            if vm.adjustments.dispersionStyle == .pieces { piecesControls } else { dissolveControls }
             Text("Sticker saves a see-through PNG to Photos and copies it for Messages. 3D Video opens as a new item you can save. "
-                 + "Dispersion breaks the subject into particles that drift the way Direction points (0° is right, 90° is up).")
+                 + (vm.adjustments.dispersionStyle == .pieces
+                    ? "Pieces breaks the subject into chunks that drift the way Direction points (0° is right, 90° is up)."
+                    : "Particle Dissolve turns the subject into fine particles of its own colors, drifting the way Direction points."))
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.65))
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 6)
+    }
+
+    private var piecesControls: some View {
+        let on = vm.adjustments.dispersion > 0
+        return VStack(spacing: 10) {
+            GlassSliderRow(title: "Dispersion", value: vm.adjustments.dispersion) {
+                vm.setEffect(\.dispersion, to: min(max($0, 0), 1))
+            }
+            Group {
+                GlassSliderRow(title: "Particle Size", value: vm.adjustments.dispersionSize) {
+                    vm.setEffect(\.dispersionSize, to: min(max($0, 0), 1))
+                }
+                GlassSliderRow(title: "Direction", value: vm.adjustments.dispersionAngle, range: 0...360,
+                               display: { "\(Int($0.rounded()))°" }) {
+                    vm.setEffect(\.dispersionAngle, to: min(max($0, 0), 360))
+                }
+            }
+            .opacity(on ? 1 : 0.4)
+            .disabled(!on)
+        }
+    }
+
+    /// Particle Dissolve: how much, direction, spread and size up front; density and softness under More.
+    private var dissolveControls: some View {
+        let a = vm.adjustments
+        let on = a.dissolveAmount > 0
+        return VStack(spacing: 10) {
+            GlassSliderRow(title: "Dissolve", value: a.dissolveAmount) { vm.setEffect(\.dissolveAmount, to: min(max($0, 0), 1)) }
+            Group {
+                GlassSliderRow(title: "Direction", value: a.dissolveAngle, range: 0...360,
+                               display: { "\(Int($0.rounded()))°" }) { vm.setEffect(\.dissolveAngle, to: min(max($0, 0), 360)) }
+                GlassSliderRow(title: "Spread", value: a.dissolveSpread) { vm.setEffect(\.dissolveSpread, to: min(max($0, 0), 1)) }
+                GlassSliderRow(title: "Particle Size", value: a.dissolveSize) { vm.setEffect(\.dissolveSize, to: min(max($0, 0), 1)) }
+                Button(showMoreDissolve ? "Fewer Settings" : "More Settings") {
+                    withAnimation(.easeInOut(duration: 0.2)) { showMoreDissolve.toggle() }
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.yellow)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if showMoreDissolve {
+                    GlassSliderRow(title: "Density", value: a.dissolveDensity) { vm.setEffect(\.dissolveDensity, to: min(max($0, 0), 1)) }
+                    GlassSliderRow(title: "Softness", value: a.dissolveSoftness) { vm.setEffect(\.dissolveSoftness, to: min(max($0, 0), 1)) }
+                }
+            }
+            .opacity(on ? 1 : 0.4)
+            .disabled(!on)
+        }
     }
 
     /// Brightness, saturation and warmth for just the subject or just the background.

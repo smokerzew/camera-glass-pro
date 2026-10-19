@@ -123,9 +123,19 @@ extension PhotoAdjustmentState {
             next.popAmount = random(0.6...1)
             next.popOption = random(0...1)
         case .subjectCreate:
-            next.dispersion = random(0.4...1)
-            next.dispersionSize = random(0.2...0.8)
-            next.dispersionAngle = random(0...360)
+            // Only the style you're on.
+            if dispersionStyle == .particleDissolve {
+                next.dissolveAmount = random(0.35...0.8)
+                next.dissolveSize = random(0.1...0.6)
+                next.dissolveDensity = random(0.4...1)
+                next.dissolveSpread = random(0.2...0.8)
+                next.dissolveAngle = random(0...360)
+                next.dissolveSoftness = random(0.2...0.8)
+            } else {
+                next.dispersion = random(0.4...1)
+                next.dispersionSize = random(0.2...0.8)
+                next.dispersionAngle = random(0...360)
+            }
         case .local, .adjust, .fxPrivacy, .subjectStyle:
             return nil
         }
