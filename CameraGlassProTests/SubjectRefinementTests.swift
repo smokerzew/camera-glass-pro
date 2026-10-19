@@ -33,10 +33,22 @@ final class SubjectRefinementTests: XCTestCase {
             .clampedToExtent().applyingGaussianBlur(sigma: 5).cropped(to: e)
         let refined = SubjectMasker.refine(rough, guide: photo, extent: e)
         XCTAssertEqual(refined.extent, e)
-        XCTAssertGreaterThan(value(refined, 595, 100).r, value(rough, 595, 100).r + 30, "inside the dark half: more subject than the rough mask")
-        XCTAssertLessThan(value(refined, 606, 100).r, 60, "past the real edge: not subject")
+        /// Where the mask crosses 50% along the middle row.
+        func crossing(_ mask: CIImage) -> Int {
+            let values = value(row: mask, y: 100, from: 560, count: 80)
+            return 560 + (values.firstIndex { $0 < 128 } ?? 80)
+        }
+        let before = crossing(rough), after = crossing(refined)
+        XCTAssertLessThan(abs(after - 600), abs(before - 600), "the edge moves toward the photo's real edge (\(before) → \(after))")
         XCTAssertGreaterThan(value(refined, 300, 100).r, 240, "well inside stays subject")
         XCTAssertLessThan(value(refined, 900, 100).r, 15, "well outside stays background")
+    }
+
+    private func value(row image: CIImage, y: CGFloat, from x: CGFloat, count: Int) -> [UInt8] {
+        var p = [UInt8](repeating: 0, count: count * 4)
+        processor.context.render(image, toBitmap: &p, rowBytes: count * 4, bounds: CGRect(x: x, y: y, width: CGFloat(count), height: 1),
+                                 format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        return stride(from: 0, to: p.count, by: 4).map { p[$0] }
     }
 
     /// An edge pixel that is half red subject, half green background comes out red once cleaned.

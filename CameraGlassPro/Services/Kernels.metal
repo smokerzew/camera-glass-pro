@@ -230,7 +230,7 @@ using namespace metal;
     float edge = smoothstep(0.02, 0.2, a) * (1.0 - smoothstep(0.8, 0.98, a));
     float3 b = bg.rgb / max(bg.a, 0.001);
     float3 f = clamp((s.rgb - (1.0 - a) * b) / max(a, 0.15), 0.0, 1.0);
-    return float4(mix(s.rgb, f, edge * step(0.01, bg.a)), s.a);
+    return float4(mix(s.rgb, f, edge * smoothstep(0.001, 0.02, bg.a)), s.a);
 }
 
 // MARK: Particle Dissolve
@@ -272,17 +272,23 @@ static float pdDissolve(float2 p, float2 dir, float2 span, float edge, float sof
     float2 side = float2(-dir.y, dir.x);
 
     // 1. In place: the subject crumbles into particles where it dissolves; gaps show what's behind it.
-    float2 cq = floor(q / cell);
-    int cx = int(cq.x), cy = int(cq.y);
+    // Particles are scattered irregularly (one per cell, anywhere in it, checked across neighboring cells),
+    // with varied sizes, so there is no visible grid.
     float d = pdDissolve(q, dir, span, edge, soft, noiseScale);
     float4 base = here;
     if (m > 0.02 && d > 0.0) {
-        float2 jitter = float2(pdRand(cx, cy, 1), pdRand(cx, cy, 2)) - 0.5;
-        float2 center = (cq + 0.5 + jitter * 0.5) * cell;
-        float radius = cell * (0.35 + 0.35 * pdRand(cx, cy, 3)) * mix(2.2, 1.0, d); // fill the cell when barely dissolved
-        bool inside = distance(q, center) < radius;
-        bool stays = pdRand(cx, cy, 4) >= d * d * 0.97 + d * 0.03; // fewer particles remain the more it dissolves
-        float gone = (inside && stays) ? 0.0 : 1.0;          // 1 where this spot's particle has left
+        float2 cq = floor(q / cell);
+        bool covered = false;
+        for (int oy = -1; oy <= 1 && !covered; oy++) {
+            for (int ox = -1; ox <= 1 && !covered; ox++) {
+                int cx = int(cq.x) + ox, cy = int(cq.y) + oy;
+                float2 center = (float2(cx, cy) + float2(pdRand(cx, cy, 1), pdRand(cx, cy, 2))) * cell;
+                float radius = cell * (0.3 + 0.5 * pdRand(cx, cy, 3)) * mix(1.9, 0.85, d); // fill in when barely dissolved
+                bool stays = pdRand(cx, cy, 4) >= d * d * 0.97 + d * 0.03;            // fewer remain the more it dissolves
+                if (stays && distance(q, center) < radius) { covered = true; }
+            }
+        }
+        float gone = covered ? 0.0 : 1.0;
         float show = 1.0 - m * gone * smoothstep(0.1, 0.35, d); // gaps open gradually: no hard line
         base = mix(behind, here, show);
     }
@@ -301,8 +307,10 @@ static float pdDissolve(float2 p, float2 dir, float2 span, float edge, float sof
         if (ms < 0.5) { continue; }
         float df = pdDissolve(from, dir, span, edge, soft, noiseScale);
         if (pdRand(gx, gy, 60 + k) > df * density) { continue; }
-        float size = cell * (0.25 + 0.4 * pdRand(gx, gy, 80 + k)) * (1.0 - 0.45 * t);
-        float2 offset = q - center;
+        float size = cell * (0.2 + 0.3 * pdRand(gx, gy, 80 + k)) * (1.0 - 0.4 * t);
+        // Anywhere inside its cell (not on a grid), staying within the cell.
+        float2 wander = (float2(pdRand(gx, gy, 100 + k), pdRand(gx, gy, 120 + k)) - 0.5) * (cell - 2.0 * size);
+        float2 offset = q - (center + wander);
         if (length(offset) > size) { continue; }
         float4 color = image.sample(image.transform(from + offset));
         float alpha = (1.0 - 0.6 * t) * smoothstep(size, size * 0.6, length(offset));

@@ -66,7 +66,8 @@ extension ImageProcessingService {
                 kCIInputContrastKey: 2.5, // only clear background feeds the estimate
             ]).applyingFilter("CIColorClamp"),
         ]).cropped(to: e)
-        let nearby = background.clampedToExtent().applyingGaussianBlur(sigma: Double(max(2, e.width / 120))).cropped(to: e)
+        // Wide enough to reach real background from anywhere in a soft edge band.
+        let nearby = background.clampedToExtent().applyingGaussianBlur(sigma: Double(max(4, e.width / 40))).cropped(to: e)
         return kernel.apply(extent: e, arguments: [image, nearby, mask])?.cropped(to: e) ?? image
     }
 }

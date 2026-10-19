@@ -212,7 +212,12 @@ extension ImageProcessingService {
         case .blur:
             let box = maskBounds(mask.cropped(to: extent), extent: extent) ?? extent
             // Blur the background with the subject taken out, so no halo of the subject's colors forms around it.
-            let behind = subjectPlate(image, mask: mask.cropped(to: extent), extent: extent)
+            // The fill replaces only the subject itself; everywhere else is the real background (a fill reaching past
+            // the outline showed as a light rim at low blur).
+            let subjectArea = mask.cropped(to: extent)
+            let behind = subjectPlate(image, mask: subjectArea, extent: extent)
+                .applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: image, kCIInputMaskImageKey: subjectArea])
+                .cropped(to: extent)
             return blurredBackground(behind, kind: a.backgroundBlurKind, amount: a.backgroundBlurAmount,
                                      center: CGPoint(x: box.midX, y: box.midY), extent: extent)
         case .black:
