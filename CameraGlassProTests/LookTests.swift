@@ -118,6 +118,21 @@ final class LookTests: XCTestCase {
         }
     }
 
+    /// The raw masks everything subject- and sky-based is built on (white = subject / sky), next to each photo.
+    func testMaskSheet() throws {
+        var tiles: [(String, CIImage)] = []
+        for name in ["portrait", "landscape", "food", "night"] {
+            let image = try photo(name)
+            let e = image.extent
+            let black = CIImage(color: .black).cropped(to: e)
+            tiles.append((name, image))
+            tiles.append(("subject", SubjectMasker.mask(for: image)?.cropped(to: e).composited(over: black) ?? black))
+            tiles.append(("person (fast)", SubjectMasker.mask(for: image, fast: true)?.cropped(to: e).composited(over: black) ?? black))
+            tiles.append(("sky", processor.skyMask(for: image, extent: e)?.composited(over: black) ?? black))
+        }
+        sheet("looks-masks", tiles)
+    }
+
     /// Owner rule: pure black stays neutral. Checked on a real night photo for every filter.
     func testNightBlacksStayNeutralOnARealPhoto() throws {
         let image = try photo("night")
