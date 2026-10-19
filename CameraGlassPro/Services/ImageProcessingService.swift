@@ -37,7 +37,8 @@ final class ImageProcessingService: @unchecked Sendable {
             if a.dispersionStyle == .particleDissolve, a.dissolveAmount > 0 {
                 image = particleDissolve(image, mask: mask.cropped(to: input.extent), amount: a.dissolveAmount,
                                          size: a.dissolveSize, density: a.dissolveDensity, spread: a.dissolveSpread,
-                                         degrees: a.dissolveAngle, softness: a.dissolveSoftness, extent: input.extent)
+                                         degrees: a.dissolveAngle, softness: a.dissolveSoftness, echo: a.dissolveEcho,
+                                         extent: input.extent)
             }
             if a.dispersionStyle == .pieces, a.dispersion > 0 {
                 image = dispersion(image, mask: mask.cropped(to: input.extent), amount: a.dispersion,

@@ -131,6 +131,7 @@ extension PhotoAdjustmentState {
                 next.dissolveSpread = random(0.2...0.8)
                 next.dissolveAngle = random(0...360)
                 next.dissolveSoftness = random(0.2...0.8)
+                next.dissolveEcho = random(0...1)
             } else {
                 next.dispersion = random(0.4...1)
                 next.dispersionSize = random(0.2...0.8)

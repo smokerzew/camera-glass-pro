@@ -98,6 +98,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var dissolveSpread: Double = 0.45
     var dissolveAngle: Double = 0
     var dissolveSoftness: Double = 0.5
+    /// A bigger, speckled copy of the dissolving subject growing out of it (0 = none).
+    var dissolveEcho: Double = 0.75
     /// Ghost: a translucent copy of the subject or whole photo, moved (opacity 0 = off).
     var ghostOpacity: Double = 0
     var ghostDistance: Double = 0.25
@@ -297,6 +299,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         dissolveSpread = unit(.dissolveSpread, 0.45)
         dissolveAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dissolveAngle)) ?? 0, 0), 360)
         dissolveSoftness = unit(.dissolveSoftness, 0.5)
+        dissolveEcho = unit(.dissolveEcho, 0.75)
         focusBlur = unit(.focusBlur, 0.6)
         eyeBrighten = unit(.eyeBrighten)
         teethWhiten = unit(.teethWhiten)

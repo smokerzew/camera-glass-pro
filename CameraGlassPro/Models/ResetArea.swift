@@ -144,6 +144,7 @@ extension PhotoAdjustmentState {
             next.dissolveSpread = d.dissolveSpread
             next.dissolveAngle = d.dissolveAngle
             next.dissolveSoftness = d.dissolveSoftness
+            next.dissolveEcho = d.dissolveEcho
         }
         return next
     }

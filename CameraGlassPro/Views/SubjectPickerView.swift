@@ -239,6 +239,7 @@ struct SubjectPickerView: View {
                 GlassSliderRow(title: "Direction", value: a.dissolveAngle, range: 0...360,
                                display: { "\(Int($0.rounded()))°" }) { vm.setEffect(\.dissolveAngle, to: min(max($0, 0), 360)) }
                 GlassSliderRow(title: "Spread", value: a.dissolveSpread) { vm.setEffect(\.dissolveSpread, to: min(max($0, 0), 1)) }
+                GlassSliderRow(title: "Echo", value: a.dissolveEcho) { vm.setEffect(\.dissolveEcho, to: min(max($0, 0), 1)) }
                 GlassSliderRow(title: "Particle Size", value: a.dissolveSize) { vm.setEffect(\.dissolveSize, to: min(max($0, 0), 1)) }
                 Button(showMoreDissolve ? "Fewer Settings" : "More Settings") {
                     withAnimation(.easeInOut(duration: 0.2)) { showMoreDissolve.toggle() }

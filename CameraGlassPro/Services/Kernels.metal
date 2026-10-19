@@ -264,7 +264,8 @@ static float pdDissolve(float2 p, float2 dir, float2 span, float edge, float sof
 
 [[stitchable]] float4 particleDissolve(coreimage::sampler image, coreimage::sampler plate, coreimage::sampler mask,
                                        float2 dir, float2 span, float edge, float soft, float cell, float density,
-                                       float travel, float noiseScale, coreimage::destination dest) {
+                                       float travel, float noiseScale, float2 anchor, float zoom, float echo,
+                                       coreimage::destination dest) {
     float2 q = dest.coord();
     float4 here = image.sample(image.transform(q));
     float4 behind = plate.sample(plate.transform(q));
@@ -293,7 +294,25 @@ static float pdDissolve(float2 p, float2 dir, float2 span, float edge, float sof
         base = mix(behind, here, show);
     }
 
-    // 2. In flight: particles carried from dissolving parts of the subject, densest near where they left.
+    // 2. Echo: a larger copy of the dissolving subject, expanding away from it, made of fine speckles that
+    // thin out with distance (the face reappears bigger, in pixel-sized grains of its own colors).
+    if (echo > 0.0) {
+        float2 p = anchor + (q - anchor) / zoom;              // this spot's place on the subject before it expanded
+        if (mask.sample(mask.transform(p)).r > 0.5) {
+            float de = pdDissolve(p, dir, span, edge, soft, noiseScale);
+            float2 c3 = floor(q / max(cell * 0.75, 1.0));
+            int ex = int(c3.x), ey = int(c3.y);
+            float far = clamp(dot(q - anchor, dir) / max(span.y * zoom, 1.0), 0.0, 1.0);
+            float intact = m * (1.0 - smoothstep(0.1, 0.35, d)); // never speckle over the intact subject
+            float chance = echo * de * (0.9 - 0.6 * far) * (1.0 - intact);
+            if (pdRand(ex, ey, 140) < chance) {
+                float2 grain = (float2(pdRand(ex, ey, 141), pdRand(ex, ey, 142)) - 0.5) * cell;
+                base = float4(image.sample(image.transform(p + grain)).rgb, 1.0);
+            }
+        }
+    }
+
+    // 3. In flight: particles carried from dissolving parts of the subject, densest near where they left.
     for (int k = 0; k < 8; k++) {
         float2 c2 = floor(q / cell);
         int gx = int(c2.x), gy = int(c2.y);
