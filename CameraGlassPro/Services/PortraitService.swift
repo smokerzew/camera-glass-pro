@@ -210,6 +210,7 @@ extension ImageProcessingService {
         case .original:
             return nil
         case .blur:
+            guard BackgroundBlurKind.curve(a.backgroundBlurAmount) > 0 else { return nil } // 0 = the untouched background
             let box = maskBounds(mask.cropped(to: extent), extent: extent) ?? extent
             // Blur the background with the subject taken out, so no halo of the subject's colors forms around it.
             // The fill replaces only the subject itself; everywhere else is the real background (a fill reaching past
