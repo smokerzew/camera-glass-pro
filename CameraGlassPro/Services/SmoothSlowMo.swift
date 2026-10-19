@@ -83,7 +83,7 @@ extension LiveEffectsService {
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
-        generator.maximumSize = CGSize(width: 1280, height: 1280)
+        generator.maximumSize = CGSize(width: 1920, height: 1920) // optical flow on every pair is slow above 1080p
         if !adjustments.isIdentity {
             generator.videoComposition = try? await VideoService.composition(for: asset, recipe: recipe, processor: processor)
         }
@@ -111,9 +111,8 @@ extension LiveEffectsService {
             let frame = CIImage(cgImage: cgFrame)
             if writer == nil {
                 let created = try AVAssetWriter(outputURL: url, fileType: .mov)
-                let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: [
-                    AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: cgFrame.width, AVVideoHeightKey: cgFrame.height,
-                ])
+                let videoInput = AVAssetWriterInput(mediaType: .video,
+                                                    outputSettings: highQualityVideoSettings(width: cgFrame.width, height: cgFrame.height))
                 videoInput.expectsMediaDataInRealTime = false
                 created.add(videoInput)
                 adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: [

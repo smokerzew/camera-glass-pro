@@ -60,6 +60,19 @@ enum LiveEffectsService {
     static let fps: Int32 = 30
     static let outputDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("Effects", isDirectory: true)
 
+    /// H.264 at a generous bitrate (about 0.35 bits per pixel per frame), so effect movies keep their detail.
+    static func highQualityVideoSettings(width: Int, height: Int) -> [String: Any] {
+        [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: max(8_000_000, Int(Double(width * height) * Double(fps) * 0.35)),
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+            ],
+        ]
+    }
+
     static func newURL(_ ext: String) throws -> URL {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         return outputDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
@@ -110,7 +123,7 @@ enum LiveEffectsService {
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
-        generator.maximumSize = CGSize(width: maxSize, height: maxSize)
+        if maxSize > 0 { generator.maximumSize = CGSize(width: maxSize, height: maxSize) } // 0 = the video's full size
         if !adjustments.isIdentity {
             generator.videoComposition = try? await VideoService.composition(for: asset, recipe: recipe, processor: processor)
         }
@@ -151,7 +164,7 @@ enum LiveEffectsService {
         audioRange: CMTimeRange? = nil, echo: Bool = false
     ) async throws {
         let audio = try await AudioPass(asset: asset, range: audioRange)
-        let generator = await editedFrames(of: asset, adjustments: adjustments, processor: processor, maxSize: 1920)
+        let generator = await editedFrames(of: asset, adjustments: adjustments, processor: processor, maxSize: 0)
         var trail: CIImage?
 
         var writer: AVAssetWriter?
@@ -165,11 +178,8 @@ enum LiveEffectsService {
             if writer == nil {
                 let created = try AVAssetWriter(outputURL: url, fileType: .mov)
                 created.metadata = metadata
-                let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: [
-                    AVVideoCodecKey: AVVideoCodecType.h264,
-                    AVVideoWidthKey: frame.width,
-                    AVVideoHeightKey: frame.height,
-                ])
+                let videoInput = AVAssetWriterInput(mediaType: .video,
+                                                    outputSettings: highQualityVideoSettings(width: frame.width, height: frame.height))
                 videoInput.expectsMediaDataInRealTime = false
                 created.add(videoInput)
                 adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: [
@@ -240,7 +250,7 @@ enum LiveEffectsService {
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
-        generator.maximumSize = CGSize(width: 2400, height: 2400)
+        // Full video resolution.
 
         var accumulator: CIImageAccumulator?
         var count = 0
@@ -292,7 +302,7 @@ enum LiveEffectsService {
         else { throw EffectError.writeFailed }
         CGImageDestinationAddImage(destination, stillImage, [
             kCGImagePropertyMakerAppleDictionary: ["17": identifier],
-            kCGImageDestinationLossyCompressionQuality: 0.92,
+            kCGImageDestinationLossyCompressionQuality: 1.0,
         ] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw EffectError.writeFailed }
 

@@ -40,7 +40,7 @@ final class PhotoEditingViewController: UIViewController, PHContentEditingContro
             let processor = ImageProcessingService.shared
             guard let source = CIImage(contentsOf: url, options: [.applyOrientationProperty: true]),
                   let recipe = try? PhotosEditFormat.encode(state),
-                  let data = try? processor.encode(processor.apply(state, to: source), as: .jpeg),
+                  let data = try? processor.encode(processor.apply(state, to: source), as: .jpeg, colorSpace: source.colorSpace),
                   (try? data.write(to: output.renderedContentURL, options: .atomic)) != nil
             else { completionHandler(nil); return }
             output.adjustmentData = recipe

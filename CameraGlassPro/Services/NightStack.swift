@@ -79,7 +79,7 @@ extension LiveEffectsService {
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
-        generator.maximumSize = CGSize(width: 2400, height: 2400)
+        // Full video resolution.
         var frames: [CIImage] = []
         for await result in generator.images(for: times) {
             if let frame = try? result.image { frames.append(CIImage(cgImage: frame)) }

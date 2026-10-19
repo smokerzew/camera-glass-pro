@@ -19,7 +19,8 @@ final class ImageProcessingService: @unchecked Sendable {
     /// `faces` lets live video reuse face boxes found for a nearby frame (nil = find them here).
     func apply(_ adjustments: PhotoAdjustmentState, to original: CIImage, subjectMask: CIImage? = nil,
                fastMask: Bool = false, backgroundPhoto: CIImage? = nil, faces: [CGRect]? = nil) -> CIImage {
-        let a = adjustments.clamped()
+        // Effect strengths on the gentle curve (see EffectResponse), so low settings stay subtle.
+        let a = adjustments.clamped().withEffectResponse()
         guard !a.isIdentity else { return original }
         // Removed objects are gone before anything else looks at the photo (subject, sky, faces).
         let input = a.removeStrokes.isEmpty ? original
@@ -605,17 +606,21 @@ final class ImageProcessingService: @unchecked Sendable {
         return context.createCGImage(output, from: output.extent)
     }
 
-    func encode(_ image: CIImage, as format: ExportFormat) throws -> Data {
-        let colorSpace = image.colorSpace ?? CGColorSpaceCreateDeviceRGB()
-        let quality = [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.92]
+    /// Highest quality the format allows: maximum lossy quality, 10-bit HEIF, 16-bit PNG, in `colorSpace` (the
+    /// photo's own, so wide-gamut Display P3 photos keep their colors; Display P3 when unknown).
+    func encode(_ image: CIImage, as format: ExportFormat, colorSpace: CGColorSpace? = nil) throws -> Data {
+        let space = colorSpace ?? image.colorSpace ?? CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB()
+        let best = [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 1.0]
         let data: Data?
         switch format {
         case .jpeg:
-            data = context.jpegRepresentation(of: image, colorSpace: colorSpace, options: quality)
+            data = context.jpegRepresentation(of: image, colorSpace: space, options: best)
         case .heic:
-            data = context.heifRepresentation(of: image, format: .RGBA8, colorSpace: colorSpace, options: quality)
+            // 10 bits per channel (smoother gradients and skies than 8); falls back to 8-bit if unavailable.
+            data = (try? context.heif10Representation(of: image, colorSpace: space, options: best))
+                ?? context.heifRepresentation(of: image, format: .RGBA8, colorSpace: space, options: best)
         case .png:
-            data = context.pngRepresentation(of: image, format: .RGBA8, colorSpace: colorSpace, options: [:])
+            data = context.pngRepresentation(of: image, format: .RGBA16, colorSpace: space, options: [:])
         }
         guard let data else { throw PhotoExportError.renderFailed }
         return data

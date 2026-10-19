@@ -183,7 +183,8 @@ struct PhotoExportService: Sendable {
         image = Self.burnOverlays(request.overlays, into: image)
         if request.options.storyFill { image = Self.storyFill(image) }
         image = Self.resized(image, longEdge: request.options.size.photoLongEdge)
-        return try processor.encode(image, as: request.options.format)
+        // The photo's own color space, so wide-gamut (Display P3) colors survive.
+        return try processor.encode(image, as: request.options.format, colorSpace: source.colorSpace)
     }
 
     /// Scales down (high-quality Lanczos) so the longest side is at most `longEdge`; never enlarges.

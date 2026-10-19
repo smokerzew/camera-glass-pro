@@ -76,7 +76,7 @@ struct CollageView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Make") { vm.makeCollage(photos, layout: layout, shape: shape) }
+                    Button("Make") { vm.makeCollage(mode: mode, layout: layout, shape: shape) }
                         .fontWeight(.semibold)
                         .disabled(loading || photos.count < 2)
                 }

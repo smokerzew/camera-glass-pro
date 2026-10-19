@@ -143,6 +143,35 @@ final class Pack6Tests: XCTestCase {
         XCTAssertNil(Collage.render([red], layout: Collage.layouts(for: 2)[0], shape: .square, longEdge: 100))
     }
 
+    // MARK: Gentle effect strengths
+
+    func testLowEffectStrengthsAreSubtle() {
+        var state = PhotoAdjustmentState()
+        state.glow = 0.2
+        state.vignette = -0.5
+        state.filterStrength = 1
+        let rendered = state.withEffectResponse()
+        XCTAssertEqual(rendered.glow, 0.04, accuracy: 0.0001, "20% renders as 4%")
+        XCTAssertEqual(rendered.vignette, -0.25, accuracy: 0.0001, "signed strengths keep their direction")
+        XCTAssertEqual(rendered.filterStrength, 1, "full strength stays full")
+        XCTAssertEqual(PhotoAdjustmentState().withEffectResponse(), PhotoAdjustmentState(), "nothing set, nothing changes")
+        XCTAssertEqual(rendered.exposure, state.exposure, "light and color sliders keep their own units")
+    }
+
+    // MARK: Export quality
+
+    func testExportsKeepWideColorAndFullBitDepth() throws {
+        let p3 = try XCTUnwrap(CGColorSpace(name: CGColorSpace.displayP3))
+        let image = CIImage(color: CIColor(red: 0.9, green: 0.2, blue: 0.1)).cropped(to: CGRect(x: 0, y: 0, width: 64, height: 64))
+        let jpeg = try processor.encode(image, as: .jpeg, colorSpace: p3)
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(jpeg as CFData, nil))
+        let decoded = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        XCTAssertEqual(decoded.colorSpace?.name, CGColorSpace.displayP3, "Display P3 survives the export")
+        let png = try processor.encode(image, as: .png, colorSpace: p3)
+        let pngImage = try XCTUnwrap(CGImageSourceCreateImageAtIndex(try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil)), 0, nil))
+        XCTAssertEqual(pngImage.bitsPerComponent, 16, "PNG keeps 16 bits per channel")
+    }
+
     @MainActor
     func testCollageNeedsTwoPhotos() {
         let vm = CameraWorkspaceViewModel(defaults: UserDefaults(suiteName: "Collage-\(UUID().uuidString)") ?? .standard)

@@ -92,6 +92,8 @@ final class CameraWorkspaceViewModel {
     var showBackgroundPhotoPicker = false
     /// Photo chosen for Background Swap (preview resolution; used for preview, video and export).
     private(set) var customBackground: CGImage?
+    /// The same photo at full resolution, for exports (the preview-size copy above is for the screen).
+    @ObservationIgnored private var customBackgroundFull: CIImage?
 
     // MARK: Live Photos and effects
     /// True while the Live Photo motion plays (touch and hold the LIVE badge).
@@ -774,19 +776,49 @@ final class CameraWorkspaceViewModel {
         return result
     }
 
-    /// Renders the collage at full preview size and opens it as a new item (edit it as a whole from there).
-    func makeCollage(_ photos: [CGImage], layout: [CGRect], shape: Collage.Shape) {
+    /// The original photo at full resolution (orientation applied), scaled down only past `maxHeight`.
+    nonisolated static func fullResolution(_ photo: ImportedPhoto, maxHeight: CGFloat) -> CIImage {
+        guard let image = CIImage(data: photo.data, options: [.applyOrientationProperty: true]) else {
+            return CIImage(cgImage: photo.preview)
+        }
+        let e = image.extent
+        guard e.height > maxHeight else { return image }
+        return PhotoExportService.resized(image, longEdge: max(e.width, e.height) * maxHeight / e.height)
+    }
+
+    /// Renders the collage from the full-resolution originals (with their edits) and opens it as a new item
+    /// (edit it as a whole from there). Up to 6000 px on the long side.
+    func makeCollage(mode: Collage.EditMode, layout: [CGRect], shape: Collage.Shape) {
         showCollage = false
+        if let current = currentEntryID { entryEdits[current] = adjustments }
         effectTask?.cancel()
         isRenderingEffect = true
         effectMessage = "Making collage…"
         let processor = self.processor
+        let importer = self.importer
+        let entries = collageEntries
+        let edits = entries.map { mode == .same ? adjustments : (entryEdits[$0.id] ?? PhotoAdjustmentState()) }
+        let background = customBackgroundFull
         effectTask = Task { [weak self] in
             do {
+                var originals: [CIImage] = []
+                for entry in entries {
+                    let loaded: ImportedPhoto
+                    switch entry.source {
+                    case .library(let item): loaded = try await importer.loadImage(from: item)
+                    case .file(let url): loaded = try await importer.loadImage(from: url)
+                    }
+                    originals.append(Self.fullResolution(loaded, maxHeight: 6000))
+                    try Task.checkCancellation()
+                }
+                let longest = originals.map { max($0.extent.width, $0.extent.height) }.max() ?? 2400
+                let space = originals.first?.colorSpace
                 let data = try await Task.detached(priority: .userInitiated) {
-                    guard let collage = Collage.render(photos.map { CIImage(cgImage: $0) }, layout: layout, shape: shape, longEdge: 2400)
+                    // Edits run here, off the main thread (subject detection can take a moment per photo).
+                    let photos = zip(originals, edits).map { processor.apply($1, to: $0, backgroundPhoto: background) }
+                    guard let collage = Collage.render(photos, layout: layout, shape: shape, longEdge: min(6000, max(2400, longest)))
                     else { throw PhotoExportError.renderFailed }
-                    return try processor.encode(collage, as: .jpeg)
+                    return try processor.encode(collage, as: .jpeg, colorSpace: space)
                 }.value
                 try Task.checkCancellation()
                 let url = try LiveEffectsService.newURL("jpg")
@@ -818,21 +850,24 @@ final class CameraWorkspaceViewModel {
         let processor = self.processor
         effectTask = Task { [weak self] in
             do {
-                var photos: [CGImage] = []
+                var photos: [CIImage] = []
                 for entry in entries {
+                    let loaded: ImportedPhoto
                     switch entry.source {
                     case .library(let item):
                         if item.supportedContentTypes.contains(where: { VideoService.isVideo($0) }) { continue }
-                        photos.append(try await importer.loadImage(from: item).preview)
+                        loaded = try await importer.loadImage(from: item)
                     case .file(let url):
                         if VideoService.isVideo(UTType(filenameExtension: url.pathExtension)) { continue }
-                        photos.append(try await importer.loadImage(from: url).preview)
+                        loaded = try await importer.loadImage(from: url)
                     }
+                    photos.append(Self.fullResolution(loaded, maxHeight: 3000))
                     try Task.checkCancellation()
                 }
+                let space = photos.first?.colorSpace
                 let data = try await Task.detached(priority: .userInitiated) {
-                    let pano = try PanoStitcher.stitch(photos.map { CIImage(cgImage: $0) }, context: processor.context)
-                    return try processor.encode(pano, as: .jpeg)
+                    let pano = try PanoStitcher.stitch(photos, context: processor.context)
+                    return try processor.encode(pano, as: .jpeg, colorSpace: space)
                 }.value
                 try Task.checkCancellation()
                 let url = try LiveEffectsService.newURL("jpg")
@@ -1363,6 +1398,7 @@ final class CameraWorkspaceViewModel {
                 let photo = try await importer.loadImage(from: item)
                 guard let self else { return }
                 self.customBackground = photo.preview
+                self.customBackgroundFull = CIImage(data: photo.data, options: [.applyOrientationProperty: true])
                 self.recipe.backgroundPhoto = CIImage(cgImage: photo.preview)
                 self.recordUndoPoint(force: true)
                 if self.pendingDoubleExposure {
@@ -2299,7 +2335,8 @@ final class CameraWorkspaceViewModel {
         let speed = Double(playbackRate)
         let trimRange = self.trimRange
         let videoPreset = options.size.videoPreset
-        let backgroundPhoto = customBackground.map { CIImage(cgImage: $0) }
+        // Full resolution for exports, so a swapped background or sky isn't an enlarged preview.
+        let backgroundPhoto = customBackgroundFull ?? customBackground.map { CIImage(cgImage: $0) }
         let work: @Sendable () async throws -> URL
 
         if let video {
