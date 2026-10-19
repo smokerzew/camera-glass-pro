@@ -240,6 +240,13 @@ final class ImageProcessingService: @unchecked Sendable {
         if a.tiltShift > 0 {
             image = tiltShift(image, amount: a.tiltShift, position: a.tiltShiftPosition, extent: extent)
         }
+        if a.paint > 0 { image = paint(image, style: a.paintStyle, amount: a.paint, extent: extent) }
+        if a.mirror != .off { image = mirror(image, mode: a.mirror, extent: extent) }
+        if a.flare > 0 { image = anamorphicFlare(image, amount: a.flare, width: a.flareWidth, extent: extent) }
+        if a.prism > 0 { image = prism(image, amount: a.prism, position: a.prismPosition, extent: extent) }
+        if a.weather != .none, a.weatherAmount > 0 {
+            image = weather(image, effect: a.weather, amount: a.weatherAmount, option: a.weatherOption, extent: extent)
+        }
         for local in a.localAdjustments where !local.edit.isNeutral {
             image = applyLocal(local, to: image, extent: extent)
         }

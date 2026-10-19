@@ -5,7 +5,8 @@ import Foundation
 extension PhotoAdjustmentState {
     static func canShuffle(_ area: ResetArea) -> Bool {
         switch area {
-        case .light, .color, .detail, .effects, .filter, .fxBlur, .fxBlend, .fxGhost, .fxArt, .fxLight, .fxRetro, .fxPop, .subjectCreate: true
+        case .light, .color, .detail, .effects, .filter, .fxBlur, .fxBlend, .fxGhost, .fxArt, .fxLight, .fxRetro, .fxPop, .fxWeather,
+             .subjectCreate: true
         case .local, .adjust, .fxPrivacy, .subjectStyle: false
         }
     }
@@ -92,6 +93,11 @@ extension PhotoAdjustmentState {
             case .depth:
                 next.depthMap = random(0.6...1)
                 next.depthHeat = coin()
+            case .paint:
+                next.paint = random(0.6...1)
+                next.paintStyle = PaintStyle.allCases.randomElement(using: &rng) ?? .oil
+            case .mirror:
+                next.mirror = MirrorMode.allCases.filter { $0 != .off }.randomElement(using: &rng) ?? .left
             }
         case .fxLight:
             next = resetting(.fxLight)
@@ -105,6 +111,12 @@ extension PhotoAdjustmentState {
                 next.spotlightSize = random(0.3...0.7)
             case .glow: next.glow = random(0.3...0.8)
             case .sparkle: next.sparkle = random(0.4...1)
+            case .flare:
+                next.flare = random(0.4...1)
+                next.flareWidth = random(0.2...0.9)
+            case .prism:
+                next.prism = random(0.4...1)
+                next.prismPosition = random(0...1)
             }
         case .fxRetro:
             next = resetting(.fxRetro)
@@ -118,6 +130,10 @@ extension PhotoAdjustmentState {
                 next.halftoneColor = coin()
             case .chroma: next.chroma = random(0.3...0.9)
             }
+        case .fxWeather:
+            next.weather = WeatherEffect.allCases.filter { $0 != .none && $0 != weather }.randomElement(using: &rng) ?? .fog
+            next.weatherAmount = random(0.5...1)
+            next.weatherOption = random(0...1)
         case .fxPop:
             next.pop = PopEffect.allCases.filter { $0 != .none && $0 != pop }.randomElement(using: &rng) ?? .glitch
             next.popAmount = random(0.6...1)

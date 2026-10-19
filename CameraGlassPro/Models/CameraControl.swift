@@ -107,6 +107,8 @@ extension CameraWorkspaceViewModel {
             || adjustments.depthMap > 0 || adjustments.blinds > 0 || adjustments.spotlight > 0 || adjustments.glow > 0
             || adjustments.sparkle > 0 || adjustments.vhs > 0 || adjustments.webcam > 0 || adjustments.halftone > 0 || adjustments.chroma > 0
             || (adjustments.pop != .none && adjustments.popAmount > 0)
+            || adjustments.flare > 0 || adjustments.prism > 0 || adjustments.paint > 0 || adjustments.mirror != .off
+            || (adjustments.weather != .none && adjustments.weatherAmount > 0)
             || (adjustments.redactionTarget == .faces ? adjustments.faceRedaction != .none : !adjustments.redactionStrokes.isEmpty)
         case .depth: depthEffect
         case .nightMode: adjustments.nightLook

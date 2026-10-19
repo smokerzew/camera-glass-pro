@@ -732,6 +732,29 @@ final class CameraWorkspaceViewModel {
         }
     }
 
+    func setPaintStyle(_ style: PaintStyle) {
+        guard style != adjustments.paintStyle else { return }
+        recordUndoPoint(force: true)
+        adjustments.paintStyle = style
+        adjustmentsChanged()
+    }
+
+    func setMirror(_ mode: MirrorMode) {
+        guard mode != adjustments.mirror else { return }
+        recordUndoPoint(force: true)
+        adjustments.mirror = mode
+        adjustmentsChanged()
+    }
+
+    /// Picking a weather turns it on at a natural strength the first time.
+    func setWeather(_ effect: WeatherEffect) {
+        guard effect != adjustments.weather else { return }
+        recordUndoPoint(force: true)
+        adjustments.weather = effect
+        if effect != .none, adjustments.weatherAmount == 0 { adjustments.weatherAmount = 0.6 }
+        adjustmentsChanged()
+    }
+
     /// Switches the dispersion style. Particle Dissolve starts at a reference-like setting the first time.
     func setDispersionStyle(_ style: DispersionStyle) {
         guard style != adjustments.dispersionStyle else { return }

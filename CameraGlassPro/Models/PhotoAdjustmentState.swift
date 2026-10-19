@@ -144,6 +144,19 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var spotlightSize: Double = 0.5
     var glow: Double = 0
     var sparkle: Double = 0
+    /// Light FX additions: anamorphic flare (and how wide) and prism light (and where on the edge).
+    var flare: Double = 0
+    var flareWidth: Double = 0.5
+    var prism: Double = 0
+    var prismPosition: Double = 0.3
+    /// Art FX additions: paint (style and strength) and mirror symmetry.
+    var paint: Double = 0
+    var paintStyle: PaintStyle = .oil
+    var mirror: MirrorMode = .off
+    /// FX > Weather: one at a time, with its strength and its own setting (height, angle, flake size or length).
+    var weather: WeatherEffect = .none
+    var weatherAmount: Double = 0
+    var weatherOption: Double = 0.5
     /// Retro FX: VHS, halftone (mix, dot size, black-white balance, color), chroma fringe.
     var vhs: Double = 0
     /// 2005 laptop webcam look (0 = off).
@@ -351,6 +364,16 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         spotlightSize = unit(.spotlightSize, 0.5)
         glow = unit(.glow)
         sparkle = unit(.sparkle)
+        flare = unit(.flare)
+        flareWidth = unit(.flareWidth, 0.5)
+        prism = unit(.prism)
+        prismPosition = unit(.prismPosition, 0.3)
+        paint = unit(.paint)
+        paintStyle = (try? c.decodeIfPresent(PaintStyle.self, forKey: .paintStyle)) ?? .oil
+        mirror = (try? c.decodeIfPresent(MirrorMode.self, forKey: .mirror)) ?? .off
+        weather = (try? c.decodeIfPresent(WeatherEffect.self, forKey: .weather)) ?? .none
+        weatherAmount = unit(.weatherAmount)
+        weatherOption = unit(.weatherOption, 0.5)
         vhs = unit(.vhs)
         webcam = unit(.webcam)
         halftone = unit(.halftone)

@@ -12,7 +12,7 @@ struct FXPickerView: View {
     @State private var retro: RetroEffect = .vhs
     @State private var popTab: PopEffect = .glitch
 
-    enum Page: String, CaseIterable { case blur, blend, ghost, art, light, retro, pop, privacy }
+    enum Page: String, CaseIterable { case blur, blend, ghost, art, light, weather, retro, pop, privacy }
 
     /// The Reset button clears only the page that's showing.
     private var resetArea: ResetArea {
@@ -24,6 +24,7 @@ struct FXPickerView: View {
         case .light: .fxLight
         case .retro: .fxRetro
         case .pop: .fxPop
+        case .weather: .fxWeather
         case .privacy: .fxPrivacy
         }
     }
@@ -67,6 +68,7 @@ struct FXPickerView: View {
                 case .light: lightPage
                 case .retro: retroPage
                 case .pop: popPage
+                case .weather: weatherPage
                 case .privacy: privacyPage
                 }
             }
@@ -245,6 +247,17 @@ struct FXPickerView: View {
                             .opacity(a.littlePlanet > 0 ? 1 : 0.4)
                             .disabled(a.littlePlanet == 0)
                         note("Wraps the photo into a tiny planet: the ground in the middle, the sky around it. Best with wide, level shots.")
+                    case .paint:
+                        GlassSliderRow(title: "Paint", value: a.paint) { vm.setEffect(\.paint, to: min(max($0, 0), 1)) }
+                        GlassTabs(tabs: PaintStyle.allCases, selection: Binding(get: { vm.adjustments.paintStyle },
+                                                                              set: { vm.setPaintStyle($0) })) { $0.label }
+                            .opacity(a.paint > 0 ? 1 : 0.4)
+                            .disabled(a.paint == 0)
+                        note("Oil paint, watercolor washes or a pencil sketch, made from the photo itself.")
+                    case .mirror:
+                        GlassTabs(tabs: MirrorMode.allCases, selection: Binding(get: { vm.adjustments.mirror },
+                                                                              set: { vm.setMirror($0) })) { $0.label }
+                        note("Keeps one half and reflects it onto the other, for a symmetrical picture.")
                     case .depth:
                         GlassSliderRow(title: "Depth Map", value: a.depthMap) { vm.setEffect(\.depthMap, to: min(max($0, 0), 1)) }
                         GlassTabs(tabs: [false, true], selection: Binding(get: { vm.adjustments.depthHeat },
@@ -287,6 +300,18 @@ struct FXPickerView: View {
                     case .sparkle:
                         GlassSliderRow(title: "Sparkle", value: a.sparkle) { vm.setEffect(\.sparkle, to: min(max($0, 0), 1)) }
                         note("Star glints on the brightest highlights, like a Y2K glam or star filter.")
+                    case .flare:
+                        GlassSliderRow(title: "Flare", value: a.flare) { vm.setEffect(\.flare, to: min(max($0, 0), 1)) }
+                        GlassSliderRow(title: "Width", value: a.flareWidth) { vm.setEffect(\.flareWidth, to: min(max($0, 0), 1)) }
+                            .opacity(a.flare > 0 ? 1 : 0.4)
+                            .disabled(a.flare == 0)
+                        note("Long blue streaks through the bright lights, like an anamorphic cinema lens.")
+                    case .prism:
+                        GlassSliderRow(title: "Prism", value: a.prism) { vm.setEffect(\.prism, to: min(max($0, 0), 1)) }
+                        GlassSliderRow(title: "Position", value: a.prismPosition) { vm.setEffect(\.prismPosition, to: min(max($0, 0), 1)) }
+                            .opacity(a.prism > 0 ? 1 : 0.4)
+                            .disabled(a.prism == 0)
+                        note("A soft rainbow of refracted light across the left edge, like shooting through a glass prism.")
                     }
                 }
             }
@@ -363,6 +388,29 @@ struct FXPickerView: View {
             }
         }
         .onAppear { if vm.adjustments.pop != .none { popTab = vm.adjustments.pop } }
+    }
+
+    /// Fog, rain, snow or god rays, one at a time.
+    private var weatherPage: some View {
+        let a = vm.adjustments
+        let on = a.weather != .none && a.weatherAmount > 0
+        return VStack(alignment: .leading, spacing: 12) {
+            GlassTabs(tabs: WeatherEffect.allCases, selection: Binding(get: { vm.adjustments.weather },
+                                                                     set: { vm.setWeather($0) })) { $0.label }
+            Group {
+                GlassSliderRow(title: "Strength", value: a.weatherAmount) { vm.setEffect(\.weatherAmount, to: min(max($0, 0), 1)) }
+                if a.weather != .none {
+                    GlassSliderRow(title: a.weather.optionTitle, value: a.weatherOption) {
+                        vm.setEffect(\.weatherOption, to: min(max($0, 0), 1))
+                    }
+                    .opacity(on ? 1 : 0.4)
+                    .disabled(!on)
+                }
+            }
+            .opacity(a.weather == .none ? 0.4 : 1)
+            .disabled(a.weather == .none)
+            note("Fog thickens with distance, rain and snow fall over the scene, god rays stream from the brightest light.")
+        }
     }
 
     private var privacyPage: some View {

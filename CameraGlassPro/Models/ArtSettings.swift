@@ -47,11 +47,13 @@ enum FilterTarget: String, Codable, CaseIterable, Identifiable, Sendable {
 
 /// Pages inside FX > Light.
 enum LightEffect: String, CaseIterable, Identifiable, Sendable {
-    case blinds, spot, glow, sparkle
+    case blinds, spot, glow, sparkle, flare, prism
 
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .flare: "Flare"
+        case .prism: "Prism"
         case .blinds: "Blinds"
         case .spot: "Spotlight"
         case .glow: "Glow"
@@ -128,11 +130,13 @@ enum PopEffect: String, CaseIterable, Identifiable, Codable, Sendable {
 
 /// Pages inside FX > Art.
 enum ArtEffect: String, CaseIterable, Identifiable, Sendable {
-    case hologram, vision, sort, orbit, melt, planet, depth
+    case hologram, vision, sort, orbit, melt, planet, depth, paint, mirror
 
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .paint: "Paint"
+        case .mirror: "Mirror"
         case .hologram: "Holo"
         case .vision: "Vision"
         case .sort: "Sort"

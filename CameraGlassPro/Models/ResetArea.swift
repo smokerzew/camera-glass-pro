@@ -7,7 +7,7 @@ enum ResetArea: String, CaseIterable, Sendable {
     /// Filter pop-up: filter, strength and grain.
     case filter
     /// FX pages.
-    case fxBlur, fxBlend, fxPrivacy, fxGhost, fxArt, fxLight, fxRetro, fxPop
+    case fxBlur, fxBlend, fxPrivacy, fxGhost, fxArt, fxLight, fxRetro, fxPop, fxWeather
     /// SUBJECT pages (the Adjust page has its own reset for subject / background / sky edits).
     case subjectStyle, subjectCreate
 
@@ -20,7 +20,7 @@ enum ResetArea: String, CaseIterable, Sendable {
         case .local: "Reset Filters"
         case .adjust: "Reset Adjust"
         case .filter: "Reset Filter"
-        case .fxBlur, .fxBlend, .fxPrivacy, .fxGhost, .fxArt, .fxLight, .fxRetro, .fxPop, .subjectStyle, .subjectCreate: "Reset"
+        case .fxBlur, .fxBlend, .fxPrivacy, .fxGhost, .fxArt, .fxLight, .fxRetro, .fxPop, .fxWeather, .subjectStyle, .subjectCreate: "Reset"
         }
     }
 
@@ -110,6 +110,9 @@ extension PhotoAdjustmentState {
             next.planetSpin = d.planetSpin
             next.depthMap = d.depthMap
             next.depthHeat = d.depthHeat
+            next.paint = d.paint
+            next.paintStyle = d.paintStyle
+            next.mirror = d.mirror
         case .fxLight:
             next.blinds = d.blinds
             next.blindsAngle = d.blindsAngle
@@ -118,6 +121,10 @@ extension PhotoAdjustmentState {
             next.spotlightSize = d.spotlightSize
             next.glow = d.glow
             next.sparkle = d.sparkle
+            next.flare = d.flare
+            next.flareWidth = d.flareWidth
+            next.prism = d.prism
+            next.prismPosition = d.prismPosition
         case .fxRetro:
             next.vhs = d.vhs
             next.webcam = d.webcam
@@ -130,6 +137,10 @@ extension PhotoAdjustmentState {
             next.pop = d.pop
             next.popAmount = d.popAmount
             next.popOption = d.popOption
+        case .fxWeather:
+            next.weather = d.weather
+            next.weatherAmount = d.weatherAmount
+            next.weatherOption = d.weatherOption
         case .subjectStyle:
             next.colorSplash = d.colorSplash
             next.background = d.background
