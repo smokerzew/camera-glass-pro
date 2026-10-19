@@ -82,7 +82,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Faces or drawing: only the chosen one is hidden (the other's settings are kept for switching back).
     var redactionTarget: RedactionTarget = .faces
     /// How strongly faces and painted areas are hidden: blur amount or pixel block size (0...1).
-    var redactionStrength: Double = 0.5
+    var redactionStrength: Double = 0.75 // high enough to hide a face out of the box
     /// Dispersion: the subject breaks into particles (strength 0...1, particle size 0...1).
     var dispersion: Double = 0
     var dispersionSize: Double = 0.4
@@ -271,7 +271,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         tiltShiftPosition = unit(.tiltShiftPosition, 0.55)
         doubleExposure = unit(.doubleExposure)
         lookMatch = (try? c.decodeIfPresent(LookMatch.self, forKey: .lookMatch)).flatMap { $0.isUsable ? $0 : nil }
-        redactionStrength = unit(.redactionStrength, 0.5)
+        redactionStrength = unit(.redactionStrength, 0.75)
         dispersion = unit(.dispersion)
         skyReplaceAmount = unit(.skyReplaceAmount, 1)
         focusBlur = unit(.focusBlur, 0.6)

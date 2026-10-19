@@ -397,8 +397,8 @@ struct FXPickerView: View {
             }
             .opacity(vm.isActive(.fx) ? 1 : 0.4)
             note(target == .faces
-                 ? "Every face found on-device is covered completely. Switch to Drawing to hide only what you paint instead."
-                 : "Only what you paint is hidden; faces are left as they are. Your face setting comes back if you switch to Faces.")
+                 ? "Every face found on-device. Low strength only softens; raise it to hide faces completely. Switch to Drawing to hide only what you paint."
+                 : "Only what you paint is hidden; faces are left as they are. Low strength only softens; raise it to hide completely.")
         }
     }
 

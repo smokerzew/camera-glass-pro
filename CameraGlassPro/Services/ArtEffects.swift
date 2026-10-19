@@ -7,26 +7,31 @@ extension ImageProcessingService {
     // MARK: Background blur kinds
 
     /// The blurred background used by SUBJECT > Style > Blur. `center` is the subject's center (zoom and spin).
-    func blurredBackground(_ image: CIImage, kind: BackgroundBlurKind, amount: Double, center: CGPoint, extent e: CGRect) -> CIImage {
-        let a = CGFloat(min(max(amount, 0), 1))
-        let base = image.clampedToExtent()
+    /// Background blur for SUBJECT > Style > Blur. `amount` 0...1 maps to the blur through `curve`
+    /// (0 = no blur at all, 10% barely visible, full = the kind's maximum), with no built-in minimum.
+    /// `source` should be the background with the subject removed (see `subjectPlate`), so the subject's
+    /// colors don't smear into the background around its edges.
+    func blurredBackground(_ source: CIImage, kind: BackgroundBlurKind, amount: Double, center: CGPoint, extent e: CGRect) -> CIImage {
+        let k = CGFloat(BackgroundBlurKind.curve(amount))
+        guard k > 0 else { return source.cropped(to: e) }
+        let base = source.clampedToExtent()
         switch kind {
         case .soft:
-            return base.applyingGaussianBlur(sigma: Double(e.width / 45 * (0.4 + 1.2 * a))).cropped(to: e)
+            return base.applyingGaussianBlur(sigma: Double(k * e.width / 28)).cropped(to: e)
         case .lens:
             // Real lens look: bright spots become soft discs (bokeh) instead of smears.
             return base.applyingFilter("CIBokehBlur", parameters: [
-                kCIInputRadiusKey: min(400, e.width / 70 * (0.5 + 1.5 * a)),
+                kCIInputRadiusKey: max(0.5, min(400, k * e.width / 23)),
                 "inputRingAmount": 0.25, "inputRingSize": 0.1, "inputSoftness": 1.0,
             ]).cropped(to: e)
         case .zoom:
             // Zoom burst: streaks rushing out from behind the subject.
             return base.applyingFilter("CIZoomBlur", parameters: [
-                kCIInputCenterKey: CIVector(x: center.x, y: center.y), "inputAmount": e.width / 18 * (0.3 + 1.2 * a),
+                kCIInputCenterKey: CIVector(x: center.x, y: center.y), "inputAmount": k * e.width / 12,
             ]).cropped(to: e)
         case .spin:
             // Spin: the background turns around the subject (average of slightly rotated copies).
-            let maxAngle = 0.03 + 0.17 * a
+            let maxAngle = 0.2 * k
             let steps = 12
             var result = base
             for i in 1...steps {
@@ -41,7 +46,7 @@ extension ImageProcessingService {
             return result.cropped(to: e)
         case .motion:
             return base.applyingFilter("CIMotionBlur", parameters: [
-                kCIInputRadiusKey: e.width / 20 * (0.4 + 1.2 * a), kCIInputAngleKey: 0,
+                kCIInputRadiusKey: k * e.width / 13, kCIInputAngleKey: 0,
             ]).cropped(to: e)
         }
     }

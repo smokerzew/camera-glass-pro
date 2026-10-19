@@ -4,6 +4,13 @@ import Foundation
 enum BackgroundBlurKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case soft, lens, zoom, spin, motion
 
+    /// Blur slider (0...1) to the share of each kind's maximum blur: squared, so the low end is fine-grained
+    /// (10% gives 1% of the maximum, half gives a quarter) and 0 is no blur.
+    static func curve(_ amount: Double) -> Double {
+        let a = min(max(amount, 0), 1)
+        return a * a
+    }
+
     var id: String { rawValue }
     var label: String {
         switch self {

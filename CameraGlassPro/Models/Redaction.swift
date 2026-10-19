@@ -35,3 +35,18 @@ struct RedactionStroke: Equatable, Codable, Sendable {
 
     static let limit = 60
 }
+
+extension Redaction {
+    /// Privacy blur radius as a share of the long side: 0 is a barely-there softening, then smoothly up to a
+    /// blur that hides a face completely (strength^1.6, no built-in minimum).
+    static func blurShare(_ strength: Double) -> CGFloat {
+        let s = min(max(strength, 0), 1)
+        return CGFloat(0.0003 + 0.036 * pow(s, 1.6))
+    }
+
+    /// Pixel block size as a share of the long side: fine 0.3% blocks at 0, up to 6% (unreadable) at full.
+    static func blockShare(_ strength: Double) -> CGFloat {
+        let s = min(max(strength, 0), 1)
+        return CGFloat(0.003 + 0.057 * pow(s, 1.5))
+    }
+}

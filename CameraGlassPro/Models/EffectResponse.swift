@@ -11,7 +11,9 @@ extension PhotoAdjustmentState {
         \.speedBlur, \.tiltShift, \.doubleExposure, \.ghostOpacity, \.hologram, \.melt, \.pixelSort, \.littlePlanet,
         \.depthMap, \.blinds, \.spotlight, \.glow, \.sparkle, \.vhs, \.webcam, \.halftone, \.chroma, \.popAmount,
         \.visionAmount, \.dispersion, \.halation, \.grain, \.skinSmoothing, \.sharpen, \.noiseReduction, \.focusBlur,
-        \.eyeBrighten, \.teethWhiten, \.skyReplaceAmount, \.backgroundBlurAmount, \.filterStrength,
+        \.eyeBrighten, \.teethWhiten, \.skyReplaceAmount, \.filterStrength,
+        // Not here (each has its own mapping where it renders): backgroundBlurAmount, redactionStrength,
+        // the Particle Dissolve settings.
     ]
 
     /// -1...1 strengths (the curve keeps the sign).

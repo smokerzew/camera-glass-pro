@@ -71,11 +71,11 @@ extension ImageProcessingService {
                 knownFaces: [CGRect]? = nil, extent e: CGRect) -> CIImage {
         guard mode != .none || !strokes.isEmpty else { return image }
         let longSide = max(e.width, e.height)
-        let s = CGFloat(min(max(strength, 0), 1))
-        let blurred = image.clampedToExtent().applyingGaussianBlur(sigma: Double(longSide * (0.006 + 0.03 * s))).cropped(to: e)
+        let blurred = image.clampedToExtent().applyingGaussianBlur(sigma: Double(longSide * Redaction.blurShare(strength)))
+            .cropped(to: e)
         // Blocks show each area's average color (blur first): CIPixellate alone samples one pixel per
         // block, which can let fine detail survive as a pattern.
-        let block = max(4, longSide * (0.008 + 0.05 * s))
+        let block = max(2, longSide * Redaction.blockShare(strength))
         let pixelated = image.clampedToExtent().applyingGaussianBlur(sigma: Double(block * 0.5))
             .applyingFilter("CIPixellate", parameters: [
                 kCIInputScaleKey: block, kCIInputCenterKey: CIVector(x: e.minX, y: e.minY),
