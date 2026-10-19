@@ -8,6 +8,12 @@ on:
   push:
     branches: [main]
 
+# One run per branch at a time: a newer push cancels the older run, so two runs never replace the same
+# release at once (that failed run 77) and "latest" always holds the newest commit's .ipa.
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write # lets the job publish the .ipa as a release file (public, no sign-in to download)
 
@@ -16,7 +22,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select newest Xcode 26
         run: |
@@ -68,6 +74,7 @@ jobs:
 
       - name: Publish screenshots and look sheets (release "screenshots")
         if: always() && github.ref == 'refs/heads/main'
+        continue-on-error: true # review material only; never blocks the .ipa
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -132,12 +139,12 @@ jobs:
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest CameraGlassPro-unsigned.ipa             --title "Latest build" --notes "Unsigned build of ${GITHUB_SHA::7}" --latest
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: CameraGlassPro-unsigned-ipa
           path: CameraGlassPro-unsigned.ipa
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: test-results

@@ -54,7 +54,26 @@ extension ImageProcessingService {
         ]).cropped(to: extent)
         let localSky = skyOnly.clampedToExtent().applyingGaussianBlur(sigma: Double(max(2, extent.width / 40))).cropped(to: extent)
         guard let refined = refine.apply(extent: extent, arguments: [image, localSky, grown]) else { return nil }
-        return refined.clampedToExtent().applyingGaussianBlur(sigma: Double(max(0.7, extent.width / 1000))).cropped(to: extent)
+        // Sunset glow just above the horizon is orange, so the color tests miss it and a new sky stopped short
+        // of the skyline. Carry the sky down over areas that stay smooth (any color), up to 15% of the height
+        // below the detected sky; the skyline's texture stops it.
+        let fine = display.applyingFilter("CIDifferenceBlendMode", parameters: [
+            kCIInputBackgroundImageKey: display.clampedToExtent().applyingGaussianBlur(sigma: Double(max(1, extent.width / 600))),
+        ]).cropped(to: extent).clampedToExtent().applyingGaussianBlur(sigma: Double(max(1, extent.width / 500))).cropped(to: extent)
+        let smooth = fine.applyingFilter("CIColorMatrix", parameters: [ // 1 below ~0.006 local difference, 0 above ~0.04
+            "inputRVector": CIVector(x: -30, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: -30, y: 0, z: 0, w: 0),
+            "inputBVector": CIVector(x: -30, y: 0, z: 0, w: 0), "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+            "inputBiasVector": CIVector(x: 1.2, y: 1.2, z: 1.2, w: 0),
+        ]).applyingFilter("CIColorClamp").cropped(to: extent)
+        let reach = (extent.height * 0.15).rounded()
+        let tall = Int(reach) | 1 // odd, as the filter wants
+        let below = likelihood.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 2]).applyingFilter("CIColorClamp")
+            .applyingFilter("CIMorphologyRectangleMaximum", parameters: ["inputWidth": 1, "inputHeight": tall])
+            .transformed(by: CGAffineTransform(translationX: 0, y: -reach / 2)) // max over the stretch above each pixel
+            .cropped(to: extent)
+        let band = below.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: smooth]).cropped(to: extent)
+        return refined.applyingFilter("CIMaximumCompositing", parameters: [kCIInputBackgroundImageKey: band])
+            .clampedToExtent().applyingGaussianBlur(sigma: Double(max(0.7, extent.width / 1000))).cropped(to: extent)
     }
 
     /// Brightness, saturation and warmth for the sky only.

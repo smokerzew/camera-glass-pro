@@ -2,7 +2,8 @@ import CoreImage
 
 /// Remove brush: paint over a small object or blemish and it's filled from what's around it.
 /// The fill has two parts: a smooth, seamless color fill that grows inward from the edge of the painted area
-/// (coarse to fine), plus the fine texture of the best-matching nearby patch so the fill isn't blurry.
+/// (coarse to fine), plus the texture of best-matching nearby patches (one per small tile of the painted area,
+/// so each part copies what suits its own surroundings).
 /// Works best on small things against sky, walls, grass or skin; large or detailed areas can look smeared.
 extension ImageProcessingService {
     func removeObjects(_ image: CIImage, strokes: [MaskStroke], extent e: CGRect) -> CIImage {
@@ -19,7 +20,9 @@ extension ImageProcessingService {
         var filled = smooth
         if let kernel = Self.kernel("addDetail") {
             let patch = matchingPatches(image, strokes: runs, hole: hole, extent: e)
-            let sigma = Double(max(2, min(e.width, e.height) / 250))
+            // Wide: most of the texture and shading comes from the matching patches; the smooth fill only evens out
+            // the broad color, so detailed areas aren't smeared.
+            let sigma = Double(max(3, min(e.width, e.height) / 80))
             let patchBlur = patch.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: e)
             filled = kernel.apply(extent: e, arguments: [smooth, patch, patchBlur, hole])?.cropped(to: e) ?? smooth
         }
@@ -53,8 +56,9 @@ extension ImageProcessingService {
         return fill.settingAlphaOne(in: e)
     }
 
-    /// The photo moved, per stroke, by the offset whose surroundings best match the stroke's surroundings,
-    /// so each painted area gets texture from a similar nearby area. Unpainted parts are the photo itself.
+    /// The photo moved, per tile of each stroke, by the offset whose surroundings best match that tile's
+    /// surroundings, so each part of a painted area gets texture from a similar nearby area. Tiles overlap with soft
+    /// edges. Unpainted parts are the photo itself.
     func matchingPatches(_ image: CIImage, strokes: [RedactionStroke], hole: CIImage, extent e: CGRect) -> CIImage {
         let side = 256
         let scale = CGFloat(side) / max(e.width, e.height)
@@ -72,16 +76,45 @@ extension ImageProcessingService {
         for stroke in strokes {
             guard let mask = cachedStrokeMask([stroke], extent: e) else { continue }
             let own = gray(mask.applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 3]).cropped(to: e))
-            guard let offset = Self.bestOffset(photo: photo, hole: own, allHoles: allHoles, width: w, height: h) else { continue }
-            // Small-image pixels (top-left origin) → photo pixels (Core Image, bottom-left origin).
-            let shift = CGAffineTransform(translationX: CGFloat(offset.x) / scale, y: -CGFloat(offset.y) / scale)
-            let moved = image.clampedToExtent().transformed(by: shift.inverted()).cropped(to: e)
+            guard let whole = Self.bestOffset(photo: photo, hole: own, allHoles: allHoles, width: w, height: h) else { continue }
             let region = mask.applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 6]).cropped(to: e)
-            patch = moved.applyingFilter("CIBlendWithMask", parameters: [
-                kCIInputBackgroundImageKey: patch, kCIInputMaskImageKey: region,
-            ]).cropped(to: e)
+            // Up to 40 tiles a stroke (a long stroke uses bigger tiles) to keep the render graph small.
+            let painted = own.reduce(0) { $0 + ($1 > 64 ? 1 : 0) }
+            let size = max(12, Int((Double(painted) / 40).squareRoot().rounded(.up)) + 1)
+            for tile in Self.tiles(of: own, width: w, height: h, size: size).prefix(60) {
+                var part = [UInt8](repeating: 0, count: w * h)
+                for y in tile.minY..<tile.maxY { for x in tile.minX..<tile.maxX { part[y * w + x] = own[y * w + x] } }
+                let offset = Self.bestOffset(photo: photo, hole: part, allHoles: allHoles, width: w, height: h) ?? whole
+                // Small-image pixels (top-left origin) → photo pixels (Core Image, bottom-left origin).
+                let shift = CGAffineTransform(translationX: CGFloat(offset.x) / scale, y: -CGFloat(offset.y) / scale)
+                let moved = image.clampedToExtent().transformed(by: shift.inverted()).cropped(to: e)
+                let pad = CGFloat(tile.width) / 3
+                let rect = CGRect(x: e.minX + (CGFloat(tile.minX) - pad) / scale, y: e.maxY - (CGFloat(tile.maxY) + pad) / scale,
+                                  width: (CGFloat(tile.width) + 2 * pad) / scale, height: (CGFloat(tile.height) + 2 * pad) / scale)
+                let soft = CIImage(color: .white).cropped(to: rect).composited(over: CIImage(color: .black))
+                    .applyingGaussianBlur(sigma: Double(pad / scale / 2)).cropped(to: e)
+                let tileMask = soft.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: region])
+                    .cropped(to: e)
+                patch = moved.applyingFilter("CIBlendWithMask", parameters: [
+                    kCIInputBackgroundImageKey: patch, kCIInputMaskImageKey: tileMask,
+                ]).cropped(to: e)
+            }
         }
         return patch
+    }
+
+    /// Tiles (small-image pixels, top-left origin) of about `size` px covering the painted pixels of `hole`.
+    static func tiles(of hole: [UInt8], width w: Int, height h: Int, size: Int) -> [(minX: Int, minY: Int, maxX: Int, maxY: Int, width: Int, height: Int)] {
+        var result: [(minX: Int, minY: Int, maxX: Int, maxY: Int, width: Int, height: Int)] = []
+        for ty in stride(from: 0, to: h, by: size) {
+            for tx in stride(from: 0, to: w, by: size) {
+                let maxX = min(w, tx + size), maxY = min(h, ty + size)
+                var painted = false
+                for y in ty..<maxY where !painted { for x in tx..<maxX where hole[y * w + x] > 64 { painted = true; break } }
+                if painted { result.append((tx, ty, maxX, maxY, maxX - tx, maxY - ty)) }
+            }
+        }
+        return result
     }
 
     /// Offset (small-image pixels, top-left origin) where the ring around `hole` matches best and the source area
