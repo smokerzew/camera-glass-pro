@@ -59,6 +59,12 @@ extension PhotoFilter {
 extension ImageProcessingService {
     func applyLook(_ look: PhotoFilter, to image: CIImage, extent: CGRect) -> CIImage {
         if let recipe = LookRecipe.recipe(look) { return recipeLook(recipe, to: image, extent: extent) }
+        guard look != .none else { return image }
+        // Owner rule: no colored night skies. The real-photo check found 11 of these looks tinting pure black.
+        return neutralBlacks(customLook(look, to: image, extent: extent))
+    }
+
+    private func customLook(_ look: PhotoFilter, to image: CIImage, extent: CGRect) -> CIImage {
         let w = extent.width
         switch look {
         case .none:
@@ -71,7 +77,7 @@ extension ImageProcessingService {
         case .noir: return builtIn(CIFilter.photoEffectNoir(), image)
         case .chrome: return builtIn(CIFilter.photoEffectChrome(), image)
         case .fade: return builtIn(CIFilter.photoEffectFade(), image)
-        case .instant: return neutralBlacks(builtIn(CIFilter.photoEffectInstant(), image)) // it lifted night skies to purple
+        case .instant: return builtIn(CIFilter.photoEffectInstant(), image)
 
         // MARK: Film stocks (color and tone only; picking one also sets its grain, see `filmTexture`)
         case .portra:
@@ -89,11 +95,11 @@ extension ImageProcessingService {
         case .fuji400h:
             // Fuji Pro 400H: airy pastels, cyan-green shadows, soft highlights.
             let airy = curve(image, [(0, 0.05), (0.25, 0.29), (0.5, 0.54), (0.75, 0.78), (1, 0.97)])
-            return neutralBlacks(splitTone(saturation(airy, 0.88), shadows: (-0.008, 0.01, 0.008), highlights: (0.006, 0.002, 0.006), amount: 1))
+            return splitTone(saturation(airy, 0.88), shadows: (-0.008, 0.01, 0.008), highlights: (0.006, 0.002, 0.006), amount: 1)
         case .cinestill:
             // CineStill 800T: tungsten-balanced, so cool overall, teal shadows, warm practical lights.
             let cool = curve(temperature(image, shift: -650), [(0, 0.03), (0.25, 0.25), (0.5, 0.51), (0.75, 0.79), (1, 0.98)])
-            return neutralBlacks(splitTone(saturation(cool, 1.04), shadows: (-0.012, 0.006, 0.018), highlights: (0.014, 0.004, -0.006), amount: 1))
+            return splitTone(saturation(cool, 1.04), shadows: (-0.012, 0.006, 0.018), highlights: (0.014, 0.004, -0.006), amount: 1)
         case .trix:
             // Kodak Tri-X 400: black and white with rich blacks and bright, punchy midtones.
             return curve(saturation(image, 0), [(0, 0.02), (0.25, 0.2), (0.5, 0.5), (0.75, 0.82), (1, 1)])
