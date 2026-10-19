@@ -104,7 +104,8 @@ final class Pack5Tests: XCTestCase {
         let e = CGRect(x: 0, y: 0, width: 256, height: 256)
         let big = e.insetBy(dx: -40, dy: -40)
         return (CIFilter(name: "CIRandomGenerator")?.outputImage ?? CIImage.empty())
-            .transformed(by: CGAffineTransform(translationX: 3000, y: 1000)) // a different patch from the noise below
+            // Stretched 3×: the generator repeats every 256 px, and unstretched it would be a shifted copy of the grain.
+            .transformed(by: CGAffineTransform(scaleX: 3, y: 3))
             .cropped(to: big)
             .settingAlphaOne(in: big)
             .applyingGaussianBlur(sigma: 5)
@@ -160,6 +161,11 @@ final class Pack5Tests: XCTestCase {
     func testStackingCutsNoise() {
         let frames = (0..<12).map { noisy($0) }
         let single = error(frames[5], against: scene)
+        for index in [0, 3, 11] {
+            let offset = NightStacker.offset(of: frames[index], to: frames[5], context: processor.context)
+            XCTAssertEqual(offset?.x ?? 99, 0, accuracy: 1.5, "frame \(index) is already lined up")
+            XCTAssertEqual(offset?.y ?? 99, 0, accuracy: 1.5, "frame \(index) is already lined up")
+        }
         // Compare before the shadow lift: undo it by comparing against the scene lifted the same way.
         let stacked = NightStacker.stack(frames, reference: 5, context: processor.context)
         let lifted = scene.applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": 0.35, "inputHighlightAmount": 1])
@@ -198,6 +204,7 @@ final class Pack5Tests: XCTestCase {
     private var wideScene: CIImage {
         let e = CGRect(x: 0, y: 0, width: 720, height: 240)
         return (CIFilter(name: "CIRandomGenerator")?.outputImage ?? CIImage.empty())
+            .transformed(by: CGAffineTransform(scaleX: 4, y: 4)) // repeats every 1024 px now, wider than the scene
             .cropped(to: e.insetBy(dx: -40, dy: -40))
             .settingAlphaOne(in: e.insetBy(dx: -40, dy: -40))
             .applyingGaussianBlur(sigma: 4)
