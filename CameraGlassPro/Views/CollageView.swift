@@ -112,15 +112,28 @@ private struct LayoutIcon: View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
                 ForEach(cells.indices, id: \.self) { index in
-                    let cell = cells[index]
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(selected ? Color.yellow.opacity(0.8) : Color.white.opacity(0.35))
-                        .frame(width: max(1, cell.width * proxy.size.width - 2), height: max(1, cell.height * proxy.size.height - 2))
-                        .offset(x: cell.minX * proxy.size.width + 1, y: cell.minY * proxy.size.height + 1)
+                    cellView(frame(of: cells[index], in: proxy.size))
                 }
             }
         }
         .padding(4)
         .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? Color.yellow : .white.opacity(0.3), lineWidth: selected ? 2 : 1) }
+    }
+
+    /// A cell's rectangle in points, with a 1 pt gap so the cells read as separate in the icon.
+    private func frame(of cell: CGRect, in size: CGSize) -> CGRect {
+        let x: CGFloat = cell.minX * size.width + 1
+        let y: CGFloat = cell.minY * size.height + 1
+        let w: CGFloat = max(1, cell.width * size.width - 2)
+        let h: CGFloat = max(1, cell.height * size.height - 2)
+        return CGRect(x: x, y: y, width: w, height: h)
+    }
+
+    private func cellView(_ rect: CGRect) -> some View {
+        let fill: Color = selected ? Color.yellow.opacity(0.8) : Color.white.opacity(0.35)
+        return RoundedRectangle(cornerRadius: 2)
+            .fill(fill)
+            .frame(width: rect.width, height: rect.height)
+            .offset(x: rect.minX, y: rect.minY)
     }
 }
