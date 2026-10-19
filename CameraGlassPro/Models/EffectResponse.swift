@@ -11,14 +11,14 @@ extension PhotoAdjustmentState {
         \.speedBlur, \.tiltShift, \.doubleExposure, \.ghostOpacity, \.hologram, \.melt, \.pixelSort, \.littlePlanet,
         \.depthMap, \.blinds, \.spotlight, \.glow, \.sparkle, \.vhs, \.webcam, \.halftone, \.chroma, \.popAmount,
         \.visionAmount, \.dispersion, \.halation, \.grain, \.skinSmoothing, \.sharpen, \.noiseReduction, \.focusBlur,
-        \.eyeBrighten, \.teethWhiten, \.skyReplaceAmount, \.filterStrength,
+        \.eyeBrighten, \.teethWhiten, \.skyReplaceAmount, \.filterStrength, \.fade, \.gradeShadowAmount, \.gradeHighlightAmount,
         // Not here (each has its own mapping where it renders): backgroundBlurAmount, redactionStrength,
         // the Particle Dissolve settings.
     ]
 
     /// -1...1 strengths (the curve keeps the sign).
     static let signedEffectStrengths: [WritableKeyPath<PhotoAdjustmentState, Double>] = [
-        \.texture, \.vignette, \.dehaze,
+        \.texture, \.vignette, \.dehaze, \.brilliance, \.clarity,
     ]
 
     /// This edit with every effect strength on the gentle curve (what actually gets rendered).

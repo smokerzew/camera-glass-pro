@@ -53,6 +53,7 @@ struct PhotoAdjustmentView: View {
                     case .color:
                         sliders(for: .color)
                         ColorMixerSection(vm: vm)
+                        ColorGradeSection(vm: vm)
                     case .detail:
                         sliders(for: .detail)
                     case .effects:

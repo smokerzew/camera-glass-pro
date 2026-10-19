@@ -178,3 +178,65 @@ extension RegionEdit {
         return copy
     }
 }
+
+// MARK: Brilliance, Clarity, Fade, Color Grade
+
+extension ImageProcessingService {
+    /// Brilliance: + brightens the shadows and tames the highlights (more detail at both ends, like Photos);
+    /// - deepens shadows and adds punch.
+    func brilliance(_ image: CIImage, amount: Double, extent e: CGRect) -> CIImage {
+        let k = min(max(amount, -1), 1)
+        return image.applyingFilter("CIHighlightShadowAdjust", parameters: [
+            "inputShadowAmount": 0.6 * k, "inputHighlightAmount": 1 - 0.35 * max(k, 0),
+        ]).applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1 - 0.06 * k]).cropped(to: e)
+    }
+
+    /// Clarity: midtone contrast with a wide radius (Texture is the fine-detail one). - softens.
+    func clarityAdjust(_ image: CIImage, amount: Double, extent e: CGRect) -> CIImage {
+        let k = min(max(amount, -1), 1)
+        if k > 0 {
+            return image.applyingFilter("CIUnsharpMask", parameters: [
+                kCIInputRadiusKey: max(4, e.width / 70), kCIInputIntensityKey: 0.5 * k,
+            ]).cropped(to: e)
+        }
+        let soft = image.clampedToExtent().applyingGaussianBlur(sigma: Double(max(2, e.width / 150))).cropped(to: e)
+        return image.applyingFilter("CIDissolveTransition", parameters: [kCIInputTargetImageKey: soft, kCIInputTimeKey: 0.5 * -k])
+            .cropped(to: e)
+    }
+
+    /// Fade: lifts the blacks to a neutral gray and softens the top end, for a matte film finish.
+    func fadeBlacks(_ image: CIImage, amount: Double) -> CIImage {
+        let k = CGFloat(min(max(amount, 0), 1))
+        let curve = CIFilter.toneCurve()
+        curve.inputImage = image
+        curve.point0 = CGPoint(x: 0, y: 0.16 * k)
+        curve.point1 = CGPoint(x: 0.25, y: 0.25 + 0.08 * k)
+        curve.point2 = CGPoint(x: 0.5, y: 0.5 + 0.02 * k)
+        curve.point3 = CGPoint(x: 0.75, y: 0.75 - 0.01 * k)
+        curve.point4 = CGPoint(x: 1, y: 1 - 0.05 * k)
+        return curve.outputImage ?? image
+    }
+
+    /// Color Grade: separate tints for shadows and highlights (pure black and white stay neutral).
+    func colorGrade(_ image: CIImage, _ a: PhotoAdjustmentState) -> CIImage {
+        guard let kernel = Self.kernel("colorGrade") else { return image }
+        func tint(_ hue: Double, _ amount: Double) -> CIVector {
+            let h = hue / 60
+            let x = 1 - abs(h.truncatingRemainder(dividingBy: 2) - 1)
+            let (r, g, b): (Double, Double, Double) = switch Int(h) % 6 {
+            case 0: (1, x, 0)
+            case 1: (x, 1, 0)
+            case 2: (0, 1, x)
+            case 3: (0, x, 1)
+            case 4: (x, 0, 1)
+            default: (1, 0, x)
+            }
+            let k = 0.12 * min(max(amount, 0), 1) // full strength: a strong but still photographic tint
+            return CIVector(x: (r - 0.5) * k, y: (g - 0.5) * k, z: (b - 0.5) * k)
+        }
+        return kernel.apply(extent: image.extent, arguments: [
+            image, tint(a.gradeShadowHue, a.gradeShadowAmount), tint(a.gradeHighlightHue, a.gradeHighlightAmount),
+            Float(min(max(a.gradeBalance, -1), 1)),
+        ]) ?? image
+    }
+}

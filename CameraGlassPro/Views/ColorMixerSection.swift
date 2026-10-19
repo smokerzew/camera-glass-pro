@@ -61,3 +61,57 @@ struct ColorMixerSection: View {
         }
     }
 }
+
+/// Color Grade in Adjust > Color: a hue and strength for the shadows and for the highlights, and the balance
+/// between them. Each hue track shows its colors.
+struct ColorGradeSection: View {
+    @Bindable var vm: CameraWorkspaceViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Color Grade", systemImage: "circle.lefthalf.filled.righthalf.striped.horizontal")
+                .font(.subheadline.weight(.semibold))
+            tone("Shadows", hue: \.gradeShadowHue, amount: \.gradeShadowAmount)
+            tone("Highlights", hue: \.gradeHighlightHue, amount: \.gradeHighlightAmount)
+            row("Balance", value: \.gradeBalance, range: -1...1)
+            Text("Tints shadows and highlights separately. Pure black and white stay neutral.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func tone(_ title: String, hue: WritableKeyPath<PhotoAdjustmentState, Double>,
+                      amount: WritableKeyPath<PhotoAdjustmentState, Double>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            row(title, value: amount, range: 0...1)
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color(hue: vm.adjustments[keyPath: hue] / 360, saturation: 0.8, brightness: 0.95))
+                    .frame(width: 14, height: 14)
+                    .accessibilityHidden(true)
+                Slider(value: Binding(get: { vm.adjustments[keyPath: hue] }, set: { vm.setEffect(hue, to: min(max($0, 0), 360)) }),
+                       in: 0...360)
+                    .tint(Color(hue: vm.adjustments[keyPath: hue] / 360, saturation: 0.8, brightness: 0.95))
+                    .accessibilityLabel("\(title) hue")
+                    .accessibilityValue("\(Int(vm.adjustments[keyPath: hue])) degrees")
+            }
+        }
+    }
+
+    private func row(_ title: String, value: WritableKeyPath<PhotoAdjustmentState, Double>, range: ClosedRange<Double>) -> some View {
+        let current = vm.adjustments[keyPath: value]
+        return VStack(spacing: 2) {
+            HStack {
+                Text(title).font(.subheadline)
+                Spacer()
+                Text(current == 0 ? "0" : String(format: range.lowerBound < 0 ? "%+d" : "%d", Int((current * 100).rounded())))
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(current == 0 ? .secondary : Color.yellow)
+            }
+            Slider(value: Binding(get: { vm.adjustments[keyPath: value] }, set: { vm.setEffect(value, to: min(max($0, range.lowerBound), range.upperBound)) }),
+                   in: range)
+                .tint(.yellow)
+                .accessibilityLabel(title)
+        }
+    }
+}

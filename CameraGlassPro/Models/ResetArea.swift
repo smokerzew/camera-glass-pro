@@ -54,6 +54,11 @@ extension PhotoAdjustmentState {
         case .color:
             sliders(.color)
             next.colorMixer = d.colorMixer
+            next.gradeShadowHue = d.gradeShadowHue
+            next.gradeShadowAmount = d.gradeShadowAmount
+            next.gradeHighlightHue = d.gradeHighlightHue
+            next.gradeHighlightAmount = d.gradeHighlightAmount
+            next.gradeBalance = d.gradeBalance
         case .detail:
             sliders(.detail)
         case .effects:

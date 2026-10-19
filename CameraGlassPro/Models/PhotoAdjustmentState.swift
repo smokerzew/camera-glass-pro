@@ -17,6 +17,16 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var dehaze: Double = 0
     var tint: Double = 0
     var vibrance: Double = 0
+    /// Brilliance (brighter shadows, gentler highlights), Clarity (midtone contrast) and Fade (lifted, matte blacks).
+    var brilliance: Double = 0
+    var clarity: Double = 0
+    var fade: Double = 0
+    /// Color Grade: hue (degrees) and strength (0...1) for the shadows and the highlights, and where they split.
+    var gradeShadowHue: Double = 210
+    var gradeShadowAmount: Double = 0
+    var gradeHighlightHue: Double = 40
+    var gradeHighlightAmount: Double = 0
+    var gradeBalance: Double = 0
     /// Local contrast (iOS 27 "Styles 3" texture): + crisper detail, − softer.
     var texture: Double = 0
     /// Film-like luminance grain.
@@ -266,6 +276,14 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         dehaze = (try? c.decodeIfPresent(Double.self, forKey: .dehaze)) ?? 0
         tint = (try? c.decodeIfPresent(Double.self, forKey: .tint)) ?? 0
         vibrance = (try? c.decodeIfPresent(Double.self, forKey: .vibrance)) ?? 0
+        brilliance = min(max((try? c.decodeIfPresent(Double.self, forKey: .brilliance)) ?? 0, -1), 1)
+        clarity = min(max((try? c.decodeIfPresent(Double.self, forKey: .clarity)) ?? 0, -1), 1)
+        fade = min(max((try? c.decodeIfPresent(Double.self, forKey: .fade)) ?? 0, 0), 1)
+        gradeShadowHue = min(max((try? c.decodeIfPresent(Double.self, forKey: .gradeShadowHue)) ?? 210, 0), 360)
+        gradeShadowAmount = min(max((try? c.decodeIfPresent(Double.self, forKey: .gradeShadowAmount)) ?? 0, 0), 1)
+        gradeHighlightHue = min(max((try? c.decodeIfPresent(Double.self, forKey: .gradeHighlightHue)) ?? 40, 0), 360)
+        gradeHighlightAmount = min(max((try? c.decodeIfPresent(Double.self, forKey: .gradeHighlightAmount)) ?? 0, 0), 1)
+        gradeBalance = min(max((try? c.decodeIfPresent(Double.self, forKey: .gradeBalance)) ?? 0, -1), 1)
         texture = try c.decodeIfPresent(Double.self, forKey: .texture) ?? 0
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
         grainSize = (try? c.decodeIfPresent(GrainSize.self, forKey: .grainSize)) ?? .medium
@@ -428,8 +446,8 @@ enum AdjustGroup: String, CaseIterable, Identifiable, Sendable {
 }
 
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
-    case exposure, brightness, contrast, highlights, shadows, whites, blacks, dehaze, saturation, vibrance, warmth, tint,
-         texture, sharpen, noise, skin, eyes, teeth, vignette, halation, grain
+    case exposure, brightness, contrast, highlights, shadows, whites, blacks, dehaze, brilliance, saturation, vibrance, warmth, tint,
+         texture, clarity, sharpen, noise, skin, eyes, teeth, vignette, fade, halation, grain
 
     var id: String { rawValue }
     var title: String {
@@ -444,10 +462,10 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
 
     var group: AdjustGroup {
         switch self {
-        case .exposure, .brightness, .contrast, .highlights, .shadows, .whites, .blacks, .dehaze: .light
+        case .exposure, .brightness, .contrast, .highlights, .shadows, .whites, .blacks, .dehaze, .brilliance: .light
         case .saturation, .vibrance, .warmth, .tint: .color
-        case .texture, .sharpen, .noise, .skin, .eyes, .teeth: .detail
-        case .vignette, .halation, .grain: .effects
+        case .texture, .clarity, .sharpen, .noise, .skin, .eyes, .teeth: .detail
+        case .vignette, .fade, .halation, .grain: .effects
         }
     }
 
@@ -463,6 +481,9 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .whites: "circle"
         case .blacks: "circle.fill"
         case .dehaze: "sun.haze.fill"
+        case .brilliance: "sun.max.circle"
+        case .clarity: "triangle.lefthalf.filled"
+        case .fade: "circle.dotted.circle"
         case .tint: "drop.triangle"
         case .vibrance: "paintpalette"
         case .texture: "circle.hexagongrid"
@@ -486,7 +507,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .warmth: -1...1
         case .highlights: -1...0        // 0 = unchanged, -1 = strongest recovery
         case .shadows: -1...1
-        case .whites, .blacks, .dehaze, .tint, .vibrance: -1...1
+        case .whites, .blacks, .dehaze, .tint, .vibrance, .brilliance, .clarity: -1...1
+        case .fade: 0...1
         case .texture: -1...1
         case .sharpen, .noise: 0...1
         case .skin, .eyes, .teeth: 0...1
@@ -515,6 +537,9 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .whites: \.whites
         case .blacks: \.blacks
         case .dehaze: \.dehaze
+        case .brilliance: \.brilliance
+        case .clarity: \.clarity
+        case .fade: \.fade
         case .tint: \.tint
         case .vibrance: \.vibrance
         case .texture: \.texture

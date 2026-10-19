@@ -337,3 +337,17 @@ static float pdDissolve(float2 p, float2 dir, float2 span, float edge, float sof
     }
     return float4(base.rgb, 1.0);
 }
+
+// Color Grade: tint the shadows and the highlights separately (display values). Pure black and pure white
+// stay neutral (the tints fade out toward both ends). `balance` moves the split toward shadows (-) or highlights (+).
+[[stitchable]] float4 colorGrade(coreimage::sample_t s, float3 shadowTint, float3 highlightTint, float balance) {
+    float3 c = pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float y = dot(c, float3(0.2126, 0.7152, 0.0722));
+    float split = 0.5 + 0.25 * balance;
+    float ws = smoothstep(0.0, 0.18, y) * (1.0 - smoothstep(split - 0.25, split + 0.1, y));
+    float wh = smoothstep(split - 0.1, split + 0.25, y) * (1.0 - smoothstep(0.92, 1.0, y));
+    float3 graded = c + shadowTint * ws + highlightTint * wh;
+    // Keep each pixel's brightness: tint changes color, not exposure.
+    graded += y - dot(graded, float3(0.2126, 0.7152, 0.0722));
+    return float4(pow(clamp(graded, 0.0, 1.0), float3(2.2)), s.a);
+}

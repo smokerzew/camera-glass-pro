@@ -142,6 +142,8 @@ final class ImageProcessingService: @unchecked Sendable {
         if a.dehaze != 0 {
             image = dehaze(image, amount: a.dehaze, extent: input.extent)
         }
+        if a.brilliance != 0 { image = brilliance(image, amount: a.brilliance, extent: input.extent) }
+        if a.clarity != 0 { image = clarityAdjust(image, amount: a.clarity, extent: input.extent) }
 
         if a.nightLook {
             let filter = CIFilter.noiseReduction()
@@ -168,6 +170,7 @@ final class ImageProcessingService: @unchecked Sendable {
             image = applyColorMixer(a.colorMixer, to: image)
         }
 
+        if a.gradeShadowAmount > 0 || a.gradeHighlightAmount > 0 { image = colorGrade(image, a) }
         image = applyStyle(a, to: image)
         let unfiltered = image
         image = applyLook(a.filter, to: image, extent: input.extent)
@@ -243,6 +246,7 @@ final class ImageProcessingService: @unchecked Sendable {
         if a.vignette != 0 {
             image = vignette(image, amount: a.vignette, extent: extent)
         }
+        if a.fade > 0 { image = fadeBlacks(image, amount: a.fade) }
         // Privacy last (before grain), so nothing after it can reveal what was hidden.
         image = redact(image, faces: a.redactionTarget == .faces ? a.faceRedaction : .none,
                        strokes: a.redactionTarget == .drawing ? a.redactionStrokes : [],
