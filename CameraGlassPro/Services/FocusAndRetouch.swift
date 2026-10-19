@@ -11,15 +11,19 @@ extension ImageProcessingService {
         else { return image }
         let short = min(e.width, e.height)
         // Near the painted areas: little blur; far away: full blur.
-        let near = painted.clampedToExtent().applyingGaussianBlur(sigma: Double(short / 12)).cropped(to: e)
-            .applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.6]).applyingFilter("CIColorClamp")
+        // A wide, gentle falloff (no hard ring around the painted area), like real depth of field.
+        let near = painted.clampedToExtent().applyingGaussianBlur(sigma: Double(short / 5)).cropped(to: e)
+            .applyingFilter("CIColorMatrix", parameters: [ // boost so the area right around the strokes stays nearly sharp
+                "inputRVector": CIVector(x: 2.2, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 2.2, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: 2.2, w: 0),
+            ]).applyingFilter("CIColorClamp")
         let blur = CIFilter.maskedVariableBlur()
         blur.inputImage = image.clampedToExtent()
         blur.mask = near.applyingFilter("CIColorInvert")
-        blur.radius = Float(min(amount, 1) * Double(short) / 30)
+        blur.radius = Float(min(amount, 1) * Double(short) / 40)
         let soft = (blur.outputImage ?? image).cropped(to: e)
         // The painted areas themselves stay fully sharp, with a soft edge.
-        let keep = painted.clampedToExtent().applyingGaussianBlur(sigma: Double(max(1, short / 300))).cropped(to: e)
+        let keep = painted.clampedToExtent().applyingGaussianBlur(sigma: Double(max(1, short / 80))).cropped(to: e)
         return image.applyingFilter("CIBlendWithMask", parameters: [
             kCIInputBackgroundImageKey: soft, kCIInputMaskImageKey: keep,
         ]).cropped(to: e)
