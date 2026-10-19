@@ -46,7 +46,10 @@ enum SubjectMasker {
                let observation = foreground.results?.first,
                !observation.allInstances.isEmpty,
                let buffer = try? observation.generateScaledMaskForImage(forInstances: observation.allInstances, from: handler) {
-                return fitted(CIImage(cvPixelBuffer: buffer), to: extent)
+                // A "subject" covering the whole frame is no subject (the simulator returns that for every photo).
+                let mask = fitted(CIImage(cvPixelBuffer: buffer), to: extent)
+                let share = coverage(of: mask)
+                if share > 0.01, share < 0.97 { return mask }
             }
         }
 
@@ -55,7 +58,8 @@ enum SubjectMasker {
         person.outputPixelFormat = kCVPixelFormatType_OneComponent8
         guard (try? handler.perform([person])) != nil, let buffer = person.results?.first?.pixelBuffer else { return nil }
         let mask = fitted(CIImage(cvPixelBuffer: buffer), to: extent)
-        return coverage(of: mask) > 0.01 ? mask : nil
+        let share = coverage(of: mask)
+        return share > 0.01 && share < 0.97 ? mask : nil
     }
 
     /// Scales a mask to cover `extent` exactly.
