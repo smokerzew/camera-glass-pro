@@ -46,7 +46,7 @@ extension ImageProcessingService {
             // A colored glow around the subject, behind it.
             let k = CGFloat(min(a.aura, 1))
             let glow = tinted(subject.clampedToExtent().applyingGaussianBlur(sigma: Double(e.width / 22)).cropped(to: e),
-                              hueColor(a.auraHue, 1.4 * k), extent: e)
+                              hueColor(a.auraHue, 1.0 * k), extent: e)
                 .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: outside])
             output = glow.applyingFilter("CIScreenBlendMode", parameters: [kCIInputBackgroundImageKey: output]).cropped(to: e)
         }

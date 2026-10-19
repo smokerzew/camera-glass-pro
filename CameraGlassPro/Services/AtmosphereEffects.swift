@@ -66,8 +66,9 @@ extension ImageProcessingService {
         let gradient = CIFilter.linearGradient()
         gradient.point0 = CGPoint(x: e.midX, y: e.minY + e.height * (0.05 + 0.4 * height))
         gradient.point1 = CGPoint(x: e.midX, y: e.minY + e.height * (0.55 + 0.4 * height))
-        gradient.color0 = CIColor(red: 0.25 * k, green: 0.25 * k, blue: 0.25 * k)
-        gradient.color1 = CIColor(red: 0.85 * k, green: 0.85 * k, blue: 0.85 * k)
+        let f = min(1, 2 * k) // the slider is already squared; fog needs to read by the middle
+        gradient.color0 = CIColor(red: 0.35 * f, green: 0.35 * f, blue: 0.35 * f)
+        gradient.color1 = CIColor(red: 0.95 * f, green: 0.95 * f, blue: 0.95 * f)
         guard let mask = gradient.outputImage?.cropped(to: e) else { return image }
         return haze.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: image, kCIInputMaskImageKey: mask])
             .cropped(to: e)
@@ -93,15 +94,15 @@ extension ImageProcessingService {
 
     /// Rain: thin bright streaks at an angle, a slightly cooler, softer scene.
     private func rain(_ image: CIImage, k: CGFloat, angle: CGFloat, extent e: CGRect) -> CIImage {
-        let cell = max(1, e.width / 700)
+        let cell = max(1.5, e.width / 500)
         let drops = specks(e, cell: cell, keep: 0.004 + 0.006 * k, seed: 311)
         let tilt = (-90 + (angle - 0.5) * 50) * .pi / 180 // mostly falling, leaning up to ±25°
         let streaks = drops.clampedToExtent().applyingFilter("CIMotionBlur", parameters: [
             kCIInputRadiusKey: e.width / 40, kCIInputAngleKey: tilt,
         ]).cropped(to: e).applyingFilter("CIColorMatrix", parameters: [
-            "inputRVector": CIVector(x: 2.2 * k, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 2.3 * k, z: 0, w: 0),
-            "inputBVector": CIVector(x: 0, y: 0, z: 2.5 * k, w: 0),
-        ])
+            "inputRVector": CIVector(x: 11 * k, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 11.5 * k, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: 12.5 * k, w: 0),
+        ]).applyingFilter("CIColorClamp") // streaks are spread thin by the blur; the gain brings them back
         let wet = image.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 1 - 0.2 * k, kCIInputBrightnessKey: -0.03 * k])
             .applyingFilter("CITemperatureAndTint", parameters: [
                 "inputNeutral": CIVector(x: 6500, y: 0), "inputTargetNeutral": CIVector(x: 6500 + 600 * k, y: 0),
@@ -130,8 +131,8 @@ extension ImageProcessingService {
         let beams = lights.clampedToExtent().applyingFilter("CIZoomBlur", parameters: [
             kCIInputCenterKey: CIVector(x: source.x, y: source.y), "inputAmount": e.width / 6 * (0.4 + 1.2 * length),
         ]).cropped(to: e).applyingFilter("CIColorMatrix", parameters: [
-            "inputRVector": CIVector(x: 1.6 * k, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 1.35 * k, z: 0, w: 0),
-            "inputBVector": CIVector(x: 0, y: 0, z: 0.9 * k, w: 0),
+            "inputRVector": CIVector(x: 4.5 * k, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 3.7 * k, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: 2.4 * k, w: 0),
         ])
         return beams.applyingFilter("CIScreenBlendMode", parameters: [kCIInputBackgroundImageKey: image]).cropped(to: e)
     }
@@ -162,13 +163,13 @@ extension ImageProcessingService {
     func anamorphicFlare(_ image: CIImage, amount: Double, width: Double, extent e: CGRect) -> CIImage {
         let k = CGFloat(min(max(amount, 0), 1))
         guard k > 0 else { return image }
-        let lights = image.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 3, kCIInputBrightnessKey: -0.7])
+        let lights = image.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 3, kCIInputBrightnessKey: -0.6])
             .applyingFilter("CIColorClamp").cropped(to: e)
         let streak = lights.clampedToExtent().applyingFilter("CIMotionBlur", parameters: [
             kCIInputRadiusKey: e.width * (0.08 + 0.3 * CGFloat(min(max(width, 0), 1))), kCIInputAngleKey: 0,
         ]).cropped(to: e).applyingFilter("CIColorMatrix", parameters: [
-            "inputRVector": CIVector(x: 0.5 * k, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 1.6 * k, z: 0, w: 0),
-            "inputBVector": CIVector(x: 0, y: 0, z: 4 * k, w: 0),
+            "inputRVector": CIVector(x: 1.5 * k, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 5 * k, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: 12 * k, w: 0),
         ])
         return streak.applyingFilter("CIScreenBlendMode", parameters: [kCIInputBackgroundImageKey: image]).cropped(to: e)
     }
@@ -186,7 +187,7 @@ extension ImageProcessingService {
             band.center = CGPoint(x: e.minX + e.width * (0.04 + 0.05 * CGFloat(i)), y: y + e.height * 0.04 * CGFloat(i))
             band.radius0 = 0
             band.radius1 = Float(e.width * 0.16)
-            band.color0 = CIColor(red: color.red * 0.55 * k, green: color.green * 0.55 * k, blue: color.blue * 0.55 * k)
+            band.color0 = CIColor(red: color.red * 1.4 * k, green: color.green * 1.4 * k, blue: color.blue * 1.4 * k)
             band.color1 = .black
             if let glow = band.outputImage?.cropped(to: e) {
                 rainbow = glow.applyingFilter("CIScreenBlendMode", parameters: [kCIInputBackgroundImageKey: rainbow]).cropped(to: e)
