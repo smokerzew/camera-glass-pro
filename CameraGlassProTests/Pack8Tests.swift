@@ -13,12 +13,12 @@ final class Pack8Tests: XCTestCase {
         return (Double(p[0]), Double(p[1]), Double(p[2]))
     }
 
-    private func greens(_ image: CIImage, _ rect: CGRect) -> [Double] {
+    private func channels(_ image: CIImage, _ rect: CGRect) -> [Double] {
         let w = Int(rect.width), h = Int(rect.height)
         var p = [UInt8](repeating: 0, count: w * h * 4)
         processor.context.render(image, toBitmap: &p, rowBytes: w * 4, bounds: rect, format: .RGBA8,
                                  colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
-        return stride(from: 1, to: p.count, by: 4).map { Double(p[$0]) }
+        return p.map(Double.init) // all channels; alpha never differs
     }
 
     /// A small scene: dark-to-light ramp left to right, with a bright spot (for flare, rays).
@@ -34,7 +34,7 @@ final class Pack8Tests: XCTestCase {
 
     private func changed(_ a: CIImage, _ b: CIImage) -> Int {
         let r = CGRect(x: 0, y: 0, width: 300, height: 200)
-        return zip(greens(a, r), greens(b, r)).filter { abs($0 - $1) > 4 }.count
+        return zip(channels(a, r), channels(b, r)).filter { abs($0 - $1) > 4 }.count
     }
 
     // MARK: Adjustments

@@ -130,7 +130,7 @@ final class ArtTests: XCTestCase {
             let shuffled = state.shuffling(.fxArt, using: &rng)!
             XCTAssertEqual(shuffled.exposure, 0.3, "only Art changes")
             let effectsOn = [shuffled.hologram > 0, shuffled.visionMode != .none, shuffled.pixelSort > 0,
-                             shuffled.orbitClones > 0, shuffled.melt > 0, shuffled.littlePlanet > 0, shuffled.depthMap > 0].filter { $0 }.count
+                             shuffled.orbitClones > 0, shuffled.melt > 0, shuffled.littlePlanet > 0, shuffled.depthMap > 0, shuffled.paint > 0, shuffled.mirror != .off].filter { $0 }.count
             XCTAssertEqual(effectsOn, 1, "one art effect at a time")
         }
     }
