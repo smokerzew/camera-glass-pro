@@ -154,7 +154,8 @@ final class Pack6Tests: XCTestCase {
         XCTAssertEqual(rendered.glow, 0.04, accuracy: 0.0001, "20% renders as 4%")
         XCTAssertEqual(rendered.vignette, -0.25, accuracy: 0.0001, "signed strengths keep their direction")
         XCTAssertEqual(rendered.filterStrength, 1, "full strength stays full")
-        XCTAssertEqual(PhotoAdjustmentState().withEffectResponse(), PhotoAdjustmentState(), "nothing set, nothing changes")
+        let flat = CIImage(color: .gray).cropped(to: CGRect(x: 0, y: 0, width: 8, height: 8))
+        XCTAssertTrue(processor.apply(PhotoAdjustmentState(), to: flat) === flat, "an untouched photo isn't re-rendered")
         XCTAssertEqual(rendered.exposure, state.exposure, "light and color sliders keep their own units")
     }
 

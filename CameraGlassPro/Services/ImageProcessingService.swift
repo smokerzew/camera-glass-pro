@@ -19,9 +19,10 @@ final class ImageProcessingService: @unchecked Sendable {
     /// `faces` lets live video reuse face boxes found for a nearby frame (nil = find them here).
     func apply(_ adjustments: PhotoAdjustmentState, to original: CIImage, subjectMask: CIImage? = nil,
                fastMask: Bool = false, backgroundPhoto: CIImage? = nil, faces: [CGRect]? = nil) -> CIImage {
+        let clamped = adjustments.clamped()
+        guard !clamped.isIdentity else { return original } // checked before the curve: some defaults aren't 0
         // Effect strengths on the gentle curve (see EffectResponse), so low settings stay subtle.
-        let a = adjustments.clamped().withEffectResponse()
-        guard !a.isIdentity else { return original }
+        let a = clamped.withEffectResponse()
         // Removed objects are gone before anything else looks at the photo (subject, sky, faces).
         let input = a.removeStrokes.isEmpty ? original
             : removeObjects(original, strokes: a.removeStrokes, extent: original.extent)
