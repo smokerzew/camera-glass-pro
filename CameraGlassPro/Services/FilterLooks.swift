@@ -71,7 +71,7 @@ extension ImageProcessingService {
         case .noir: return builtIn(CIFilter.photoEffectNoir(), image)
         case .chrome: return builtIn(CIFilter.photoEffectChrome(), image)
         case .fade: return builtIn(CIFilter.photoEffectFade(), image)
-        case .instant: return builtIn(CIFilter.photoEffectInstant(), image)
+        case .instant: return neutralBlacks(builtIn(CIFilter.photoEffectInstant(), image)) // it lifted night skies to purple
 
         // MARK: Film stocks (color and tone only; picking one also sets its grain, see `filmTexture`)
         case .portra:
@@ -89,11 +89,11 @@ extension ImageProcessingService {
         case .fuji400h:
             // Fuji Pro 400H: airy pastels, cyan-green shadows, soft highlights.
             let airy = curve(image, [(0, 0.05), (0.25, 0.29), (0.5, 0.54), (0.75, 0.78), (1, 0.97)])
-            return splitTone(saturation(airy, 0.88), shadows: (-0.008, 0.01, 0.008), highlights: (0.006, 0.002, 0.006), amount: 1)
+            return neutralBlacks(splitTone(saturation(airy, 0.88), shadows: (-0.008, 0.01, 0.008), highlights: (0.006, 0.002, 0.006), amount: 1))
         case .cinestill:
             // CineStill 800T: tungsten-balanced, so cool overall, teal shadows, warm practical lights.
             let cool = curve(temperature(image, shift: -650), [(0, 0.03), (0.25, 0.25), (0.5, 0.51), (0.75, 0.79), (1, 0.98)])
-            return splitTone(saturation(cool, 1.04), shadows: (-0.012, 0.006, 0.018), highlights: (0.014, 0.004, -0.006), amount: 1)
+            return neutralBlacks(splitTone(saturation(cool, 1.04), shadows: (-0.012, 0.006, 0.018), highlights: (0.014, 0.004, -0.006), amount: 1))
         case .trix:
             // Kodak Tri-X 400: black and white with rich blacks and bright, punchy midtones.
             return curve(saturation(image, 0), [(0, 0.02), (0.25, 0.2), (0.5, 0.5), (0.75, 0.82), (1, 1)])
@@ -225,6 +225,22 @@ extension ImageProcessingService {
         f.point3 = CGPoint(x: points[3].0, y: points[3].1)
         f.point4 = CGPoint(x: points[4].0, y: points[4].1)
         return f.outputImage ?? image
+    }
+
+    /// The look's own color fades out toward black, so the deepest shadows (a night sky) stay neutral gray.
+    private func neutralBlacks(_ image: CIImage) -> CIImage {
+        let gray = saturation(image, 0)
+        // Mask: 0 for (linear) luminance under ~0.004 (about 5% on screen), 1 above ~0.04 (about 22%).
+        let mask = image.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: 0.2126 * 27.8, y: 0.7152 * 27.8, z: 0.0722 * 27.8, w: 0),
+            "inputGVector": CIVector(x: 0.2126 * 27.8, y: 0.7152 * 27.8, z: 0.0722 * 27.8, w: 0),
+            "inputBVector": CIVector(x: 0.2126 * 27.8, y: 0.7152 * 27.8, z: 0.0722 * 27.8, w: 0),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+            "inputBiasVector": CIVector(x: -0.11, y: -0.11, z: -0.11, w: 0),
+        ]).applyingFilter("CIColorClamp")
+        return image.applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: gray, kCIInputMaskImageKey: mask,
+        ]).cropped(to: image.extent)
     }
 
     private func saturation(_ image: CIImage, _ value: Double) -> CIImage {

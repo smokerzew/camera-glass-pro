@@ -146,8 +146,8 @@ final class LookTests: XCTestCase {
         let original = pixels(image)
         let blacks = stride(from: 0, to: original.count, by: 4).filter { max(original[$0], original[$0 + 1], original[$0 + 2]) < 12 }
         guard blacks.count > 50 else { throw XCTSkip("too few near-black pixels in the night photo") }
-        // Same scope as testRecipeLooksKeepBlackNeutral: duotone looks (Game Boy) map black to a color on purpose.
-        for filter in PhotoFilter.allCases where LookRecipe.recipe(filter) != nil && LookRecipe.recipe(filter)?.duotone == nil {
+        // Every look except duotones (Game Boy maps black to its dark color on purpose).
+        for filter in PhotoFilter.allCases where filter != .none && LookRecipe.recipe(filter)?.duotone == nil {
             let out = pixels(render(with { $0.filter = filter }, image))
             let chroma = blacks.reduce(0.0) { sum, i in
                 sum + Double(max(out[i], out[i + 1], out[i + 2]) - min(out[i], out[i + 1], out[i + 2]))
