@@ -189,7 +189,7 @@ using namespace metal;
     float3 c = pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2));
     float y = dot(c, float3(0.2126, 0.7152, 0.0722));
     float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
-    float teeth = smoothstep(0.28, 0.5, y) * (1.0 - smoothstep(0.22, 0.42, sat)) * mask.r * amount;
+    float teeth = smoothstep(0.28, 0.5, y) * (1.0 - smoothstep(0.3, 0.52, sat)) * mask.r * amount; // yellowed teeth reach ~0.35
     float3 white = mix(float3(y), c, 0.35) + 0.06;
     return float4(pow(clamp(mix(c, white, teeth), 0.0, 1.0), float3(2.2)), s.a);
 }
