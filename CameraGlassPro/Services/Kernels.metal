@@ -171,12 +171,14 @@ using namespace metal;
     return float4(m, m, m, 1.0);
 }
 
-// Sky Replace: the new sky plus the original sky's fine detail (clouds, haze) as brightness, in display space.
+// Sky Replace: the new sky with the original sky's fine detail (clouds, haze) as relative brightness, in display
+// space, so clouds take on the new sky's color (pink at sunset) instead of staying white specks.
 [[stitchable]] float4 skyDetail(coreimage::sample_t sky, coreimage::sample_t original, coreimage::sample_t originalBlur,
                                 float amount) {
     float3 o = pow(clamp(original.rgb, 0.0, 1.0), float3(1.0 / 2.2));
     float3 b = pow(clamp(originalBlur.rgb, 0.0, 1.0), float3(1.0 / 2.2));
     float3 n = pow(clamp(sky.rgb, 0.0, 1.0), float3(1.0 / 2.2));
-    float detail = dot(o - b, float3(0.2126, 0.7152, 0.0722)) * amount;
-    return float4(pow(clamp(n + detail, 0.0, 1.0), float3(2.2)), 1.0);
+    float3 w = float3(0.2126, 0.7152, 0.0722);
+    float ratio = clamp(dot(o, w) / max(dot(b, w), 0.02), 0.6, 1.8);
+    return float4(pow(clamp(n * mix(1.0, ratio, amount), 0.0, 1.0), float3(2.2)), 1.0);
 }

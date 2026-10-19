@@ -66,8 +66,7 @@ struct PhotoAdjustmentView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
             }
-            .navigationTitle("Adjust")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.inline) // no title: the toolbar is full and the tabs say where you are
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu("Reset") {
@@ -129,6 +128,7 @@ struct PhotoAdjustmentView: View {
         .presentationBackgroundInteraction(.enabled(upThrough: .height(380)))
         .presentationDragIndicator(.visible)
         .modifier(GlassSheetBackground())
+        .preferredColorScheme(.dark) // matches the camera UI; yellow labels were hard to read on light glass
         .appAlert(vm)
         .onDisappear { vm.setShowOriginal(false) }
     }
