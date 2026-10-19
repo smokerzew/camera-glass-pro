@@ -2,7 +2,7 @@ import Foundation
 
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
-    case flash, live, aspect, timer, exposure, styles, filter, adjust, fx, liquify, remove, crop, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, frame, format
+    case flash, live, aspect, timer, exposure, collage, styles, filter, adjust, fx, liquify, remove, crop, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, frame, format
 
     var id: String { rawValue }
 
@@ -25,7 +25,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
     /// Which page of the controls panel it sits on.
     var group: PanelGroup {
         switch self {
-        case .flash, .live, .aspect, .timer, .exposure, .nightMode, .format: .camera
+        case .flash, .live, .aspect, .timer, .exposure, .collage, .nightMode, .format: .camera
         case .adjust, .styles, .filter, .fx, .liquify, .crop, .depth, .subject, .effects: .edit
         case .remove, .grid, .level, .scopes, .peaking, .zebras, .liveText, .trim, .frame: .tools
         }
@@ -50,6 +50,7 @@ extension CameraWorkspaceViewModel {
     /// Whether a control can be used right now (TRIM needs a video, editing controls need media).
     func isAvailable(_ control: CameraControl) -> Bool {
         if control == .trim || control == .frame { return video != nil }
+        if control == .collage { return collageEntries.count >= 2 }
         if control == .effects { return canMakeEffects }
         if control == .crop || control == .liquify || control == .remove { return photo != nil }
         return !control.requiresMedia || hasMedia
@@ -61,6 +62,7 @@ extension CameraWorkspaceViewModel {
         case .live: livePreference ? "livephoto" : "livephoto.slash"
         case .aspect: "aspectratio"
         case .timer: "timer"
+        case .collage: "rectangle.split.2x2"
         case .exposure: "plusminus"
         case .styles: "square.3.layers.3d"
         case .filter: "camera.filters"
@@ -115,6 +117,7 @@ extension CameraWorkspaceViewModel {
         case .zebras: zebras
         case .trim: isTrimmed
         case .frame: false
+        case .collage: false
         case .liveText: liveTextEnabled
         case .effects: false
         case .subject: adjustments.colorSplash || adjustments.background != .original || adjustments.skyReplace != .none
@@ -157,6 +160,7 @@ extension CameraWorkspaceViewModel {
         case .zebras: zebras ? "On" : "Off"
         case .trim: isTrimmed ? String(format: "%.1f s to %.1f s", trimStart, trimEnd) : "Full length"
         case .frame: video != nil ? "Pick a frame to save" : "Needs a video"
+        case .collage: collageEntries.count >= 2 ? "\(collageEntries.count) photos" : "Needs 2 or more photos"
         case .liveText: liveTextEnabled ? "\(recognizedText.count) lines found" : "Off"
         case .effects: canMakeEffects ? "Loop, Bounce, Reverse, Echo, GIF and more" : "Needs a video or Live Photo"
         case .crop: adjustments.hasGeometry ? "Edited" : "Original framing"
@@ -190,6 +194,7 @@ extension CameraWorkspaceViewModel {
         case .zebras: "Stripes the brightest areas that are close to clipping"
         case .trim: "Choose where the video starts and ends"
         case .frame: "Step to the exact frame, then save it as a photo with or without the camera UI"
+        case .collage: "Puts 2 to 6 of the photos you picked into one picture"
         case .liveText: "Finds text you can copy or translate (pauses videos)"
         case .effects: "Makes a Loop, Bounce, Reverse, Speed Ramp, Stop Motion, Echo, GIF or Long Exposure, or a Live Photo"
         case .subject: "Color Splash, Background Swap and Sky Replace"
@@ -237,6 +242,9 @@ extension CameraWorkspaceViewModel {
         case .zebras: setZebras(!zebras)
         case .trim: showTrim = true
         case .frame: openFramePicker()
+        case .collage:
+            isControlPanelOpen = false
+            showCollage = true
         case .liveText: setLiveText(!liveTextEnabled)
         case .effects: openEffectsPicker()
         case .subject: openSubjectPicker()

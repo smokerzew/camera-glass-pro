@@ -106,6 +106,7 @@ final class CameraWorkspaceViewModel {
     var showLiquifyEditor = false
     var showRemoveEditor = false
     var showFocusEditor = false
+    var showCollage = false
     /// Saved versions of the edit, per photo or video.
     private(set) var versionStore: [UUID: [PhotoAdjustmentState]] = [:]
     var showRedactionEditor = false
@@ -734,6 +735,70 @@ final class CameraWorkspaceViewModel {
         recordUndoPoint(force: true)
         adjustments.cinematicFocus = []
         adjustmentsChanged()
+    }
+
+    // MARK: Collage
+
+    private func isVideo(_ entry: LibraryEntry) -> Bool {
+        switch entry.source {
+        case .library(let item): item.supportedContentTypes.contains { VideoService.isVideo($0) }
+        case .file(let url): VideoService.isVideo(UTType(filenameExtension: url.pathExtension))
+        }
+    }
+
+    /// Photos in the multi-selection that can go in a collage (videos are skipped), at most six.
+    var collageEntries: [LibraryEntry] { Array(library.filter { !isVideo($0) }.prefix(Collage.maxPhotos)) }
+
+    /// The collage's photos with their edits, rendered at preview size: each photo's own edit, or the current
+    /// photo's edit on all of them.
+    func collagePhotos(_ mode: Collage.EditMode) async throws -> [CGImage] {
+        if let current = currentEntryID { entryEdits[current] = adjustments }
+        let importer = self.importer
+        let processor = self.processor
+        let background = customBackground.map { CIImage(cgImage: $0) }
+        var result: [CGImage] = []
+        for entry in collageEntries {
+            let photo: ImportedPhoto
+            switch entry.source {
+            case .library(let item): photo = try await importer.loadImage(from: item)
+            case .file(let url): photo = try await importer.loadImage(from: url)
+            }
+            let edit = mode == .same ? adjustments : (entryEdits[entry.id] ?? PhotoAdjustmentState())
+            let preview = photo.preview
+            let rendered = await Task.detached(priority: .userInitiated) {
+                processor.renderPreview(preview, adjustments: edit, backgroundPhoto: background)
+            }.value
+            result.append(rendered ?? preview)
+            try Task.checkCancellation()
+        }
+        return result
+    }
+
+    /// Renders the collage at full preview size and opens it as a new item (edit it as a whole from there).
+    func makeCollage(_ photos: [CGImage], layout: [CGRect], shape: Collage.Shape) {
+        showCollage = false
+        effectTask?.cancel()
+        isRenderingEffect = true
+        effectMessage = "Making collage…"
+        let processor = self.processor
+        effectTask = Task { [weak self] in
+            do {
+                let data = try await Task.detached(priority: .userInitiated) {
+                    guard let collage = Collage.render(photos.map { CIImage(cgImage: $0) }, layout: layout, shape: shape, longEdge: 2400)
+                    else { throw PhotoExportError.renderFailed }
+                    return try processor.encode(collage, as: .jpeg)
+                }.value
+                try Task.checkCancellation()
+                let url = try LiveEffectsService.newURL("jpg")
+                try data.write(to: url)
+                self?.showEffectResult(url, toast: "Collage created")
+            } catch is CancellationError {
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? "The collage couldn't be made."
+                self?.alert = AppAlert(title: "Couldn't Make Collage", message: message)
+            }
+            self?.isRenderingEffect = false
+        }
     }
 
     // MARK: Panorama

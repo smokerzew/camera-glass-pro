@@ -118,6 +118,30 @@ final class LookTests: XCTestCase {
         }
     }
 
+    func testPack6Sheet() throws {
+        let portrait = try photo("portrait"), landscape = try photo("landscape"), sunset = try photo("sunset")
+        let food = try photo("food"), night = try photo("night")
+        func stroke(_ x: CGFloat, _ y: CGFloat, _ width: Double, to end: CGPoint? = nil) -> MaskStroke {
+            MaskStroke(add: true, width: width, points: [CGPoint(x: x, y: y)] + (end.map { [$0] } ?? []))
+        }
+        var tiles: [(String, CIImage)] = [
+            ("Portrait", portrait),
+            ("Eyes + Teeth", render(with { $0.eyeBrighten = 1; $0.teethWhiten = 1 }, portrait)),
+            ("Focus on rock", render(with { $0.focusStrokes = [stroke(0.27, 0.6, 0.25)]; $0.focusBlur = 0.8 }, landscape)),
+            ("Remove spire top", render(with { $0.removeStrokes = [stroke(0.5, 0.05, 0.04, to: CGPoint(x: 0.5, y: 0.25))] }, sunset)),
+            ("Remove house", render(with { $0.removeStrokes = [stroke(0.9, 0.62, 0.18)] }, sunset)),
+            ("Sunset sky band", render(with { $0.skyReplace = .golden }, sunset)),
+        ]
+        for (index, cells) in Collage.layouts(for: 4).enumerated() {
+            if let collage = Collage.render([portrait, landscape, food, night], layout: cells, shape: .square, longEdge: 400) {
+                let fitted = collage.transformed(by: CGAffineTransform(scaleX: portrait.extent.height / 400, y: portrait.extent.height / 400))
+                    .composited(over: CIImage(color: .black).cropped(to: portrait.extent))
+                tiles.append(("Collage \(index + 1)", fitted))
+            }
+        }
+        sheet("looks-pack6", tiles)
+    }
+
     /// The raw masks everything subject- and sky-based is built on (white = subject / sky), next to each photo.
     func testMaskSheet() throws {
         var tiles: [(String, CIImage)] = []
