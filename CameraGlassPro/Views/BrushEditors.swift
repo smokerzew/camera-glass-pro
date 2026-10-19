@@ -200,33 +200,40 @@ struct LiquifyEditorView: View {
     }
 }
 
-/// Remove: paint over something small; it's filled in from its surroundings after each stroke.
-struct RemoveEditorView: View {
+/// Paint editor for brush tools that only collect strokes (Remove, Focus Brush): the edited photo re-renders
+/// after each stroke; undo, redo and Clear All.
+struct PaintEditorView: View {
     @Bindable var vm: CameraWorkspaceViewModel
+    let title: String
+    let strokes: KeyPath<PhotoAdjustmentState, [MaskStroke]>
+    let set: ([MaskStroke]) -> Void
+    let note: String
     @Environment(\.dismiss) private var dismiss
     @State private var brush = 0.05
     @State private var photo: CGImage?
     @State private var history = StrokeHistory<MaskStroke>()
 
+    private var current: [MaskStroke] { vm.adjustments[keyPath: strokes] }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
-                EditorTopBar(title: "REMOVE", canUndo: !history.past.isEmpty, canRedo: !history.future.isEmpty,
+                EditorTopBar(title: title, canUndo: !history.past.isEmpty, canRedo: !history.future.isEmpty,
                              undo: undo, redo: redo, done: { dismiss() })
                 BrushCanvas(image: photo, brush: brush) { points in
-                    change(to: vm.adjustments.removeStrokes + [MaskStroke(add: true, width: brush, points: points)])
+                    change(to: current + [MaskStroke(add: true, width: brush, points: points)])
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 VStack(spacing: 14) {
                     GlassSliderRow(title: "Brush", value: brush, range: 0.01...0.2,
                                    display: { "\(Int(($0 * 100).rounded()))" }) { brush = $0 }
-                    Text("Paint over a small object, spot or wire, covering all of it. Works best on sky, walls, grass and skin.")
+                    Text(note)
                         .font(.footnote).foregroundStyle(.white.opacity(0.65))
                     Button("Clear All", role: .destructive) { change(to: []) }
                         .font(.subheadline.weight(.semibold))
-                        .disabled(vm.adjustments.removeStrokes.isEmpty)
+                        .disabled(current.isEmpty)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
@@ -237,23 +244,23 @@ struct RemoveEditorView: View {
         .task { photo = await vm.editorPreview() }
     }
 
-    private func change(to strokes: [MaskStroke]) {
-        history.record(vm.adjustments.removeStrokes)
-        vm.setRemoveStrokes(strokes)
+    private func change(to next: [MaskStroke]) {
+        history.record(current)
+        set(next)
         refresh()
     }
 
     private func undo() {
         guard let previous = history.past.popLast() else { return }
-        history.future.append(vm.adjustments.removeStrokes)
-        vm.setRemoveStrokes(previous)
+        history.future.append(current)
+        set(previous)
         refresh()
     }
 
     private func redo() {
         guard let next = history.future.popLast() else { return }
-        history.past.append(vm.adjustments.removeStrokes)
-        vm.setRemoveStrokes(next)
+        history.past.append(current)
+        set(next)
         refresh()
     }
 

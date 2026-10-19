@@ -105,6 +105,7 @@ final class CameraWorkspaceViewModel {
     var showMaskEditor = false
     var showLiquifyEditor = false
     var showRemoveEditor = false
+    var showFocusEditor = false
     /// Saved versions of the edit, per photo or video.
     private(set) var versionStore: [UUID: [PhotoAdjustmentState]] = [:]
     var showRedactionEditor = false
@@ -1688,6 +1689,14 @@ final class CameraWorkspaceViewModel {
         guard limited != adjustments.liquifyStrokes else { return }
         recordUndoPoint(force: true)
         adjustments.liquifyStrokes = limited
+        adjustmentsChanged()
+    }
+
+    func setFocusStrokes(_ strokes: [MaskStroke]) {
+        let limited = Array(strokes.prefix(MaskStroke.limit))
+        guard limited != adjustments.focusStrokes else { return }
+        recordUndoPoint(force: true)
+        adjustments.focusStrokes = limited
         adjustmentsChanged()
     }
 

@@ -98,6 +98,7 @@ extension CameraWorkspaceViewModel {
         case .liquify: !adjustments.liquifyStrokes.isEmpty
         case .remove: !adjustments.removeStrokes.isEmpty
         case .fx: adjustments.speedBlur > 0 || adjustments.tiltShift > 0 || adjustments.doubleExposure > 0
+            || (!adjustments.focusStrokes.isEmpty && adjustments.focusBlur > 0)
             || adjustments.ghostOpacity > 0 || adjustments.lookMatch != nil
             || adjustments.hologram > 0 || adjustments.melt > 0 || adjustments.orbitClones > 0
             || adjustments.visionMode != .none || adjustments.pixelSort > 0 || adjustments.littlePlanet > 0

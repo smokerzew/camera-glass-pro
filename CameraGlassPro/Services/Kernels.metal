@@ -182,3 +182,14 @@ using namespace metal;
     float ratio = clamp(dot(o, w) / max(dot(b, w), 0.02), 0.6, 1.8);
     return float4(pow(clamp(n * mix(1.0, ratio, amount), 0.0, 1.0), float3(2.2)), 1.0);
 }
+
+// Whiten Teeth: inside the mouth, bright low-saturation pixels (teeth) lose their yellow and brighten a little;
+// lips and gums (saturated reds) and the dark inside of the mouth are left alone.
+[[stitchable]] float4 teethWhiten(coreimage::sample_t s, coreimage::sample_t mask, float amount) {
+    float3 c = pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float y = dot(c, float3(0.2126, 0.7152, 0.0722));
+    float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+    float teeth = smoothstep(0.28, 0.5, y) * (1.0 - smoothstep(0.22, 0.42, sat)) * mask.r * amount;
+    float3 white = mix(float3(y), c, 0.35) + 0.06;
+    return float4(pow(clamp(mix(c, white, teeth), 0.0, 1.0), float3(2.2)), s.a);
+}

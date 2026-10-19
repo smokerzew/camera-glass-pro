@@ -103,7 +103,24 @@ struct FXPickerView: View {
                            display: { "\(Int(($0 * 100).rounded()))%" }) { vm.setEffect(\.tiltShiftPosition, to: $0) }
                 .opacity(vm.adjustments.tiltShift > 0 ? 1 : 0.4)
                 .disabled(vm.adjustments.tiltShift == 0)
-            note("Speed Blur streaks the background behind the subject. Tilt-Shift makes scenes look like tiny models; move the sharp band to where it should stay in focus.")
+            HStack(spacing: 8) {
+                Button { vm.showFocusEditor = true } label: {
+                    Label(vm.adjustments.focusStrokes.isEmpty ? "Focus Brush" : "Focus Brush (\(vm.adjustments.focusStrokes.count))",
+                          systemImage: "scope")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                        .cameraGlass(.interactive, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(vm.photo == nil)
+                .accessibilityHint("Paint what stays sharp; everything else blurs")
+            }
+            if !vm.adjustments.focusStrokes.isEmpty {
+                GlassSliderRow(title: "Focus Blur", value: vm.adjustments.focusBlur) { vm.setEffect(\.focusBlur, to: min(max($0, 0), 1)) }
+            }
+            note("Speed Blur streaks the background behind the subject. Tilt-Shift makes scenes look like tiny models. Focus Brush: paint what stays sharp; the rest blurs more the farther it is.")
         }
     }
 

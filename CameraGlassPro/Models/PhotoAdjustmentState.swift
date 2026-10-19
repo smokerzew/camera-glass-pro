@@ -27,6 +27,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var noiseReduction: Double = 0
     /// Softens skin on detected faces (0...1).
     var skinSmoothing: Double = 0
+    /// Face retouch on detected faces (0...1): brighter, crisper eyes; whiter teeth.
+    var eyeBrighten: Double = 0
+    var teethWhiten: Double = 0
     /// Darkens (+) or lightens (−) the corners.
     var vignette: Double = 0
     /// Per-color hue, saturation and luminance.
@@ -137,6 +140,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var liquifyStrokes: [LiquifyStroke] = []
     /// Remove brush strokes (same coordinates; `add` is unused): painted areas are filled from around them.
     var removeStrokes: [MaskStroke] = []
+    /// Focus Brush: painted areas stay sharp, the rest gets a lens blur of strength `focusBlur` (0...1).
+    var focusStrokes: [MaskStroke] = []
+    var focusBlur: Double = 0.6
 
     var orbitClones: Int { orbitCount >= 1.5 ? Int(orbitCount.rounded()) : 0 }
     var redactionStrokes: [RedactionStroke] = []
@@ -220,7 +226,8 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
 
     /// Effects that work pixel by pixel or per subject: live video previews them at a lighter size.
     var isHeavy: Bool {
-        needsSubject || dispersion > 0 || melt > 0 || pixelSort > 0 || littlePlanet > 0 || !liquifyStrokes.isEmpty || !removeStrokes.isEmpty
+        needsSubject || dispersion > 0 || melt > 0 || pixelSort > 0 || littlePlanet > 0 || !liquifyStrokes.isEmpty || !removeStrokes.isEmpty || !focusStrokes.isEmpty
+            || eyeBrighten > 0 || teethWhiten > 0
             || skinSmoothing > 0 || skyReplace != .none || faceRedaction != .none || !redactionStrokes.isEmpty || halation > 0 || noiseReduction > 0
     }
 
@@ -267,6 +274,9 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         redactionStrength = unit(.redactionStrength, 0.5)
         dispersion = unit(.dispersion)
         skyReplaceAmount = unit(.skyReplaceAmount, 1)
+        focusBlur = unit(.focusBlur, 0.6)
+        eyeBrighten = unit(.eyeBrighten)
+        teethWhiten = unit(.teethWhiten)
         cinematicFocus = Array(((try? c.decodeIfPresent([CinematicFocus].self, forKey: .cinematicFocus)) ?? [])
             .prefix(CinematicFocus.limit))
         dispersionSize = unit(.dispersionSize, 0.4)
@@ -310,6 +320,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         maskStrokes = Array(((try? c.decodeIfPresent([MaskStroke].self, forKey: .maskStrokes)) ?? []).prefix(MaskStroke.limit))
         liquifyStrokes = Array(((try? c.decodeIfPresent([LiquifyStroke].self, forKey: .liquifyStrokes)) ?? []).prefix(LiquifyStroke.limit))
         removeStrokes = Array(((try? c.decodeIfPresent([MaskStroke].self, forKey: .removeStrokes)) ?? []).prefix(MaskStroke.limit))
+        focusStrokes = Array(((try? c.decodeIfPresent([MaskStroke].self, forKey: .focusStrokes)) ?? []).prefix(MaskStroke.limit))
         planetSpin = min(max((try? c.decodeIfPresent(Double.self, forKey: .planetSpin)) ?? 0, 0), 360)
         dispersionAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dispersionAngle)) ?? 0, 0), 360)
         faceRedaction = (try? c.decodeIfPresent(Redaction.self, forKey: .faceRedaction)) ?? .none
@@ -392,12 +403,14 @@ enum AdjustGroup: String, CaseIterable, Identifiable, Sendable {
 
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
     case exposure, brightness, contrast, highlights, shadows, whites, blacks, dehaze, saturation, vibrance, warmth, tint,
-         texture, sharpen, noise, skin, vignette, halation, grain
+         texture, sharpen, noise, skin, eyes, teeth, vignette, halation, grain
 
     var id: String { rawValue }
     var title: String {
         switch self {
         case .skin: "Smooth Skin"
+        case .eyes: "Brighten Eyes"
+        case .teeth: "Whiten Teeth"
         case .noise: "Noise Reduction"
         default: rawValue.capitalized
         }
@@ -407,7 +420,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .exposure, .brightness, .contrast, .highlights, .shadows, .whites, .blacks, .dehaze: .light
         case .saturation, .vibrance, .warmth, .tint: .color
-        case .texture, .sharpen, .noise, .skin: .detail
+        case .texture, .sharpen, .noise, .skin, .eyes, .teeth: .detail
         case .vignette, .halation, .grain: .effects
         }
     }
@@ -430,6 +443,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .sharpen: "triangle"
         case .noise: "aqi.low"
         case .skin: "face.smiling"
+        case .eyes: "eye"
+        case .teeth: "mouth"
         case .vignette: "camera.aperture"
         case .halation: "sun.haze"
         case .grain: "circle.dotted"
@@ -448,7 +463,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .whites, .blacks, .dehaze, .tint, .vibrance: -1...1
         case .texture: -1...1
         case .sharpen, .noise: 0...1
-        case .skin: 0...1
+        case .skin, .eyes, .teeth: 0...1
         case .vignette: -1...1        // + darker corners, − lighter
         case .halation: 0...1
         case .grain: 0...1
@@ -480,6 +495,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .sharpen: \.sharpen
         case .noise: \.noiseReduction
         case .skin: \.skinSmoothing
+        case .eyes: \.eyeBrighten
+        case .teeth: \.teethWhiten
         case .vignette: \.vignette
         case .halation: \.halation
         case .grain: \.grain

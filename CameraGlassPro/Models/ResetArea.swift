@@ -74,6 +74,8 @@ extension PhotoAdjustmentState {
             next.speedAngle = d.speedAngle
             next.tiltShift = d.tiltShift
             next.tiltShiftPosition = d.tiltShiftPosition
+            next.focusStrokes = d.focusStrokes
+            next.focusBlur = d.focusBlur
         case .fxBlend:
             next.doubleExposure = d.doubleExposure
             next.lookMatch = d.lookMatch

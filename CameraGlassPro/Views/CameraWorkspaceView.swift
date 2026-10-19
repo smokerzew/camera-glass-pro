@@ -72,7 +72,14 @@ struct CameraWorkspaceView: View {
             .fullScreenCover(isPresented: $vm.showRedactionEditor) { RedactionEditorView(vm: vm) }
             .fullScreenCover(isPresented: $vm.showMaskEditor) { MaskRefineEditorView(vm: vm) }
             .fullScreenCover(isPresented: $vm.showLiquifyEditor) { LiquifyEditorView(vm: vm) }
-            .fullScreenCover(isPresented: $vm.showRemoveEditor) { RemoveEditorView(vm: vm) }
+            .fullScreenCover(isPresented: $vm.showRemoveEditor) {
+                PaintEditorView(vm: vm, title: "REMOVE", strokes: \.removeStrokes, set: vm.setRemoveStrokes,
+                                note: "Paint over a small object, spot or wire, covering all of it. Works best on sky, walls, grass and skin.")
+            }
+            .fullScreenCover(isPresented: $vm.showFocusEditor) {
+                PaintEditorView(vm: vm, title: "FOCUS BRUSH", strokes: \.focusStrokes, set: vm.setFocusStrokes,
+                                note: "Paint what should stay sharp. Everything else blurs, more the farther it is from what you painted.")
+            }
             .appAlert(vm)
             .sensoryFeedback(.success, trigger: vm.importSuccessCount)
             .sensoryFeedback(.selection, trigger: vm.mode)

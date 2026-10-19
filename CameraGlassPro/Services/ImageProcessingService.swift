@@ -54,6 +54,9 @@ final class ImageProcessingService: @unchecked Sendable {
         if a.doubleExposure > 0, let second = backgroundPhoto {
             image = doubleExposure(image, second: second, mask: mask, amount: a.doubleExposure, extent: input.extent)
         }
+        if !a.focusStrokes.isEmpty, a.focusBlur > 0 {
+            image = focusBrush(image, strokes: a.focusStrokes, amount: a.focusBlur, extent: input.extent)
+        }
 
         // Sky found on the untouched photo, so edits never change what counts as sky.
         let sky = a.skyEdit.isNeutral && a.skyReplace == .none ? nil : skyMask(for: input, extent: input.extent)
@@ -72,6 +75,9 @@ final class ImageProcessingService: @unchecked Sendable {
 
         if a.skinSmoothing > 0 {
             image = smoothSkin(image, amount: a.skinSmoothing, extent: input.extent, knownFaces: faces)
+        }
+        if a.eyeBrighten > 0 || a.teethWhiten > 0 {
+            image = retouchFaces(image, eyes: a.eyeBrighten, teeth: a.teethWhiten, extent: input.extent)
         }
 
         if a.exposure != 0 {
