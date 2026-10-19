@@ -13,8 +13,8 @@ final class FilterCatalogTests: XCTestCase {
         XCTAssertEqual(FilterCategory.y2k.filters.count, 8)
         XCTAssertEqual(FilterCategory.digicam.title, "DigiCam FX")
         XCTAssertEqual(FilterCategory.digicam.filters, [.pointShoot, .nightFlash, .coolCCD, .y2006, .digicam, .ccd, .retro])
-        XCTAssertEqual(grouped.count, 174, "174 filters")
-        XCTAssertEqual(FilterCategory.allCases.count, 20)
+        XCTAssertEqual(grouped.count, 244, "244 filters")
+        XCTAssertEqual(FilterCategory.allCases.count, 27)
         for category in FilterCategory.allCases { XCTAssertFalse(category.filters.isEmpty, "\(category) is empty") }
         XCTAssertEqual(Set(PhotoFilter.allCases.map(\.label)).count, PhotoFilter.allCases.count, "names are unique")
     }

@@ -571,6 +571,13 @@ enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case cottonCandy, babyBlue, mintCream, lilac, peachFuzz, lemonade, cloudy, blush, seaGlass, dreamy
     case terracotta, olive, sandstone, moss, clay, cedar, harvest, canyon, linen, coffee
     case velvet, champagne, ivory, onyx, pearl, bordeaux, sapphire, goldLeaf, silk, magazine
+    case weddingWhite, veil, blushRose, goldenVows, ivoryLace, firstDance, garden, timeless, champagneToast, candlelight
+    case runway, editorialCool, vogue, glossy, lookbook, streetStyle, noirChic, pastelCouture, flashStudio, desertShoot
+    case stageLights, purpleHaze, greenScreen, vhsDream, redRoom, blueHour, afterglow, mosh, lofi, spotlit
+    case reportage, fieldNotes, photojournal, overcastDoc, naturalLight, dust, northern, kodakDoc, grit, humanist
+    case print2383, bleach, epic, western, thriller, romance, scifi, noir1940, technicolor3, indie
+    case hassel, portra120, ektar120, fuji120, velvia120, acros, studioPortrait, landscape120, pastel120, tonal
+    case handycam, hi8, vacation95, homeVideo, skatePark, birthday, greenTint, beachTape, mallLights, rewind
 
     var label: String {
         if let recipe = LookRecipe.recipe(self) { return recipe.label }
