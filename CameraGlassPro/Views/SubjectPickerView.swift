@@ -11,7 +11,7 @@ struct SubjectPickerView: View {
     @State private var showMoreDissolve = false
 
     /// Three short pages instead of one long card.
-    enum Page: String, CaseIterable { case style, adjust, create }
+    enum Page: String, CaseIterable { case style, adjust, effects, create }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -28,11 +28,11 @@ struct SubjectPickerView: View {
                     .foregroundStyle(.white.opacity(0.9))
                 Spacer()
                 // The Adjust page has its own Reset next to its region buttons.
-                if page == .create {
-                    AreaShuffleButton(vm: vm, area: .subjectCreate)
+                if page == .create || page == .effects {
+                    AreaShuffleButton(vm: vm, area: page == .create ? .subjectCreate : .subjectEffects)
                 }
                 if page != .adjust {
-                    AreaResetButton(vm: vm, area: page == .style ? .subjectStyle : .subjectCreate)
+                    AreaResetButton(vm: vm, area: page == .style ? .subjectStyle : (page == .create ? .subjectCreate : .subjectEffects))
                         .padding(.trailing, 12)
                 }
                 if vm.isFindingSubject {
@@ -51,6 +51,7 @@ struct SubjectPickerView: View {
                 switch page {
                 case .style: stylePage
                 case .adjust: regionEdits
+                case .effects: effectsPage
                 case .create: createPage
                 }
             }
@@ -132,6 +133,32 @@ struct SubjectPickerView: View {
             skyReplaceRow
             if vm.video != nil { cinematicRow }
         }
+    }
+
+    /// Neon outline, aura, silhouette and drop shadow.
+    private var effectsPage: some View {
+        let a = vm.adjustments
+        return VStack(spacing: 10) {
+            GlassSliderRow(title: "Neon Outline", value: a.neonOutline) { vm.setEffect(\.neonOutline, to: min(max($0, 0), 1)) }
+            hueRow("Neon Color", \.neonHue, enabled: a.neonOutline > 0)
+            GlassSliderRow(title: "Aura", value: a.aura) { vm.setEffect(\.aura, to: min(max($0, 0), 1)) }
+            hueRow("Aura Color", \.auraHue, enabled: a.aura > 0)
+            GlassSliderRow(title: "Silhouette", value: a.silhouette) { vm.setEffect(\.silhouette, to: min(max($0, 0), 1)) }
+            GlassSliderRow(title: "Shadow", value: a.subjectShadow) { vm.setEffect(\.subjectShadow, to: min(max($0, 0), 1)) }
+            Text("Neon traces a glowing line around the subject; Aura is a colored glow behind it; Silhouette darkens it "
+                 + "against the background; Shadow casts a soft shadow behind it.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.65))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 6)
+    }
+
+    private func hueRow(_ title: String, _ path: WritableKeyPath<PhotoAdjustmentState, Double>, enabled: Bool) -> some View {
+        GlassSliderRow(title: title, value: vm.adjustments[keyPath: path], range: 0...360,
+                       display: { "\(Int($0.rounded()))°" }) { vm.setEffect(path, to: min(max($0, 0), 360)) }
+            .opacity(enabled ? 1 : 0.4)
+            .disabled(!enabled)
     }
 
     /// CINEMATIC focus points made by tapping the video in CINEMATIC mode.

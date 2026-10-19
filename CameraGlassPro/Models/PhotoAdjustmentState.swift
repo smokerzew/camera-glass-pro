@@ -110,6 +110,16 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var dissolveSoftness: Double = 0.5
     /// A bigger, speckled copy of the dissolving subject growing out of it (0 = none).
     var dissolveEcho: Double = 0.75
+    /// SUBJECT > Effects: neon outline (and its hue), colored aura (and its hue), silhouette, drop shadow.
+    var neonOutline: Double = 0
+    var neonHue: Double = 300
+    var aura: Double = 0
+    var auraHue: Double = 45
+    var silhouette: Double = 0
+    var subjectShadow: Double = 0
+
+    /// Any SUBJECT > Effects setting is on.
+    var hasSubjectEffects: Bool { neonOutline > 0 || aura > 0 || silhouette > 0 || subjectShadow > 0 }
     /// Ghost: a translucent copy of the subject or whole photo, moved (opacity 0 = off).
     var ghostOpacity: Double = 0
     var ghostDistance: Double = 0.25
@@ -221,7 +231,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     /// Any edit that needs the subject mask.
     var needsSubject: Bool {
         portrait || colorSplash || background != .original || !subjectEdit.isNeutral || !backgroundEdit.isNeutral
-            || speedBlur > 0 || doubleExposure > 0 || dispersionActive || ghostOpacity > 0 // the subject goes back on top of the ghost
+            || speedBlur > 0 || doubleExposure > 0 || dispersionActive || ghostOpacity > 0 || hasSubjectEffects // the subject goes back on top of the ghost
             || hologram > 0 || melt > 0 || orbitClones > 0 || (pixelSort > 0 && pixelSortSubjectOnly)
             || (filter != .none && filterTarget != .all) || spotlight > 0 || depthMap > 0
     }
@@ -237,6 +247,10 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         copy.speedBlur = 0 // double exposure still works without a subject
         copy.dispersion = 0
         copy.dissolveAmount = 0
+        copy.neonOutline = 0
+        copy.aura = 0
+        copy.silhouette = 0
+        copy.subjectShadow = 0
         if copy.ghostTarget == .subject { copy.ghostOpacity = 0 }
         copy.hologram = 0
         copy.melt = 0
@@ -331,6 +345,12 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         dissolveAngle = min(max((try? c.decodeIfPresent(Double.self, forKey: .dissolveAngle)) ?? 0, 0), 360)
         dissolveSoftness = unit(.dissolveSoftness, 0.5)
         dissolveEcho = unit(.dissolveEcho, 0.75)
+        neonOutline = unit(.neonOutline)
+        neonHue = min(max((try? c.decodeIfPresent(Double.self, forKey: .neonHue)) ?? 300, 0), 360)
+        aura = unit(.aura)
+        auraHue = min(max((try? c.decodeIfPresent(Double.self, forKey: .auraHue)) ?? 45, 0), 360)
+        silhouette = unit(.silhouette)
+        subjectShadow = unit(.subjectShadow)
         focusBlur = unit(.focusBlur, 0.6)
         eyeBrighten = unit(.eyeBrighten)
         teethWhiten = unit(.teethWhiten)

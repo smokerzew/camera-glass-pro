@@ -222,6 +222,33 @@ final class LookTests: XCTestCase {
         sheet("looks-strengths", tiles)
     }
 
+    /// Pack 8: echo, subject effects, new photo FX and adjustments on real photos.
+    func testPack8Sheet() throws {
+        let portrait = try photo("portrait"), landscape = try photo("landscape"), sunset = try photo("sunset")
+        let mask = portraitMask(portrait)
+        func subject(_ change: (inout PhotoAdjustmentState) -> Void) -> CIImage {
+            processor.apply(with(change), to: portrait, subjectMask: mask).cropped(to: portrait.extent)
+        }
+        sheet("looks-pack8", [
+            ("Dissolve echo 100", subject { $0.dispersionStyle = .particleDissolve; $0.dissolveAmount = 0.55; $0.dissolveEcho = 1 }),
+            ("Dissolve echo 0", subject { $0.dispersionStyle = .particleDissolve; $0.dissolveAmount = 0.55; $0.dissolveEcho = 0 }),
+            ("Neon 80", subject { $0.neonOutline = 0.8 }), ("Aura 80", subject { $0.aura = 0.8 }),
+            ("Silhouette 100", subject { $0.silhouette = 1 }), ("Shadow 80", subject { $0.subjectShadow = 0.8 }),
+            ("Fog", render(with { $0.weather = .fog; $0.weatherAmount = 0.6 }, landscape)),
+            ("Rain", render(with { $0.weather = .rain; $0.weatherAmount = 0.6 }, landscape)),
+            ("Snow", render(with { $0.weather = .snow; $0.weatherAmount = 0.6 }, landscape)),
+            ("God Rays", render(with { $0.weather = .rays; $0.weatherAmount = 0.6 }, sunset)),
+            ("Flare", render(with { $0.flare = 0.7 }, sunset)), ("Prism", render(with { $0.prism = 0.7 }, portrait)),
+            ("Oil", render(with { $0.paint = 0.8; $0.paintStyle = .oil }, landscape)),
+            ("Watercolor", render(with { $0.paint = 0.8; $0.paintStyle = .watercolor }, landscape)),
+            ("Sketch", render(with { $0.paint = 0.8; $0.paintStyle = .sketch }, portrait)),
+            ("Mirror left", render(with { $0.mirror = .left }, landscape)),
+            ("Brilliance 80", render(with { $0.brilliance = 0.8 }, sunset)), ("Clarity 80", render(with { $0.clarity = 0.8 }, landscape)),
+            ("Fade 60", render(with { $0.fade = 0.6 }, portrait)),
+            ("Grade teal/orange", render(with { $0.gradeShadowAmount = 0.6; $0.gradeHighlightAmount = 0.6 }, sunset)),
+        ])
+    }
+
     /// The raw masks everything subject- and sky-based is built on (white = subject / sky), next to each photo.
     func testMaskSheet() throws {
         var tiles: [(String, CIImage)] = []

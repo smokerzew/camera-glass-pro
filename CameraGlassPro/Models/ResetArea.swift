@@ -9,7 +9,7 @@ enum ResetArea: String, CaseIterable, Sendable {
     /// FX pages.
     case fxBlur, fxBlend, fxPrivacy, fxGhost, fxArt, fxLight, fxRetro, fxPop, fxWeather
     /// SUBJECT pages (the Adjust page has its own reset for subject / background / sky edits).
-    case subjectStyle, subjectCreate
+    case subjectStyle, subjectCreate, subjectEffects
 
     var title: String {
         switch self {
@@ -20,7 +20,8 @@ enum ResetArea: String, CaseIterable, Sendable {
         case .local: "Reset Filters"
         case .adjust: "Reset Adjust"
         case .filter: "Reset Filter"
-        case .fxBlur, .fxBlend, .fxPrivacy, .fxGhost, .fxArt, .fxLight, .fxRetro, .fxPop, .fxWeather, .subjectStyle, .subjectCreate: "Reset"
+        case .fxBlur, .fxBlend, .fxPrivacy, .fxGhost, .fxArt, .fxLight, .fxRetro, .fxPop, .fxWeather, .subjectStyle, .subjectCreate,
+             .subjectEffects: "Reset"
         }
     }
 
@@ -161,6 +162,13 @@ extension PhotoAdjustmentState {
             next.dissolveAngle = d.dissolveAngle
             next.dissolveSoftness = d.dissolveSoftness
             next.dissolveEcho = d.dissolveEcho
+        case .subjectEffects:
+            next.neonOutline = d.neonOutline
+            next.neonHue = d.neonHue
+            next.aura = d.aura
+            next.auraHue = d.auraHue
+            next.silhouette = d.silhouette
+            next.subjectShadow = d.subjectShadow
         }
         return next
     }

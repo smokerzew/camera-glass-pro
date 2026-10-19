@@ -123,6 +123,7 @@ extension CameraWorkspaceViewModel {
         case .liveText: liveTextEnabled
         case .effects: false
         case .subject: adjustments.colorSplash || adjustments.background != .original || adjustments.skyReplace != .none
+            || adjustments.hasSubjectEffects
         case .crop: adjustments.hasGeometry
         case .format: false
         }

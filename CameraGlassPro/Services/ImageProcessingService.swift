@@ -34,6 +34,9 @@ final class ImageProcessingService: @unchecked Sendable {
         }
         if let mask {
             image = composeSubject(a, to: image, mask: mask, backgroundPhoto: backgroundPhoto)
+            if a.hasSubjectEffects {
+                image = subjectEffects(image, mask: mask.cropped(to: input.extent), a, extent: input.extent)
+            }
             if a.dispersionStyle == .particleDissolve, a.dissolveAmount > 0 {
                 image = particleDissolve(image, mask: mask.cropped(to: input.extent), amount: a.dissolveAmount,
                                          size: a.dissolveSize, density: a.dissolveDensity, spread: a.dissolveSpread,

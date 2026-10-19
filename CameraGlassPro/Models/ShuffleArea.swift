@@ -6,7 +6,7 @@ extension PhotoAdjustmentState {
     static func canShuffle(_ area: ResetArea) -> Bool {
         switch area {
         case .light, .color, .detail, .effects, .filter, .fxBlur, .fxBlend, .fxGhost, .fxArt, .fxLight, .fxRetro, .fxPop, .fxWeather,
-             .subjectCreate: true
+             .subjectCreate, .subjectEffects: true
         case .local, .adjust, .fxPrivacy, .subjectStyle: false
         }
     }
@@ -130,6 +130,15 @@ extension PhotoAdjustmentState {
                 next.halftoneColor = coin()
             case .chroma: next.chroma = random(0.3...0.9)
             }
+        case .subjectEffects:
+            // One or two of them, in random colors.
+            next = resetting(.subjectEffects)
+            next.neonOutline = coin(0.5) ? random(0.5...1) : 0
+            next.neonHue = random(0...360)
+            next.aura = coin(0.5) ? random(0.4...0.9) : 0
+            next.auraHue = random(0...360)
+            next.subjectShadow = coin(0.4) ? random(0.4...0.8) : 0
+            if next.neonOutline == 0, next.aura == 0, next.subjectShadow == 0 { next.silhouette = random(0.6...1) }
         case .fxWeather:
             next.weather = WeatherEffect.allCases.filter { $0 != .none && $0 != weather }.randomElement(using: &rng) ?? .fog
             next.weatherAmount = random(0.5...1)

@@ -12,7 +12,7 @@ extension PhotoAdjustmentState {
         \.depthMap, \.blinds, \.spotlight, \.glow, \.sparkle, \.vhs, \.webcam, \.halftone, \.chroma, \.popAmount,
         \.visionAmount, \.dispersion, \.halation, \.grain, \.skinSmoothing, \.sharpen, \.noiseReduction, \.focusBlur,
         \.eyeBrighten, \.teethWhiten, \.skyReplaceAmount, \.filterStrength, \.fade, \.gradeShadowAmount, \.gradeHighlightAmount,
-        \.flare, \.prism, \.paint, \.weatherAmount,
+        \.flare, \.prism, \.paint, \.weatherAmount, \.neonOutline, \.aura, \.silhouette, \.subjectShadow,
         // Not here (each has its own mapping where it renders): backgroundBlurAmount, redactionStrength,
         // the Particle Dissolve settings.
     ]
