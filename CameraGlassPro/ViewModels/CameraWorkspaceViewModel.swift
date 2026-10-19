@@ -449,6 +449,11 @@ final class CameraWorkspaceViewModel {
         restoringState = state // set after startLibrary, which clears it
     }
 
+    /// Opens a file directly (UI tests only; see `UITestHook`).
+    func openForUITest(_ url: URL) {
+        startLibrary([LibraryEntry(source: .file(url))])
+    }
+
     /// Saves the current edits and framing (called when the app goes to the background).
     func saveSessionState() {
         guard let store = sessionStore, hasMedia, restoringState == nil else { return }

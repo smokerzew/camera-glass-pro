@@ -38,6 +38,16 @@
                ReferencedContainer = "container:CameraGlassPro.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A10000000000000000000033"
+               BuildableName = "CameraGlassProUITests.xctest"
+               BlueprintName = "CameraGlassProUITests"
+               ReferencedContainer = "container:CameraGlassPro.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

@@ -56,7 +56,10 @@ struct CameraWorkspaceView: View {
                 vm.setLookMatchReference(from: item)
                 matchItem = nil
             }
-            .task { vm.restoreLastSession() }
+            .task {
+                // UI tests hand the app a photo (the system picker runs outside the app and can't be scripted reliably).
+                if let url = UITestHook.photoURL() { vm.openForUITest(url) } else { vm.restoreLastSession() }
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { vm.saveSessionState() }
             }
