@@ -63,7 +63,7 @@ final class ScreenshotTour: CameraGlassUITestCase {
         app.buttons["Tools"].firstMatch.tap(); settle(0.6); shot("04-panel-tools")
         tapOutside(); settle(0.6)
 
-        open("Filter"); settle(2.5); shot("05-filters")
+        open("Filter"); settle(6); shot("05-filters") // preview tiles render in the background
         tapOutside(); settle(0.6)
 
         open("Styles"); settle(); shot("06-styles")
@@ -71,16 +71,17 @@ final class ScreenshotTour: CameraGlassUITestCase {
 
         open("Fx"); settle()
         for (index, page) in ["Blur", "Blend", "Ghost", "Art", "Light", "Retro", "Pop", "Privacy"].enumerated() {
-            let tab = popUp("FX").buttons[page]
+            let tab = popUp("FX").buttons[page].firstMatch // the page tab; "Blur" also names effects
             if tab.exists { tab.tap(); settle(0.7); shot(String(format: "07-fx-%02d-%@", index + 1, page.lowercased())) }
         }
         tapOutside(); settle(0.6)
 
         open("Subject"); settle(2); shot("08-subject-style")
-        let sunset = popUp("Subject").buttons["Sunset"]
+        // Last match: the SKY row sits below the BACKGROUND row, which has its own "Sunset".
+        let sunset = popUp("Subject").buttons.matching(identifier: "Sunset").allElementsBoundByIndex.last ?? popUp("Subject").buttons["Sunset"]
         if sunset.exists { sunset.tap(); settle(3); shot("09-subject-sky-sunset") }
         for page in ["Adjust", "Create"] {
-            let tab = popUp("Subject").buttons[page]
+            let tab = popUp("Subject").buttons[page].firstMatch
             if tab.exists { tab.tap(); settle(0.8); shot("10-subject-\(page.lowercased())") }
         }
         tapOutside(); settle(0.6)
@@ -130,7 +131,7 @@ final class TapTests: CameraGlassUITestCase {
         open("Fx")
         let fx = popUp("FX")
         XCTAssertTrue(fx.waitForExistence(timeout: 5))
-        for page in ["Light", "Retro", "Blur"] { fx.buttons[page].tap() }
+        for page in ["Light", "Retro", "Blur"] { fx.buttons[page].firstMatch.tap() }
         fx.sliders.firstMatch.adjust(toNormalizedSliderPosition: 0.6)
         XCTAssertTrue(fx.exists, "FX stays open while using it")
         XCTAssertTrue(fx.buttons["Reset"].exists, "each FX page has its own Reset")

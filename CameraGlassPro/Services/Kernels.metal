@@ -159,3 +159,24 @@ using namespace metal;
                                 coreimage::sample_t mask) {
     return float4(base.rgb + (patch.rgb - patchBlur.rgb) * mask.r, base.a);
 }
+
+// Sky edge refinement: `region` is the (dilated) smooth-sky area; `local` is the average sky color nearby
+// (premultiplied by how much sky it saw). Pixels close to the local sky color stay sky, so the edge follows
+// rooftops and ridges pixel by pixel instead of a blurred band.
+[[stitchable]] float4 skyRefine(coreimage::sample_t s, coreimage::sample_t local, coreimage::sample_t region) {
+    float3 c = pow(clamp(s.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float3 sky = pow(clamp(local.rgb / max(local.a, 0.001), 0.0, 1.0), float3(1.0 / 2.2));
+    float d = length(c - sky);
+    float m = region.r * (1.0 - smoothstep(0.07, 0.2, d));
+    return float4(m, m, m, 1.0);
+}
+
+// Sky Replace: the new sky plus the original sky's fine detail (clouds, haze) as brightness, in display space.
+[[stitchable]] float4 skyDetail(coreimage::sample_t sky, coreimage::sample_t original, coreimage::sample_t originalBlur,
+                                float amount) {
+    float3 o = pow(clamp(original.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float3 b = pow(clamp(originalBlur.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float3 n = pow(clamp(sky.rgb, 0.0, 1.0), float3(1.0 / 2.2));
+    float detail = dot(o - b, float3(0.2126, 0.7152, 0.0722)) * amount;
+    return float4(pow(clamp(n + detail, 0.0, 1.0), float3(2.2)), 1.0);
+}

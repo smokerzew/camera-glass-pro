@@ -28,7 +28,10 @@ extension ImageProcessingService {
         guard let kernel = Self.kernel("skyLikelihood") else { return nil }
         let display = image.applyingFilter("CILinearToSRGBToneCurve")
         let detail = display.clampedToExtent().applyingGaussianBlur(sigma: Double(max(1, extent.width / 250)))
+        // Cropped before spreading: outside the photo the difference is the blur itself, which made a
+        // "textured" rim along the frame edges (no sky there).
         let texture = display.applyingFilter("CIDifferenceBlendMode", parameters: [kCIInputBackgroundImageKey: detail])
+            .cropped(to: extent)
             .clampedToExtent()
             .applyingGaussianBlur(sigma: Double(max(1, extent.width / 100)))
             .cropped(to: extent)
@@ -39,8 +42,19 @@ extension ImageProcessingService {
         top.color1 = .black
         guard let position = top.outputImage?.cropped(to: extent),
               let likelihood = kernel.apply(extent: extent, arguments: [image, texture, position]) else { return nil }
-        // Feather so edits blend smoothly into rooftops and trees.
-        return likelihood.clampedToExtent().applyingGaussianBlur(sigma: Double(max(1, extent.width / 120))).cropped(to: extent)
+        // The smooth-area test is blurred, so it stops short of ridges and rooftops. Grow it past them, then keep
+        // only pixels close to the nearby sky color, so the edge follows the skyline pixel by pixel.
+        guard let refine = Self.kernel("skyRefine") else {
+            return likelihood.clampedToExtent().applyingGaussianBlur(sigma: Double(max(1, extent.width / 120))).cropped(to: extent)
+        }
+        let grown = likelihood.applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: max(1, extent.width / 70)])
+            .cropped(to: extent)
+        let skyOnly = CIImage(color: .clear).cropped(to: extent).applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: image, kCIInputMaskImageKey: likelihood.applyingFilter("CIColorInvert"),
+        ]).cropped(to: extent)
+        let localSky = skyOnly.clampedToExtent().applyingGaussianBlur(sigma: Double(max(2, extent.width / 40))).cropped(to: extent)
+        guard let refined = refine.apply(extent: extent, arguments: [image, localSky, grown]) else { return nil }
+        return refined.clampedToExtent().applyingGaussianBlur(sigma: Double(max(0.7, extent.width / 1000))).cropped(to: extent)
     }
 
     /// Brightness, saturation and warmth for the sky only.
@@ -106,7 +120,10 @@ extension ImageProcessingService {
             gradient.color0 = colors.top
             gradient.color1 = colors.horizon
             guard let output = gradient.outputImage else { return image }
-            newSky = output.cropped(to: e)
+            // Keep the original sky's clouds and haze as brightness detail, so it isn't a flat painted sky.
+            let blur = image.clampedToExtent().applyingGaussianBlur(sigma: Double(max(2, e.width / 60))).cropped(to: e)
+            newSky = Self.kernel("skyDetail")?.apply(extent: e, arguments: [output.cropped(to: e), image, blur, Float(0.9)])?
+                .cropped(to: e) ?? output.cropped(to: e)
         } else if let photo, photo.extent.width > 0, photo.extent.height > 0 {
             // Cover the frame, anchored to the top so the photo's own sky lands in ours.
             let p = photo.extent
@@ -119,9 +136,9 @@ extension ImageProcessingService {
         } else {
             return image
         }
-        // Tighter edge than the feathered sky-edit mask, so trees and rooftops get no halo.
-        // Clamped: contrast around 0.5 pushes the ground below 0, which would push it away from the new sky's color.
-        let edge = mask.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.6])
+        // A slightly firmer edge. Clamped: contrast around 0.5 pushes the ground below 0, which would push it away
+        // from the new sky's color.
+        let edge = mask.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: 1.25])
             .applyingFilter("CIColorClamp").cropped(to: e)
         let strength = CIImage(color: CIColor(red: k, green: k, blue: k)).cropped(to: e)
         let skyMask = edge.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: strength])
