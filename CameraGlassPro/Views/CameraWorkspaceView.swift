@@ -5,7 +5,7 @@ import SwiftUI
 /// status icons float over its top, zoom/shutter controls over its bottom, and a black bar holds
 /// the thumbnail, the mode capsule and a round action button.
 struct CameraWorkspaceView: View {
-    @State private var vm = CameraWorkspaceViewModel(sessionStore: .standard, projectStore: .standard)
+    @State private var vm = CameraWorkspaceViewModel(sessionStore: .standard)
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var backgroundItem: PhotosPickerItem?
     @State private var matchItem: PhotosPickerItem?
@@ -58,18 +58,16 @@ struct CameraWorkspaceView: View {
             }
             .task {
                 // UI tests hand the app a photo (the system picker runs outside the app and can't be scripted reliably).
-                if let url = UITestHook.photoURL() { vm.openForUITest(url) } else { vm.startUp() }
+                if let url = UITestHook.photoURL() { vm.openForUITest(url) } else { vm.restoreLastSession() }
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { vm.saveSessionState() }
-                vm.cameraSceneActive(phase == .active)
             }
             .sheet(isPresented: $vm.showAdjustments) { PhotoAdjustmentView(vm: vm, detent: $adjustDetent) }
             .sheet(isPresented: $vm.showExport) { PhotoExportView(vm: vm) }
             .sheet(isPresented: $vm.showTrim) { VideoTrimView(vm: vm) }
             .sheet(isPresented: $vm.showFramePicker) { FramePickerView(vm: vm) }
             .sheet(isPresented: $vm.showCollage) { CollageView(vm: vm) }
-            .sheet(isPresented: $vm.showLibrary) { LibraryView(vm: vm) }
             .sheet(isPresented: $vm.showTextSheet) { LiveTextSheet(vm: vm) }
             .fullScreenCover(isPresented: $vm.showCropEditor) { CropEditorView(vm: vm) }
             .fullScreenCover(isPresented: $vm.showRedactionEditor) { RedactionEditorView(vm: vm) }
@@ -198,13 +196,6 @@ struct CameraWorkspaceView: View {
 
                 if vm.showFilterPicker {
                     FilterPickerView(vm: vm)
-                        .padding(.bottom, 6)
-                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-                        .zIndex(1)
-                }
-
-                if vm.showManualControls {
-                    ManualControlsView(vm: vm)
                         .padding(.bottom, 6)
                         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)

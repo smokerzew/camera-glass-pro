@@ -54,8 +54,6 @@ struct PhotoAdjustmentView: View {
                         sliders(for: .color)
                         ColorMixerSection(vm: vm)
                         ColorGradeSection(vm: vm)
-                        CurvesSection(vm: vm)
-                        CalibrationSection(vm: vm)
                     case .detail:
                         sliders(for: .detail)
                     case .effects:

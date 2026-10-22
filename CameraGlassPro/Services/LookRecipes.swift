@@ -52,23 +52,6 @@ struct LookRecipe {
     /// (A switch rather than one big dictionary literal, which is slow to type-check.)
     static func recipe(_ filter: PhotoFilter) -> LookRecipe? {
         switch filter {
-        // Signature: original film-inspired looks, each a starting point for further edits.
-        // Natural color negative: gentle toe and shoulder, slightly warm, true-to-life color.
-        case .daylightNeg: LookRecipe("Daylight Neg", .signature, temperature: 120.0, curve: [(0.0, 0.02), (0.25, 0.24), (0.5, 0.5), (0.75, 0.77), (1.0, 0.985)], saturation: 1.04, shadows: (0.0, 0.004, 0.006), highlights: (0.008, 0.004, 0.0))
-        // High-speed film pushed two stops: punchy midtones, muted color, cool shadows (coarse grain comes with it).
-        case .push1600: LookRecipe("Push 1600", .signature, exposure: 0.05, curve: [(0.0, 0.03), (0.25, 0.21), (0.5, 0.5), (0.75, 0.8), (1.0, 0.98)], saturation: 0.92, shadows: (-0.004, 0.006, 0.01))
-        // Warm, faded print: lifted blacks, softened highlights, lower saturation.
-        case .sunFaded: LookRecipe("Sun Faded", .signature, temperature: 350.0, curve: [(0.0, 0.07), (0.25, 0.27), (0.5, 0.51), (0.75, 0.75), (1.0, 0.95)], saturation: 0.82, highlights: (0.014, 0.008, -0.004))
-        // Neutral monochrome with an even, full tonal range.
-        case .silverTone: LookRecipe("Silver Tone", .signature, mono: (0.3, 0.59, 0.11), curve: [(0.0, 0.015), (0.25, 0.23), (0.5, 0.5), (0.75, 0.78), (1.0, 0.99)])
-        // Soft portrait: open shadows, warm skin, a little highlight bloom.
-        case .softBloom: LookRecipe("Soft Bloom", .signature, exposure: 0.05, temperature: 150.0, curve: [(0.0, 0.03), (0.25, 0.255), (0.5, 0.52), (0.75, 0.77), (1.0, 0.98)], saturation: 0.94, highlights: (0.008, 0.004, 0.002), glow: 0.2)
-        // Rich contrast: deep blacks, bright whites, dense color.
-        case .deepPrint: LookRecipe("Deep Print", .signature, curve: [(0.0, 0.0), (0.25, 0.18), (0.5, 0.5), (0.75, 0.83), (1.0, 1.0)], saturation: 1.12, vibrance: 0.15, clarity: 0.2)
-        // Muted cinematic color: low saturation, slightly cool, soft contrast.
-        case .quietCinema: LookRecipe("Quiet Cinema", .signature, exposure: -0.05, temperature: -80.0, curve: [(0.0, 0.03), (0.25, 0.22), (0.5, 0.49), (0.75, 0.77), (1.0, 0.97)], saturation: 0.78, shadows: (-0.006, 0.004, 0.012), highlights: (0.008, 0.006, 0.0))
-        // Warm highlights over cool shadows.
-        case .goldenSplit: LookRecipe("Golden Split", .signature, curve: [(0.0, 0.01), (0.25, 0.225), (0.5, 0.5), (0.75, 0.785), (1.0, 0.99)], saturation: 1.02, shadows: (-0.012, 0.002, 0.02), highlights: (0.022, 0.01, -0.012))
         case .vividWarm: LookRecipe("Vivid Warm", .classic, temperature: 350.0, curve: [(0.0, 0.01), (0.25, 0.235), (0.5, 0.5), (0.75, 0.775), (1.0, 0.99)], vibrance: 0.35)
         case .vividCool: LookRecipe("Vivid Cool", .classic, temperature: -350.0, curve: [(0.0, 0.01), (0.25, 0.235), (0.5, 0.5), (0.75, 0.775), (1.0, 0.99)], vibrance: 0.35)
         case .dramatic: LookRecipe("Dramatic", .classic, exposure: -0.15, curve: [(0.0, 0.0), (0.25, 0.19), (0.5, 0.5), (0.75, 0.82), (1.0, 1.0)], saturation: 0.9, clarity: 0.35)

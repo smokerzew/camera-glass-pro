@@ -449,7 +449,6 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Camera Glass";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera Glass uses the camera to take photos and to analyze the scene for framing suggestions. Nothing leaves your iPhone.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Camera Glass Pro adds photos to your library only when you choose to save an export or a screen capture.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -486,7 +485,6 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Camera Glass";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera Glass uses the camera to take photos and to analyze the scene for framing suggestions. Nothing leaves your iPhone.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Camera Glass Pro adds photos to your library only when you choose to save an export or a screen capture.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

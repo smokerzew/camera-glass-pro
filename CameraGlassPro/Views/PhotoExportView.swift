@@ -1,4 +1,3 @@
-import CoreImage
 import SwiftUI
 
 /// Export sheet: choose original vs edited copy, render off the main thread, then hand the file
@@ -16,7 +15,7 @@ struct PhotoExportView: View {
 
     private var options: ExportOptions {
         ExportOptions(content: content, format: vm.exportFormat, size: size, cropToFraming: cropToFraming, burnOverlays: burnOverlays,
-                      storyFill: storyFill && !isVideo, finish: content == .adjusted && !isVideo ? vm.finish : FinishSettings())
+                      storyFill: storyFill && !isVideo)
     }
 
     private var overlays: OverlayBurnIn {
@@ -72,10 +71,6 @@ struct PhotoExportView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     }
-                }
-
-                if content == .adjusted && !isVideo {
-                    FinishSection(vm: vm)
                 }
 
                 // One tap: render with every edit and effect (no camera controls) and save to Photos.
@@ -171,55 +166,5 @@ struct PhotoExportView: View {
     private func sharePreview(for file: URL) -> SharePreview<Image, Never> {
         let image = vm.displayedImage.map { Image(decorative: $0, scale: 1) } ?? Image(systemName: "photo")
         return SharePreview(file.lastPathComponent, image: image)
-    }
-}
-
-/// Frame and date stamp for the finished copy, with a preview. Only real capture metadata is used:
-/// without a capture date there is no stamp, and missing camera details are labeled as unavailable.
-private struct FinishSection: View {
-    @Bindable var vm: CameraWorkspaceViewModel
-    @State private var preview: CGImage?
-
-    var body: some View {
-        let metadata = vm.captureMetadata ?? CaptureMetadata()
-        Section {
-            Picker("Frame", selection: Binding(get: { vm.finish.frame }, set: { var f = vm.finish; f.frame = $0; vm.setFinish(f) })) {
-                ForEach(FrameStyle.allCases) { Text($0.label).tag($0) }
-            }
-            Toggle("Date Stamp", isOn: Binding(get: { vm.finish.dateStamp }, set: { var f = vm.finish; f.dateStamp = $0; vm.setFinish(f) }))
-                .disabled(metadata.date == nil)
-            if !vm.finish.isEmpty, let preview {
-                Image(decorative: preview, scale: 1)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 260)
-                    .frame(maxWidth: .infinity)
-                    .accessibilityLabel("Preview of the finished photo")
-            }
-        } header: {
-            Text("Finish")
-        } footer: {
-            Text(footer(metadata))
-        }
-        .task(id: vm.finish) { await render(metadata) }
-    }
-
-    private func footer(_ m: CaptureMetadata) -> String {
-        var lines = ["Frames and stamps are added to the exported copy only; your original and edit don't change."]
-        if m.date == nil { lines.append("This photo has no capture date, so it can't be stamped.") }
-        if vm.finish.frame == .specs, m.isEmpty { lines.append("This photo has no camera details; the Specs frame says so instead of guessing.") }
-        return lines.joined(separator: " ")
-    }
-
-    private func render(_ metadata: CaptureMetadata) async {
-        guard !vm.finish.isEmpty, let source = vm.displayedImage else { preview = nil; return }
-        let settings = vm.finish
-        preview = await Task.detached(priority: .userInitiated) { () -> CGImage? in
-            let full = CIImage(cgImage: source)
-            let scale = min(1, 900 / max(full.extent.width, full.extent.height, 1))
-            let small = full.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            guard let image = ImageProcessingService.shared.context.createCGImage(small, from: small.extent) else { return nil }
-            return FinishingRenderer.render(image, settings: settings, metadata: metadata)
-        }.value
     }
 }

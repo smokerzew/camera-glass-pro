@@ -91,8 +91,6 @@ final class ImageProcessingService: @unchecked Sendable {
             image = retouchFaces(image, eyes: a.eyeBrighten, teeth: a.teethWhiten, extent: input.extent)
         }
 
-        if !a.calibration.isNeutral { image = applyCalibration(a.calibration, to: image) }
-
         if a.exposure != 0 {
             let filter = CIFilter.exposureAdjust()
             filter.inputImage = image
@@ -176,7 +174,6 @@ final class ImageProcessingService: @unchecked Sendable {
         }
 
         if a.gradeShadowAmount > 0 || a.gradeHighlightAmount > 0 { image = colorGrade(image, a) }
-        if !a.curves.isIdentity { image = applyCurves(a.curves, to: image) }
         image = applyStyle(a, to: image)
         let unfiltered = image
         image = applyLook(a.filter, to: image, extent: input.extent)
@@ -260,7 +257,6 @@ final class ImageProcessingService: @unchecked Sendable {
             image = vignette(image, amount: a.vignette, extent: extent)
         }
         if a.fade > 0 { image = fadeBlacks(image, amount: a.fade) }
-        if a.dust > 0 || a.scratches > 0 { image = filmDamage(image, dust: a.dust, scratches: a.scratches, extent: extent) }
         // Privacy last (before grain), so nothing after it can reveal what was hidden.
         image = redact(image, faces: a.redactionTarget == .faces ? a.faceRedaction : .none,
                        strokes: a.redactionTarget == .drawing ? a.redactionStrokes : [],

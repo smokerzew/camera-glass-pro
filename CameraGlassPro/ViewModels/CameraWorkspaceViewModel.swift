@@ -1,6 +1,4 @@
 import AVFoundation
-import CoreImage
-import ImageIO
 import Observation
 import QuartzCore
 import Photos
@@ -243,35 +241,14 @@ final class CameraWorkspaceViewModel {
     @ObservationIgnored private var restoringState: SessionState?
     private let sessionStore: SessionStore?
 
-    // MARK: Live camera and photo library
-    let camera = LiveCameraModel()
-    /// True while the live viewfinder is shown instead of a photo.
-    private(set) var showingCamera = false
-    let projectStore: ProjectStore?
-    private(set) var projects: [PhotoProject] = []
-    /// The newest library photo, for the thumbnail beside the shutter.
-    private(set) var latestThumbnail: CGImage?
-    /// Frame and date stamp of the open photo (part of its project, used by the export).
-    private(set) var finish = FinishSettings()
-    var showLibrary = false
-    var showManualControls = false
-    /// Project of each open library entry (photos only).
-    @ObservationIgnored private var entryProjects: [UUID: UUID] = [:]
-    /// Where the next imported photo came from (camera captures say so; picks from Photos are imports).
-    @ObservationIgnored private var nextProjectSource: PhotoProject.Source = .imported
-    @ObservationIgnored private var nextProjectCompanion: Data?
-    @ObservationIgnored private var projectSaveTask: Task<Void, Never>?
-
     init(
         importer: PhotoImporting = PhotoImportService(),
         processor: ImageProcessingService = .shared,
         exporter: PhotoExportService = PhotoExportService(),
         defaults: UserDefaults = .standard,
-        sessionStore: SessionStore? = nil,
-        projectStore: ProjectStore? = nil
+        sessionStore: SessionStore? = nil
     ) {
         self.sessionStore = sessionStore
-        self.projectStore = projectStore
         self.importer = importer
         self.processor = processor
         self.exporter = exporter
@@ -344,8 +321,6 @@ final class CameraWorkspaceViewModel {
     var hasEdits: Bool { !adjustments.isIdentity }
 
     var previewRatio: CGFloat {
-        // The live camera frame is 3:4 (portrait); "Full" shows all of it.
-        if showingCamera { return aspect.resolvedRatio(imageSize: CGSize(width: 3, height: 4)) }
         guard aspect != .original else { return viewfinderRatio }
         return aspect.resolvedRatio(imageSize: mediaSize ?? CGSize(width: 3, height: 4))
     }
@@ -363,12 +338,9 @@ final class CameraWorkspaceViewModel {
     /// Plays/pauses a loaded video in the video modes; otherwise honors the timer and opens the picker.
     func primaryAction() {
         if isRecordingUI { stopRecordingRequested = true; return }
-        if showingCamera { shutterPressed(); return }
         if centerControlPlaysVideo { togglePlayback(); return }
         guard countdown == nil else { cancelCountdown(); return }
         if canStitchPanorama { stitchPanorama(); return }
-        // With a camera, the shutter on an open photo goes back to shooting (hold it to import instead).
-        if Self.deviceHasCamera, projectStore != nil, !mode.usesRecordStyle { openCamera(); return }
         if flash == .on { flashPulse += 1 }
         guard timer != .off else { showPhotosPicker = true; return }
         let seconds = timer.rawValue
@@ -488,7 +460,6 @@ final class CameraWorkspaceViewModel {
 
     /// Saves the current edits and framing (called when the app goes to the background).
     func saveSessionState() {
-        saveCurrentProject()
         guard let store = sessionStore, hasMedia, restoringState == nil else { return }
         try? store.saveState(currentSessionState(fileName: sessionFileName))
     }
@@ -573,7 +544,6 @@ final class CameraWorkspaceViewModel {
     }
 
     private func apply(_ media: ImportedMedia) async {
-        if showingCamera { leaveCamera() }
         tearDownPlayer()
         if let old = video { try? FileManager.default.removeItem(at: old.url) }
         renderedPreview = nil
@@ -619,7 +589,6 @@ final class CameraWorkspaceViewModel {
         } else {
             persistSessionMedia(media)
         }
-        if case .photo(let newPhoto) = media, restoring == nil { registerProject(for: newPhoto) }
         isImporting = false
         importSuccessCount += 1
         recognizedText = []
@@ -1018,10 +987,6 @@ final class CameraWorkspaceViewModel {
     // MARK: Framing
 
     func setZoom(_ value: CGFloat) {
-        if showingCamera {
-            zoom = camera.setZoom(ZoomLimits.clamp(value))
-            return
-        }
         zoom = ZoomLimits.clamp(value)
     }
 
@@ -1143,20 +1108,12 @@ final class CameraWorkspaceViewModel {
     func beginExposureDrag() {
         focusTask?.cancel()
         isFocusDimmed = false
-        if showingCamera {
-            exposureDragStart = Double(camera.exposureBias)
-            return
-        }
         exposureDragStart = adjustments.exposure
         recordUndoPoint(force: true)
     }
 
     func updateExposureDrag(by verticalTranslation: CGFloat) {
         guard let start = exposureDragStart else { return }
-        if showingCamera {
-            camera.setExposureBias(Float(start - Double(verticalTranslation) / 120))
-            return
-        }
         adjustments[.exposure] = start - Double(verticalTranslation) / 120
         adjustmentsChanged()
     }
@@ -1518,10 +1475,7 @@ final class CameraWorkspaceViewModel {
 
     private func renderFilterThumbnails() {
         thumbnailTask?.cancel()
-        guard let source = photo?.preview ?? video?.poster ?? (showingCamera ? camera.frames.latestImage() : nil) else {
-            filterThumbnails = [:]
-            return
-        }
+        guard let source = photo?.preview ?? video?.poster else { filterThumbnails = [:]; return }
         let recipe = adjustments
         let processor = self.processor
         thumbnailTask = Task { [weak self] in
@@ -1565,10 +1519,6 @@ final class CameraWorkspaceViewModel {
         case .agfaVista: texture = (0.2, .fine, 0)
         case .delta3200: texture = (0.6, .coarse, 0)
         case .polaroid600: texture = (0.15, .fine, 0)
-        case .daylightNeg: texture = (0.2, .fine, 0)
-        case .push1600: texture = (0.55, .coarse, 0)
-        case .sunFaded: texture = (0.25, .medium, 0)
-        case .quietCinema: texture = (0.2, .medium, 0.25)
         default: texture = nil
         }
         guard let texture else { return state }
@@ -1716,7 +1666,6 @@ final class CameraWorkspaceViewModel {
     /// A glass pop-up or the controls panel is open over the main controls.
     var isPopUpOpen: Bool {
         showSubjectPicker || showEffectsPicker || showStylesPad || showFilterPicker || isControlPanelOpen || showFXPicker
-            || showManualControls
     }
 
     func closePopUps() {
@@ -1726,10 +1675,6 @@ final class CameraWorkspaceViewModel {
         showFilterPicker = false
         isControlPanelOpen = false
         showFXPicker = false
-        if showManualControls {
-            showManualControls = false
-            camera.watchReadings(false)
-        }
     }
 
     // MARK: FX
@@ -2332,8 +2277,6 @@ final class CameraWorkspaceViewModel {
     }
 
     private func adjustmentsChanged() {
-        if showingCamera { camera.look.setRecipe(adjustments) }
-        scheduleProjectSave()
         invalidateExport()
         recipe.value = showOriginal ? PhotoAdjustmentState() : adjustments
         refreshPausedVideoFrame()
@@ -2574,313 +2517,5 @@ final class CameraWorkspaceViewModel {
             guard !Task.isCancelled else { return }
             self?.toast = nil
         }
-    }
-}
-
-// MARK: - Live camera, capture and the photo library
-
-extension CameraWorkspaceViewModel {
-    static let deviceHasCamera = CameraService.bestDevice(.back) != nil || CameraService.bestDevice(.front) != nil
-
-    /// Launch: a camera opens on the camera; without one (Simulator) the last photo reopens as before.
-    func startUp() {
-        refreshProjects()
-        if Self.deviceHasCamera, projectStore != nil { openCamera() } else { restoreLastSession() }
-    }
-
-    /// Shows the live viewfinder, saving and closing the open photo first.
-    func openCamera() {
-        saveCurrentProject()
-        closeMedia()
-        showingCamera = true
-        resetFraming()
-        if aspect == .original { aspect = .fourThree } // the camera shoots 3:4, 4:5, 9:16 or 1:1
-        zoom = 1
-        camera.look.setRecipe(adjustments)
-        refreshProjects()
-        Task { [weak self] in
-            guard let self else { return }
-            await self.camera.start()
-            if self.camera.isRunning { self.zoom = self.camera.setZoom(1) }
-        }
-    }
-
-    /// Stops the camera when a photo opens.
-    private func leaveCamera() {
-        showingCamera = false
-        isControlPanelOpen = false
-        showManualControls = false
-        camera.dismissScan()
-        camera.isComposing = false
-        camera.clearFrame()
-        camera.watchReadings(false)
-        camera.stop()
-        cancelCountdown()
-    }
-
-    /// Scene phase: release the camera in the background, take it back when active.
-    func cameraSceneActive(_ active: Bool) {
-        guard showingCamera else { return }
-        if active { Task { await camera.start() } } else { camera.stop() }
-    }
-
-    private func closeMedia() {
-        cancelImport()
-        tearDownPlayer()
-        if let old = video { try? FileManager.default.removeItem(at: old.url) }
-        photo = nil
-        video = nil
-        renderedPreview = nil
-        showOriginal = false
-        library = []
-        libraryIndex = 0
-        entryEdits = [:]
-        entryProjects = [:]
-        restoringState = nil
-        invalidateExport()
-        clearFocus()
-        recognizedText = []
-        // Looks picked in the camera start fresh; the last photo's edit stays with that photo.
-        adjustments = PhotoAdjustmentState()
-        clearUndoHistory()
-        recipe.value = adjustments
-        finish = FinishSettings()
-    }
-
-    // MARK: Shutter
-
-    private func shutterPressed() {
-        guard camera.isRunning, !camera.isCapturing else { return }
-        guard countdown == nil else { cancelCountdown(); return }
-        guard timer != .off else { capturePhoto(); return }
-        let seconds = timer.rawValue
-        countdownTask = Task { [weak self] in
-            for remaining in stride(from: seconds, to: 0, by: -1) {
-                self?.countdown = remaining
-                try? await Task.sleep(for: .seconds(1))
-                if Task.isCancelled { return }
-            }
-            self?.countdown = nil
-            self?.capturePhoto()
-        }
-    }
-
-    /// The crop the next photo gets: an accepted or custom frame, else what the chosen aspect shows.
-    var captureCrop: CGRect {
-        if let frame = camera.frame { return frame }
-        return AspectFillMapping.visibleRect(imageAspect: camera.imageAspect, viewSize: CGSize(width: previewRatio, height: 1))
-    }
-
-    func capturePhoto() {
-        let crop = captureCrop
-        var look = adjustments
-        look.cropRect = crop.width > 0.995 && crop.height > 0.995 ? PhotoAdjustmentState.fullCrop : crop
-        let heif = exportFormat != .jpeg
-        let flash = self.flash
-        Task { [weak self, look] in
-            guard let self else { return }
-            do {
-                let shot = try await self.camera.capture(flash: flash, heif: heif)
-                await self.openCapture(shot, edit: look)
-            } catch {
-                self.alert = AppAlert(title: "Couldn't Take Photo",
-                                      message: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
-            }
-        }
-    }
-
-    /// Saves the capture as a new library project (the RAW as the original when there is one) and opens it for review.
-    private func openCapture(_ shot: CapturedPhoto, edit: PhotoAdjustmentState) async {
-        let isRAW = shot.rawData != nil
-        let source: PhotoProject.Source = !isRAW ? .camera : (shot.rawKind == .proRAW ? .cameraProRAW : .cameraRAW)
-        let state = SessionState(kind: .photo, fileName: "", adjustments: edit, mode: CameraMode.photo.rawValue)
-        guard let store = projectStore else { return }
-        do {
-            let project = try await Task.detached(priority: .userInitiated) {
-                try store.create(original: shot.rawData ?? shot.processedData,
-                                 typeIdentifier: isRAW ? "com.adobe.raw-image" : shot.processedType,
-                                 source: source, companion: isRAW ? shot.processedData : nil, state: state)
-            }.value
-            importSuccessCount += 1
-            openProject(project)
-        } catch {
-            alert = AppAlert(title: "Couldn't Save Photo", message: (error as? LocalizedError)?.errorDescription ?? "")
-        }
-    }
-
-    // MARK: Projects
-
-    func refreshProjects() {
-        guard let store = projectStore else { return }
-        projects = store.list()
-        latestThumbnail = projects.first.flatMap { Self.loadThumbnail(store.thumbnailURL($0.id)) }
-    }
-
-    nonisolated static func loadThumbnail(_ url: URL) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        return CGImageSourceCreateImageAtIndex(source, 0, nil)
-    }
-
-    func openProject(_ project: PhotoProject) {
-        guard let store = projectStore else { return }
-        guard store.hasOriginal(project) else {
-            alert = AppAlert(title: "Original Missing", message: ProjectError.missingOriginal.errorDescription ?? "")
-            return
-        }
-        saveCurrentProject()
-        showLibrary = false
-        let entry = LibraryEntry(source: .file(store.originalURL(project)))
-        startLibrary([entry])
-        entryProjects[entry.id] = project.id
-        restoringState = project.state // set after startLibrary, which clears it
-        finish = project.finish
-    }
-
-    var currentProjectID: UUID? { currentEntryID.flatMap { entryProjects[$0] } }
-
-    private func registerProject(for photo: ImportedPhoto) {
-        guard let store = projectStore, let entryID = currentEntryID, entryProjects[entryID] == nil else { return }
-        if case .file(let url) = library[libraryIndex].source, let id = store.projectID(forOriginal: url) {
-            entryProjects[entryID] = id
-            return
-        }
-        let state = currentSessionState(fileName: "")
-        let data = photo.data
-        let type = photo.typeIdentifier
-        Task { [weak self] in
-            let project = try? await Task.detached(priority: .utility) {
-                try store.create(original: data, typeIdentifier: type, source: .imported, state: state)
-            }.value
-            guard let self, let project else { return }
-            self.entryProjects[entryID] = project.id
-            self.saveCurrentProject()
-            self.refreshProjects()
-        }
-    }
-
-    /// Writes the open photo's edit, framing and finish into its project (the original is never touched).
-    func saveCurrentProject() {
-        projectSaveTask?.cancel()
-        guard let store = projectStore, photo != nil, restoringState == nil, let id = currentProjectID,
-              var project = store.load(id) else { return }
-        project.state = currentSessionState(fileName: project.originalFile)
-        project.finish = finish
-        try? store.save(project)
-        guard let image = displayedImage else { return }
-        Task.detached(priority: .utility) { [weak self] in
-            let full = CIImage(cgImage: image)
-            let scale = min(1, 480 / max(full.extent.width, full.extent.height, 1))
-            let small = full.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            if let thumb = ImageProcessingService.shared.context.createCGImage(small, from: small.extent) {
-                store.writeThumbnail(thumb, for: id)
-            }
-            await self?.refreshProjects()
-        }
-    }
-
-    private func scheduleProjectSave() {
-        guard projectStore != nil, photo != nil else { return }
-        projectSaveTask?.cancel()
-        projectSaveTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1.5))
-            guard !Task.isCancelled else { return }
-            self?.saveCurrentProject()
-        }
-    }
-
-    func setFinish(_ settings: FinishSettings) {
-        guard settings != finish else { return }
-        finish = settings
-        invalidateExport()
-        scheduleProjectSave()
-    }
-
-    func duplicateProject(_ project: PhotoProject) {
-        guard let store = projectStore else { return }
-        do {
-            _ = try store.duplicate(project)
-            refreshProjects()
-            showToast("Duplicated")
-        } catch {
-            alert = AppAlert(title: "Couldn't Duplicate", message: (error as? LocalizedError)?.errorDescription ?? "")
-        }
-    }
-
-    /// Removes the app's copy and its edits (never anything in Photos). Closes it first if it's open.
-    func deleteProject(_ project: PhotoProject) {
-        guard let store = projectStore else { return }
-        if currentProjectID == project.id {
-            projectSaveTask?.cancel()
-            entryProjects = [:]
-            if Self.deviceHasCamera { openCamera() } else { closeMedia() }
-        }
-        store.delete(project.id)
-        refreshProjects()
-    }
-
-    // MARK: Live controls shared with the edit screen
-
-    func focusLive(atView point: CGPoint, lock: Bool) {
-        focus(atView: point, mediaPoint: nil, lock: lock)
-        camera.focus(atLayerPoint: point, lock: lock)
-    }
-
-    /// The EV shown in the top bar and set by the exposure slider: the camera's bias live, the edit's otherwise.
-    var exposureReadout: Double { showingCamera ? Double(camera.exposureBias) : adjustments.exposure }
-
-    var exposureRange: ClosedRange<Double> {
-        guard showingCamera else { return AdjustmentParameter.exposure.range }
-        let low = max(-4, Double(camera.capabilities.minExposureBias)), high = min(4, Double(camera.capabilities.maxExposureBias))
-        return low < high ? low...high : -2...2
-    }
-
-    func setExposureReadout(_ value: Double) {
-        if showingCamera { camera.setExposureBias(Float(value)) } else { setAdjustment(.exposure, to: value) }
-    }
-
-    var zoomPresets: [CGFloat] {
-        showingCamera && camera.isRunning ? camera.capabilities.zoomPresets : ZoomLimits.presets
-    }
-
-    /// Thumbnail beside the shutter: the library while shooting, export for an open photo.
-    func thumbnailTapped() {
-        if showingCamera {
-            refreshProjects()
-            showLibrary = true
-        } else {
-            showExport = true
-        }
-    }
-
-    /// Round button: flips the camera while shooting, imports from Files otherwise.
-    func sideButtonTapped() {
-        if showingCamera {
-            Task { [weak self] in
-                await self?.camera.flip()
-                self?.zoom = 1
-            }
-        } else {
-            showFileImporter = true
-        }
-    }
-
-    /// Capture facts of the open photo (for the Specs frame and the date stamp).
-    var captureMetadata: CaptureMetadata? {
-        photo.map { CaptureMetadata(data: $0.data) }
-    }
-
-    // MARK: Curves and calibration
-
-    /// One drag = one undo step, like the other sliders.
-    func setCurves(_ curves: ToneCurves) {
-        recordUndoPoint()
-        adjustments.curves = curves
-        adjustmentsChanged()
-    }
-
-    func setCalibration(_ calibration: ColorCalibration) {
-        recordUndoPoint()
-        adjustments.calibration = calibration
-        adjustmentsChanged()
     }
 }

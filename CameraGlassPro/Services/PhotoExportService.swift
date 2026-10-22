@@ -84,8 +84,6 @@ struct ExportOptions: Equatable, Sendable {
     var burnOverlays = false
     /// Fits the edited photo into a 9:16 frame over a blurred, darkened copy of itself (photos only).
     var storyFill = false
-    /// Frame and date stamp for the finished copy (edited photos only; the original never changes).
-    var finish = FinishSettings()
 }
 
 struct OverlayBurnIn: Equatable, Sendable {
@@ -183,10 +181,6 @@ struct PhotoExportService: Sendable {
             image = Self.crop(image, normalized: crop)
         }
         image = Self.burnOverlays(request.overlays, into: image)
-        if !request.options.finish.isEmpty {
-            image = FinishingRenderer.finish(image, settings: request.options.finish, metadata: CaptureMetadata(data: request.data),
-                                             context: processor.context)
-        }
         if request.options.storyFill { image = Self.storyFill(image) }
         image = Self.resized(image, longEdge: request.options.size.photoLongEdge)
         // The photo's own color space, so wide-gamut (Display P3) colors survive.
