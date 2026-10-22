@@ -58,7 +58,7 @@ struct CaptureMetadata: Equatable, Sendable {
 
     init(data: Data) {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else { return }
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else { self.init(); return }
         self.init(properties: props)
     }
 

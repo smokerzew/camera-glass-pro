@@ -325,6 +325,24 @@ final class ProjectAndFinishTests: XCTestCase {
         XCTAssertEqual(none.extent.size, CGSize(width: 300, height: 200), "no finish, no change")
     }
 
+    func testEditedCopyKeepsCaptureMetadataAndCanDropLocation() throws {
+        let original = try photoData(exif: [kCGImagePropertyExifISOSpeedRatings: [320], kCGImagePropertyExifDateTimeOriginal: "2026:10:22 09:00:00"])
+        var withGPS = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(XCTUnwrap(CGImageSourceCreateWithData(original as CFData, nil)), 0, nil) as? [String: Any])
+        withGPS[kCGImagePropertyGPSDictionary as String] = [kCGImagePropertyGPSLatitude as String: 48.85, kCGImagePropertyGPSLatitudeRef as String: "N"]
+        let kept = PhotoExportService.carriedMetadata(withGPS, removeLocation: false)
+        XCTAssertNotNil(kept[kCGImagePropertyGPSDictionary as String])
+        XCTAssertNil(PhotoExportService.carriedMetadata(withGPS, removeLocation: true)[kCGImagePropertyGPSDictionary as String])
+
+        var state = PhotoAdjustmentState()
+        state.exposure = 0.3
+        let request = ExportRequest(data: original, typeIdentifier: UTType.jpeg.identifier, adjustments: state,
+                                    options: ExportOptions(content: .adjusted, format: .jpeg), normalizedCrop: nil, overlays: OverlayBurnIn())
+        let edited = try PhotoExportService().renderAdjusted(request)
+        let m = CaptureMetadata(data: edited)
+        XCTAssertEqual(m.iso, 320, "the edited copy keeps the capture settings")
+        XCTAssertNotNil(m.date, "and the capture date")
+    }
+
     func testExportAddsTheFrameOnlyToTheEditedCopy() throws {
         let original = try photoData()
         var options = ExportOptions(content: .adjusted, format: .jpeg)

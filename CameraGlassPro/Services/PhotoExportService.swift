@@ -2,6 +2,7 @@ import CoreImage.CIFilterBuiltins
 import AVFoundation
 import CoreImage
 import Foundation
+import ImageIO
 import UniformTypeIdentifiers
 
 enum ExportContent: String, CaseIterable, Identifiable, Sendable {
@@ -86,6 +87,8 @@ struct ExportOptions: Equatable, Sendable {
     var storyFill = false
     /// Frame and date stamp for the finished copy (edited photos only; the original never changes).
     var finish = FinishSettings()
+    /// Leaves GPS location out of the edited copy's metadata (the original keeps it).
+    var removeLocation = false
 }
 
 struct OverlayBurnIn: Equatable, Sendable {
@@ -189,8 +192,31 @@ struct PhotoExportService: Sendable {
         }
         if request.options.storyFill { image = Self.storyFill(image) }
         image = Self.resized(image, longEdge: request.options.size.photoLongEdge)
+        image = image.settingProperties(Self.carriedMetadata(source.properties, removeLocation: request.options.removeLocation))
         // The photo's own color space, so wide-gamut (Display P3) colors survive.
         return try processor.encode(image, as: request.options.format, colorSpace: source.colorSpace)
+    }
+
+    /// The original's capture metadata for the edited copy: camera, exposure and date stay; orientation is reset
+    /// (the pixels are already upright), stale pixel sizes are dropped, and location goes if asked.
+    static func carriedMetadata(_ properties: [String: Any], removeLocation: Bool) -> [String: Any] {
+        var props: [String: Any] = [:]
+        for key in [kCGImagePropertyExifDictionary, kCGImagePropertyTIFFDictionary, kCGImagePropertyIPTCDictionary,
+                    kCGImagePropertyExifAuxDictionary, kCGImagePropertyGPSDictionary] as [CFString] {
+            if let value = properties[key as String] { props[key as String] = value }
+        }
+        if removeLocation { props[kCGImagePropertyGPSDictionary as String] = nil }
+        if var exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] {
+            exif[kCGImagePropertyExifPixelXDimension as String] = nil
+            exif[kCGImagePropertyExifPixelYDimension as String] = nil
+            props[kCGImagePropertyExifDictionary as String] = exif
+        }
+        if var tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
+            tiff[kCGImagePropertyTIFFOrientation as String] = 1
+            props[kCGImagePropertyTIFFDictionary as String] = tiff
+        }
+        props[kCGImagePropertyOrientation as String] = 1
+        return props
     }
 
     /// Scales down (high-quality Lanczos) so the longest side is at most `longEdge`; never enlarges.
