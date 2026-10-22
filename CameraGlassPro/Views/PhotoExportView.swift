@@ -13,12 +13,10 @@ struct PhotoExportView: View {
     @State private var cropToFraming = false
     @State private var burnOverlays = false
     @AppStorage("exportStoryFill") private var storyFill = false
-    @AppStorage("exportRemoveLocation") private var removeLocation = false
 
     private var options: ExportOptions {
         ExportOptions(content: content, format: vm.exportFormat, size: size, cropToFraming: cropToFraming, burnOverlays: burnOverlays,
-                      storyFill: storyFill && !isVideo, finish: content == .adjusted && !isVideo ? vm.finish : FinishSettings(),
-                      removeLocation: removeLocation)
+                      storyFill: storyFill && !isVideo, finish: content == .adjusted && !isVideo ? vm.finish : FinishSettings())
     }
 
     private var overlays: OverlayBurnIn {
@@ -57,7 +55,6 @@ struct PhotoExportView: View {
                         Toggle("Include Composition Guides", isOn: $burnOverlays)
                             .disabled(overlays.isEmpty)
                         Toggle("9:16 Story, Blurred Fill", isOn: $storyFill)
-                        Toggle("Remove Location", isOn: $removeLocation)
                     }
                     if cropToFraming || burnOverlays || storyFill {
                         Section {
