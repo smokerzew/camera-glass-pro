@@ -3,17 +3,29 @@ import CoreGraphics
 enum AspectRatioOption: String, CaseIterable, Identifiable {
     case original
     case fourThree = "4:3"
+    case fiveFour = "5:4"
     case sixteenNine = "16:9"
     case square = "1:1"
 
     var id: String { rawValue }
     var label: String { self == .original ? "Full" : rawValue }
 
+    /// How the camera names the portrait frame: 3:4, 4:5, 9:16, 1:1 ("Full" is the sensor's 3:4).
+    var portraitLabel: String {
+        switch self {
+        case .original, .fourThree: "3:4"
+        case .fiveFour: "4:5"
+        case .sixteenNine: "9:16"
+        case .square: "1:1"
+        }
+    }
+
     /// Long side / short side, nil for the image's own ratio.
     private var longToShort: CGFloat? {
         switch self {
         case .original: nil
         case .fourThree: 4.0 / 3.0
+        case .fiveFour: 5.0 / 4.0
         case .sixteenNine: 16.0 / 9.0
         case .square: 1
         }

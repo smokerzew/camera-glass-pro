@@ -13,6 +13,7 @@ extension PhotoAdjustmentState {
         \.visionAmount, \.dispersion, \.halation, \.grain, \.skinSmoothing, \.sharpen, \.noiseReduction, \.focusBlur,
         \.eyeBrighten, \.teethWhiten, \.skyReplaceAmount, \.filterStrength, \.fade, \.gradeShadowAmount, \.gradeHighlightAmount,
         \.flare, \.prism, \.paint, \.weatherAmount, \.neonOutline, \.aura, \.silhouette, \.subjectShadow,
+        \.dust, \.scratches,
         // Not here (each has its own mapping where it renders): backgroundBlurAmount, redactionStrength,
         // the Particle Dissolve settings.
     ]

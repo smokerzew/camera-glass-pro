@@ -21,7 +21,10 @@ struct PhotoPreviewView: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                if let mediaSize = vm.mediaSize {
+                if vm.showingCamera {
+                    LiveViewfinderView(vm: vm, motion: motion, size: proxy.size)
+                        .transition(.opacity)
+                } else if let mediaSize = vm.mediaSize {
                     let frame = FramingGeometry.frameSize(ratio: vm.previewRatio, in: proxy.size)
                     viewfinder(mediaSize: mediaSize, frame: frame)
                         .frame(width: frame.width, height: frame.height)

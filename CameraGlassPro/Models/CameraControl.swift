@@ -3,6 +3,7 @@ import Foundation
 /// Every control in the ⠿ panel. Any of them can also be pinned to the top bar via Edit.
 enum CameraControl: String, CaseIterable, Identifiable {
     case flash, live, aspect, timer, exposure, collage, styles, filter, adjust, fx, liquify, remove, crop, depth, subject, nightMode, grid, level, scopes, peaking, zebras, liveText, effects, trim, frame, format
+    case scan, compose, manual, raw, torch
 
     var id: String { rawValue }
 
@@ -10,6 +11,7 @@ enum CameraControl: String, CaseIterable, Identifiable {
         switch self {
         case .nightMode: "NIGHT MODE"
         case .liveText: "TEXT"
+        case .raw: "RAW"
         default: rawValue.uppercased()
         }
     }
@@ -28,11 +30,12 @@ enum CameraControl: String, CaseIterable, Identifiable {
         case .flash, .live, .aspect, .timer, .exposure, .collage, .nightMode, .format: .camera
         case .adjust, .styles, .filter, .fx, .liquify, .crop, .depth, .subject, .effects: .edit
         case .remove, .grid, .level, .scopes, .peaking, .zebras, .liveText, .trim, .frame: .tools
+        case .scan, .compose, .manual, .raw, .torch: .pro
         }
     }
 
     /// What iOS shows in the top bar out of the box (matches the reference recording).
-    static let defaultTopBar: [CameraControl] = [.flash, .live, .exposure, .styles]
+    static let defaultTopBar: [CameraControl] = [.flash, .scan, .exposure, .styles]
 
     static func decode(_ stored: String?) -> [CameraControl] {
         guard let stored else { return defaultTopBar }
@@ -49,6 +52,8 @@ enum CameraControl: String, CaseIterable, Identifiable {
 extension CameraWorkspaceViewModel {
     /// Whether a control can be used right now (TRIM needs a video, editing controls need media).
     func isAvailable(_ control: CameraControl) -> Bool {
+        if showingCamera { return isAvailableLive(control) }
+        if control.group == .pro { return false } // capture controls only work while shooting
         if control == .trim || control == .frame { return video != nil }
         if control == .collage { return collageEntries.count >= 2 }
         if control == .effects { return canMakeEffects }
@@ -56,8 +61,27 @@ extension CameraWorkspaceViewModel {
         return !control.requiresMedia || hasMedia
     }
 
+    /// What works on the live camera: capture settings, and looks that apply to the photo once it's taken.
+    func isAvailableLive(_ control: CameraControl) -> Bool {
+        let running = camera.isRunning
+        switch control {
+        case .flash: return running && camera.capabilities.hasFlash
+        case .torch: return running && camera.capabilities.hasTorch
+        case .aspect, .timer, .exposure, .scan, .compose: return running
+        case .manual: return running && camera.hasManualControls
+        case .raw: return running && camera.supportsAnyRAW
+        case .styles, .filter, .depth, .nightMode, .grid, .level, .format: return true
+        default: return false
+        }
+    }
+
     func symbol(for control: CameraControl) -> String {
         switch control {
+        case .scan: "viewfinder"
+        case .compose: "rectangle.dashed"
+        case .manual: "dial.medium"
+        case .raw: "r.square"
+        case .torch: camera.torch ? "flashlight.on.fill" : "flashlight.off.fill"
         case .flash: flash == .off ? "bolt.slash" : flash.systemImage
         case .live: livePreference ? "livephoto" : "livephoto.slash"
         case .aspect: "aspectratio"
@@ -89,6 +113,11 @@ extension CameraWorkspaceViewModel {
 
     func isActive(_ control: CameraControl) -> Bool {
         switch control {
+        case .scan: camera.scan != .idle
+        case .compose: camera.isComposing || camera.frame != nil
+        case .manual: showManualControls || !camera.manual.isAuto
+        case .raw: showingCamera && camera.rawMode != .off
+        case .torch: camera.torch
         case .flash: flash != .off
         case .live: livePreference
         case .aspect: aspect != .original
@@ -132,6 +161,8 @@ extension CameraWorkspaceViewModel {
     /// Short text drawn instead of the icon (e.g. "3s", "16:9", "HEIF"), or nil for the icon.
     func valueText(for control: CameraControl) -> String? {
         switch control {
+        case .aspect where showingCamera: aspect.portraitLabel
+        case .raw: showingCamera && camera.rawMode != .off ? (camera.rawMode == .proRAW ? "PRO" : "RAW") : nil
         case .aspect: aspect == .original ? nil : aspect.rawValue
         case .timer: timer == .off ? nil : timer.label
         case .depth: depthEffect ? String(format: "ƒ%.1f", adjustments.aperture) : nil
@@ -143,6 +174,11 @@ extension CameraWorkspaceViewModel {
 
     func stateDescription(for control: CameraControl) -> String {
         switch control {
+        case .scan: camera.scanResult.map { $0.isConclusive ? "Suggestion ready" : "No clear suggestion" } ?? "Off"
+        case .compose: camera.frame == nil ? "No frame" : (camera.alignment?.isAligned == true ? "Aligned" : "Frame set")
+        case .manual: camera.manual.isAuto ? "Auto" : "Manual"
+        case .raw: camera.rawMode.label
+        case .torch: camera.torch ? "On" : "Off"
         case .flash: flash.label
         case .live: livePreference ? "On" : "Off"
         case .aspect: aspect.label
@@ -177,6 +213,11 @@ extension CameraWorkspaceViewModel {
 
     func hint(for control: CameraControl) -> String {
         switch control {
+        case .scan: "Analyzes the scene and suggests a framing, with measured exposure and level notes"
+        case .compose: "Draw your own frame on the viewfinder and tap a subject to track how it lines up"
+        case .manual: "ISO, shutter speed, focus and white balance, where this camera supports them"
+        case .raw: "Also saves a RAW (or Apple ProRAW) original, where this iPhone supports it"
+        case .torch: "Keeps the flashlight on while you frame"
         case .flash: "Visual flash effect only"
         case .live: "Plays a Live Photo's motion when it opens; touch and hold LIVE to play it again"
         case .aspect: "Cycles full screen, 4:3, 16:9 and 1:1 framing"
@@ -209,9 +250,26 @@ extension CameraWorkspaceViewModel {
     /// Runs a control. Exposure opens the panel's slider when used from the top bar.
     func perform(_ control: CameraControl, fromTopBar: Bool = false) {
         switch control {
+        case .scan:
+            isControlPanelOpen = false
+            if camera.scan == .idle { camera.startScan() } else { camera.dismissScan() }
+        case .compose:
+            isControlPanelOpen = false
+            camera.dismissScan()
+            camera.isComposing.toggle()
+        case .manual:
+            isControlPanelOpen = false
+            showManualControls = true
+            camera.watchReadings(true)
+        case .raw: camera.cycleRaw()
+        case .torch: camera.setTorch(!camera.torch)
         case .flash: flash = flash.next
         case .live: livePreference.toggle()
-        case .aspect: aspect = aspect.next
+        case .aspect:
+            aspect = aspect.next
+            // The camera's frames are always one of 3:4, 4:5, 9:16 and 1:1 ("Full" is 3:4 there).
+            if showingCamera, aspect == .original { aspect = aspect.next }
+            if showingCamera { camera.composeAspect = aspect }
         case .timer: timer = timer.next
         case .exposure:
             if fromTopBar {
@@ -259,7 +317,7 @@ extension CameraWorkspaceViewModel {
 
 /// Pages of the controls panel, so it shows a handful of controls at a time.
 enum PanelGroup: String, CaseIterable, Sendable {
-    case camera, edit, tools
+    case camera, pro, edit, tools
 }
 
 private extension String {

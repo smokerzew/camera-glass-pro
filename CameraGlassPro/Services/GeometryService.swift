@@ -90,7 +90,7 @@ extension ImageProcessingService {
 
 /// Crop aspect presets in the editor.
 enum CropAspect: String, CaseIterable, Identifiable {
-    case freeform, original, square, fourThree, threeFour, sixteenNine, nineSixteen
+    case freeform, original, square, fourThree, threeFour, fiveFour, fourFive, sixteenNine, nineSixteen
 
     var id: String { rawValue }
 
@@ -101,6 +101,8 @@ enum CropAspect: String, CaseIterable, Identifiable {
         case .square: "Square"
         case .fourThree: "4:3"
         case .threeFour: "3:4"
+        case .fiveFour: "5:4"
+        case .fourFive: "4:5"
         case .sixteenNine: "16:9"
         case .nineSixteen: "9:16"
         }
@@ -111,6 +113,8 @@ enum CropAspect: String, CaseIterable, Identifiable {
         switch self {
         case .fourThree: .threeFour
         case .threeFour: .fourThree
+        case .fiveFour: .fourFive
+        case .fourFive: .fiveFour
         case .sixteenNine: .nineSixteen
         case .nineSixteen: .sixteenNine
         default: self
@@ -125,6 +129,8 @@ enum CropAspect: String, CaseIterable, Identifiable {
         case .square: 1
         case .fourThree: 4.0 / 3.0
         case .threeFour: 3.0 / 4.0
+        case .fiveFour: 5.0 / 4.0
+        case .fourFive: 4.0 / 5.0
         case .sixteenNine: 16.0 / 9.0
         case .nineSixteen: 9.0 / 16.0
         }

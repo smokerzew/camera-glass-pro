@@ -3,6 +3,7 @@ import SwiftUI
 /// Camera-style ".5  1×  2  5" pill. Tapping the selected value toggles the fine slider.
 struct ZoomSelector: View {
     let zoom: CGFloat
+    var presets: [CGFloat] = ZoomLimits.presets
     let onSelect: (CGFloat) -> Void
     let onToggleSlider: () -> Void
 
@@ -10,12 +11,12 @@ struct ZoomSelector: View {
     @Namespace private var selection
 
     private var activePreset: CGFloat {
-        ZoomLimits.presets.last { $0 <= zoom + 0.001 } ?? ZoomLimits.minimum
+        presets.last { $0 <= zoom + 0.001 } ?? presets.first ?? ZoomLimits.minimum
     }
 
     var body: some View {
         HStack(spacing: 14) {
-            ForEach(ZoomLimits.presets, id: \.self) { preset in
+            ForEach(presets, id: \.self) { preset in
                 let isActive = preset == activePreset
                 Button {
                     isActive ? onToggleSlider() : onSelect(preset)

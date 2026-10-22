@@ -83,17 +83,17 @@ struct CameraControlPanel: View {
                 }
             }
 
-            if vm.isExposureDialVisible, vm.hasMedia, !vm.isEditingTopBar {
+            if vm.isExposureDialVisible, vm.hasMedia || vm.showingCamera, !vm.isEditingTopBar {
                 HStack(spacing: 10) {
                     Image(systemName: "plusminus").foregroundStyle(.white.opacity(0.8)).accessibilityHidden(true)
                     Slider(
-                        value: Binding(get: { vm.adjustments.exposure }, set: { vm.setAdjustment(.exposure, to: $0) }),
-                        in: AdjustmentParameter.exposure.range, step: 0.1
+                        value: Binding(get: { vm.exposureReadout }, set: { vm.setExposureReadout($0) }),
+                        in: vm.exposureRange, step: 0.1
                     )
                     .tint(.yellow)
                     .accessibilityLabel("Exposure")
-                    .accessibilityValue(AdjustmentParameter.exposure.format(vm.adjustments.exposure))
-                    Text(String(format: "%+.1f", vm.adjustments.exposure))
+                    .accessibilityValue(AdjustmentParameter.exposure.format(vm.exposureReadout))
+                    Text(String(format: "%+.1f", vm.exposureReadout))
                         .font(.caption.monospacedDigit().weight(.semibold))
                         .foregroundStyle(.yellow)
                         .frame(minWidth: 40, alignment: .trailing)

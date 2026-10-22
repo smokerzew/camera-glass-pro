@@ -46,6 +46,12 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
     var colorMixer = ColorMixer()
     /// Film halation: red-orange glow bleeding around bright lights (0...1).
     var halation: Double = 0
+    /// Film dust specks and hairs, and long scratches (0...1 each).
+    var dust: Double = 0
+    var scratches: Double = 0
+    /// Point curves (master and per channel) and color calibration of the three primaries.
+    var curves = ToneCurves()
+    var calibration = ColorCalibration()
     /// "Night Look": lifts shadows and reduces noise. A real filter, not a capture mode.
     var nightLook = false
     /// Photo look applied after the adjustments (the panel's FILTER control).
@@ -284,6 +290,7 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         needsSubject || dispersion > 0 || dissolveAmount > 0 || melt > 0 || pixelSort > 0 || littlePlanet > 0 || !liquifyStrokes.isEmpty || !removeStrokes.isEmpty || !focusStrokes.isEmpty
             || eyeBrighten > 0 || teethWhiten > 0
             || skinSmoothing > 0 || skyReplace != .none || faceRedaction != .none || !redactionStrokes.isEmpty || halation > 0 || noiseReduction > 0
+            || dust > 0 || scratches > 0
     }
 
     init() {}
@@ -317,6 +324,10 @@ struct PhotoAdjustmentState: Equatable, Codable, Sendable {
         vignette = min(max(try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0, -1), 1)
         colorMixer = (try? c.decodeIfPresent(ColorMixer.self, forKey: .colorMixer)) ?? ColorMixer()
         halation = min(max(try c.decodeIfPresent(Double.self, forKey: .halation) ?? 0, 0), 1)
+        dust = min(max((try? c.decodeIfPresent(Double.self, forKey: .dust)) ?? 0, 0), 1)
+        scratches = min(max((try? c.decodeIfPresent(Double.self, forKey: .scratches)) ?? 0, 0), 1)
+        curves = (try? c.decodeIfPresent(ToneCurves.self, forKey: .curves)) ?? ToneCurves()
+        calibration = (try? c.decodeIfPresent(ColorCalibration.self, forKey: .calibration)) ?? ColorCalibration()
         skinSmoothing = min(max(try c.decodeIfPresent(Double.self, forKey: .skinSmoothing) ?? 0, 0), 1)
         sharpen = min(max(try c.decodeIfPresent(Double.self, forKey: .sharpen) ?? 0, 0), 1)
         noiseReduction = min(max(try c.decodeIfPresent(Double.self, forKey: .noiseReduction) ?? 0, 0), 1)
@@ -490,7 +501,7 @@ enum AdjustGroup: String, CaseIterable, Identifiable, Sendable {
 
 enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
     case exposure, brightness, contrast, highlights, shadows, whites, blacks, dehaze, brilliance, saturation, vibrance, warmth, tint,
-         texture, clarity, sharpen, noise, skin, eyes, teeth, vignette, fade, halation, grain
+         texture, clarity, sharpen, noise, skin, eyes, teeth, vignette, fade, halation, grain, dust, scratches
 
     var id: String { rawValue }
     var title: String {
@@ -508,7 +519,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .exposure, .brightness, .contrast, .highlights, .shadows, .whites, .blacks, .dehaze, .brilliance: .light
         case .saturation, .vibrance, .warmth, .tint: .color
         case .texture, .clarity, .sharpen, .noise, .skin, .eyes, .teeth: .detail
-        case .vignette, .fade, .halation, .grain: .effects
+        case .vignette, .fade, .halation, .grain, .dust, .scratches: .effects
         }
     }
 
@@ -538,6 +549,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .vignette: "camera.aperture"
         case .halation: "sun.haze"
         case .grain: "circle.dotted"
+        case .dust: "aqi.medium"
+        case .scratches: "scribble"
         }
     }
 
@@ -558,6 +571,7 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .vignette: -1...1        // + darker corners, − lighter
         case .halation: 0...1
         case .grain: 0...1
+        case .dust, .scratches: 0...1
         }
     }
 
@@ -594,6 +608,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
         case .vignette: \.vignette
         case .halation: \.halation
         case .grain: \.grain
+        case .dust: \.dust
+        case .scratches: \.scratches
         }
     }
 
@@ -613,6 +629,8 @@ enum AdjustmentParameter: String, CaseIterable, Identifiable, Sendable {
 /// Photo looks picked in the FILTER pop-up (grouped by `FilterCategory`).
 enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case none, vivid, mono, noir, chrome, fade, instant
+    // Signature: the app's own film-inspired starting points (original names and values).
+    case daylightNeg, push1600, sunFaded, silverTone, softBloom, deepPrint, quietCinema, goldenSplit
     case portra, ektar, gold, fuji400h, cinestill, trix
     // Recipe looks (LookRecipes.swift)
     case vividWarm, vividCool, dramatic, dramaticCool
